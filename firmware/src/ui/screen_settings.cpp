@@ -218,7 +218,7 @@ namespace {
 screen_settings::Action s_action = screen_settings::A_NONE;
 int  s_newBright = -1;
 int  s_newSleep  = -1;
-int  s_newRot    = -1;
+int  s_newRot    = screen_settings::ROT_NONE;
 bool s_holding   = false;
 uint32_t s_viewSig = 0;
 
@@ -301,7 +301,7 @@ namespace screen_settings {
 Action takeAction()   { Action v = s_action; s_action = A_NONE; return v; }
 int  takeBrightness() { int v = s_newBright; s_newBright = -1; return v; }
 int  takeSleep()      { int v = s_newSleep;  s_newSleep  = -1; return v; }
-int  takeRotation()   { int v = s_newRot;    s_newRot    = -1; return v; }
+int  takeRotation()   { int v = s_newRot; s_newRot = ROT_NONE; return v; }
 bool factoryHolding() { return s_holding; }
 
 void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
@@ -386,9 +386,10 @@ void showAccount(const char* email, int printers, bool linked) {
     frame::button(body, i18n::T(S_SIGN_OUT), 2, []() { s_action = A_SIGN_OUT; });
 }
 
-void showScreen(uint8_t brightness, int sleepSeconds, int rotation) {
+void showScreen(uint8_t brightness, int sleepSeconds, int rotation, bool autoRot) {
     uint32_t sig = 0xB0000000u ^ ((uint32_t)brightness << 16)
-                 ^ (uint32_t)sleepSeconds ^ ((uint32_t)rotation << 12);
+                 ^ (uint32_t)sleepSeconds ^ ((uint32_t)rotation << 12)
+                 ^ (autoRot ? 0x00000800u : 0u);
     if (sig == s_viewSig) return;
     s_viewSig = sig;
 
@@ -427,11 +428,16 @@ void showScreen(uint8_t brightness, int sleepSeconds, int rotation) {
     // and both mountings are in use. The chips are the two angles rather than
     // words: "Normal" only means anything to someone who already knows which
     // way their own device is, and 180 turns it over whichever way that is.
-    kv(body, i18n::T(S_ORIENTATION), rotation == 0 ? "0" LV_DEG : "180" LV_DEG,
+    // Three positions rather than a switch beside a pair: Auto is not a
+    // modifier on the choice, it IS one of the choices, and saying so in one
+    // control removes the state where "auto" is on and an angle is also
+    // selected and neither explains the other.
+    kv(body, i18n::T(S_ORIENTATION),
+       autoRot ? i18n::T(S_AUTO) : (rotation == 0 ? "0" LV_DEG : "180" LV_DEG),
        theme::TEXT);
-    static const char* const rl[] = { "0" LV_DEG, "180" LV_DEG };
-    static const int rv[] = { 0, 2 };
-    segmented(body, rl, rv, 2, rotation, onRotate);
+    const char* const rl[] = { i18n::T(S_AUTO), "0" LV_DEG, "180" LV_DEG };
+    static const int rv[] = { AUTO_ROT, 0, 2 };
+    segmented(body, rl, rv, 3, autoRot ? AUTO_ROT : rotation, onRotate);
 
     // Nothing else to say. A settings screen that ends with an instruction is
     // a settings screen that did not explain itself above.

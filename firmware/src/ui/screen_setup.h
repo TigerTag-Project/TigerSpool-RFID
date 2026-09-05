@@ -18,6 +18,13 @@ namespace screen_setup {
 // prototype fit four because its font was ASCII-only and it paginated, and a
 // user hunting for their language across pages is a bad first impression.
 void showLanguage(bool force = false, bool withBack = false);
+
+// True once if the rotate button in the language screen's header was pressed.
+// It exists for the first boot, where the panel may be upside down and the
+// accelerometer's guess may be wrong - a device someone cannot read is a
+// device they cannot set up, so the correction belongs on the first screen
+// rather than three taps into Settings.
+bool takeRotate();
 int  takeLanguage();          // index into the locale table, or -1
 
 // ---- 2. Wi-Fi -------------------------------------------------------------

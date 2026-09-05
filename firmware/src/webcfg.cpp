@@ -282,7 +282,7 @@ namespace {
         else if (preview == "setwifi")  screen_settings::showWifi("Atelier", "192.168.20.170",
                                                                   WiFi.macAddress().c_str(), true, -55);
         else if (preview == "setacct")  screen_settings::showAccount("benoit@atome3d.com", 6, true);
-        else if (preview == "setscreen") screen_settings::showScreen(80, 60, 2);
+        else if (preview == "setscreen") screen_settings::showScreen(80, 60, 2, false);
         // The state that cannot be reached on demand - the device is only ever
         // behind by accident - and the one whose layout is tightest.
         else if (preview == "setupdate") screen_settings::showUpdate(TIGERSPOOL_FW_VERSION, "stable",

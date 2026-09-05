@@ -60,10 +60,14 @@ Action takeAction();
 void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
               int rssi);   // dBm, 0 when not connected
 void showAccount(const char* email, int printers, bool linked);
-void showScreen(uint8_t brightness, int sleepSeconds, int rotation);
+void showScreen(uint8_t brightness, int sleepSeconds, int rotation, bool autoRot);
 int  takeBrightness();       // new percentage, or -1
 int  takeSleep();            // new timeout in seconds, or -1
-int  takeRotation();         // 0 or 2, or -1
+// 0 or 2 for a fixed orientation, AUTO_ROT to follow the accelerometer, or
+// ROT_NONE when the user has not touched it.
+constexpr int AUTO_ROT = -1;
+constexpr int ROT_NONE = -2;
+int  takeRotation();
 // `channel` is still taken and still hashed into the redraw signature, but it
 // is not drawn: there is one channel, and a row that always reads "stable" is a
 // row nobody reads twice. It stays in the signature so the day a second channel

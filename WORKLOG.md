@@ -298,3 +298,18 @@ font fallback chain that would restore accents.
   update path checks `frame::screen()` before writing - the pointers do not
   survive another screen, and writing into freed LVGL objects is a crash.
 
+## 2026-09-05 - the board knows which way up it is
+
+- `imu.{h,cpp}`: QMI8658 at 0x6B, accelerometer only, gyroscope left off.
+- Both facts measured on hardware rather than assumed. An I2C scan: GPIO6/7
+  empty, touch bus carries 0x15, 0x6B, 0x7E. And the axis - Y was the obvious
+  guess and reads ~50; gravity is on X, -9360 with the device upright in its
+  printed holder. Threshold 4000 counts, about a quarter of a gravity, so a box
+  lying flat answers "cannot tell" instead of guessing.
+- First boot uses it once, when `rot` has never been stored. `autorot` is the
+  new key. Rotate button on the language header sets a fixed angle and clears
+  autorot; Display offers Auto / 0 / 180.
+- NOT verified here: I cannot turn the device over. The reading is correct in
+  its current orientation and the thresholds are measured, but somebody has to
+  hold it upside down.
+

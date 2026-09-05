@@ -106,6 +106,7 @@ enum StrId : uint8_t {
     S_UPDATE_KEEPS,
     S_LATER,
     S_SIGNAL,
+    S_AUTO,
     S_ORIENTATION,
     S_RESTARTING,
     S_COUNT

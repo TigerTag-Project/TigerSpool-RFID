@@ -97,6 +97,7 @@ static const Row STR[S_COUNT] = {
 /* S_UPDATE_KEEPS   */ {{ "Wi-Fi, account and printers are kept.", "Wi-Fi, compte et imprimantes sont conserves.", "WLAN, Konto und Drucker bleiben erhalten.", "Wi-Fi, cuenta e impresoras se conservan.", "Wi-Fi, account e stampanti sono conservati.", "Wi-Fi, konto i drukarki zostaja zachowane.", "Wi-Fi, conta e impressoras sao mantidos.", "Wi-Fi, conta e impressoras sao mantidos." }},
 /* S_LATER          */ {{ "Later", "Plus tard", "Spater", "Mas tarde", "Piu tardi", "Pozniej", "Depois", "Mais tarde" }},
 /* S_SIGNAL         */ {{ "Signal", "Signal", "Signal", "Senal", "Segnale", "Sygnal", "Sinal", "Sinal" }},
+/* S_AUTO           */ {{ "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto" }},
 /* S_ORIENTATION   */ {{ "Orientation", "Orientation", "Ausrichtung", "Orientacion", "Orientamento", "Orientacja", "Orientacao", "Orientacao" }},
 /* S_RESTARTING     */ {{ "Installed. Restarting...", "Installe. Redemarrage...", "Installiert. Neustart...", "Instalado. Reiniciando...", "Installato. Riavvio...", "Zainstalowano. Restart...", "Instalado. Reiniciando...", "Instalado. A reiniciar..." }},
 };

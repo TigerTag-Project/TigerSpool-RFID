@@ -28,6 +28,7 @@
 #include "backend_snapmaker.h"
 #include "webcfg.h"
 #include "net/ota.h"
+#include "imu.h"
 #include "tigertag_cloud.h"
 #include "ui/lvgl_port.h"
 #include "ui/screen_home.h"
@@ -377,12 +378,24 @@ static void loadCfg() {
 uint8_t screenBrightness = 80;
 int     screenSleepSec   = 60;
 int     screenRotation   = SCR_ROTATION;
+bool    screenAutoRot    = false;
 
 static void loadScreenPrefs() {
     nvs.begin("tigerspool", true);
     screenBrightness = (uint8_t)nvs.getInt("bright", 80);
     screenSleepSec   = nvs.getInt("sleep", 60);
-    screenRotation   = nvs.getInt("rot", SCR_ROTATION);
+    // A device that has never been told which way up it is asks the
+    // accelerometer, once. Anything the user does afterwards - the button on
+    // the language screen, or the Display setting - overwrites this and it
+    // never runs again, because the key now exists.
+    screenRotation = nvs.getInt("rot", -1);
+    screenAutoRot  = nvs.getInt("autorot", 0) != 0;
+    if (screenRotation < 0) {
+        int fromImu = imu::suggestedRotation();
+        screenRotation = (fromImu >= 0) ? fromImu : SCR_ROTATION;
+        Serial.printf("[ui] first boot: orientation %d %s\n", screenRotation,
+                      fromImu >= 0 ? "from the accelerometer" : "(flat - kept the default)");
+    }
     nvs.end();
     lvgl_port::setBacklight(screenBrightness);
 }
@@ -391,6 +404,7 @@ static void saveScreenPrefs() {
     nvs.putInt("bright", screenBrightness);
     nvs.putInt("sleep", screenSleepSec);
     nvs.putInt("rot", screenRotation);
+    nvs.putInt("autorot", screenAutoRot ? 1 : 0);
     nvs.end();
     lvgl_port::setBacklight(screenBrightness);
 }
@@ -540,6 +554,7 @@ void setup() {
     i18n::begin();
     migrateLegacyConfig();     // must run before anything reads the new namespace
     loadCfg();
+    imu::begin();          // before loadScreenPrefs: first boot asks it
     loadScreenPrefs();
     // After lvgl_port::begin(), because turning the panel repaints it. The
     // boot logo above was drawn at the compiled default, which is the right
@@ -587,6 +602,25 @@ void loop() {
 
     // The backlight is the only thing that sleeps. Everything below this line
     // keeps running whether the screen is lit or not.
+    // Follow the accelerometer, but only when the user asked for it and only
+    // on a reading the sensor is sure of. Checked once a second: turning a box
+    // over is not a gesture that needs millisecond response, and polling an
+    // I2C sensor the touch panel shares is not free.
+    if (screenAutoRot) {
+        static uint32_t lastLook = 0;
+        if (millis() - lastLook > 1000) {
+            lastLook = millis();
+            int want = imu::suggestedRotation();
+            if (want >= 0 && want != screenRotation) {
+                screenRotation = want;
+                lvgl_port::setRotation(want);
+                nvs.begin("tigerspool", false);
+                nvs.putInt("rot", want);
+                nvs.end();
+            }
+        }
+    }
+
     // The screen never sleeps during setup. Every one of these states puts
     // something on the panel that has to be READ off it - a QR code to scan, a
     // pairing code to type, a network being joined - and a screen that goes
@@ -678,6 +712,19 @@ void loop() {
     case ST_LANG: {
         screen_setup::showLanguage(false, langFromSettings);
         lvgl_port::loop();
+
+        // The rotate button on the first-boot header. Flipping by hand is a
+        // decision, so it also settles the question the accelerometer was
+        // answering: automatic following goes off, and stays off unless the
+        // user turns it on themselves under Display.
+        if (screen_setup::takeRotate()) {
+            screenRotation = (screenRotation == 0) ? 2 : 0;
+            screenAutoRot  = false;
+            saveScreenPrefs();
+            lvgl_port::setRotation(screenRotation);
+            screen_setup::showLanguage(true, langFromSettings);   // rebuild the right way up
+            lvgl_port::loop();
+        }
 
         // Opened from Settings to see which language is set, and closed again
         // without touching it. Without this the only way out was to pick one.
@@ -1026,7 +1073,8 @@ void loop() {
     }
 
     case ST_SET_SCREEN: {
-        screen_settings::showScreen(screenBrightness, screenSleepSec, screenRotation);
+        screen_settings::showScreen(screenBrightness, screenSleepSec,
+                                    screenRotation, screenAutoRot);
         lvgl_port::loop();
         BACK_TO_SETTINGS();
         int b = screen_settings::takeBrightness();
@@ -1036,9 +1084,12 @@ void loop() {
         if (sl >= 0) { screenSleepSec = sl; saveScreenPrefs();
                        screen_settings::invalidate(); }
         int r = screen_settings::takeRotation();
-        if (r >= 0)  { screenRotation = r; saveScreenPrefs();
-                       lvgl_port::setRotation(r);
-                       screen_settings::invalidate(); }
+        if (r != screen_settings::ROT_NONE) {
+            screenAutoRot = (r == screen_settings::AUTO_ROT);
+            if (!screenAutoRot) { screenRotation = r; lvgl_port::setRotation(r); }
+            saveScreenPrefs();
+            screen_settings::invalidate();
+        }
         break;
     }
 

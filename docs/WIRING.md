@@ -55,9 +55,14 @@ often than not.
 
 ## ⚠️ Do not use GPIO6 and GPIO7
 
-On this board GPIO6/7 are an **I²C bus** (QMI8658 IMU / camera header) and carry
-**pull-up resistors**. Wiring the PN532's UART there produces a link that looks
-alive and is quietly corrupt: random UIDs, `READ` commands that fail or return
+On this board GPIO6/7 are an **I²C bus** (camera header) and carry **pull-up
+resistors**. The QMI8658 accelerometer is *not* there — a scan of this board
+answers on the touch controller's bus, SDA 48 and SCL 47, at `0x6B`, and finds
+nothing at all on GPIO6/7. The warning below is unchanged either way: the
+pull-ups are what corrupt a UART, and an empty bus still has them.
+
+Wiring the PN532's UART there produces a link that looks alive and is quietly
+corrupt: random UIDs, `READ` commands that fail or return
 garbage, tags that read once and never again.
 
 GPIO6/7 appear in some early notes for this project and in the pin table of the

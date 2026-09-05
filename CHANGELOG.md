@@ -7,6 +7,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-09-05
+
+### Added
+
+- **The device works out which way up it is, on its first boot.** The board has
+  an accelerometer; a device that has never been told its orientation now asks
+  it once, before the language screen, so nobody has to read an upside-down
+  question.
+- **A rotate button on that first screen**, top right. The guess can be wrong —
+  lying flat, gravity says nothing — and a device somebody cannot read is a
+  device they cannot set up, so the correction is on the screen where the
+  problem shows rather than three taps into Settings. Pressing it is a
+  decision: automatic following goes off and stays off.
+- **Orientation under Display is now Auto / 0° / 180°.** Auto is not a
+  modifier on the choice, it is one of the choices, and one control removes the
+  state where automatic is on, an angle is also selected, and neither explains
+  the other. Auto follows the accelerometer while the device is running —
+  checked once a second, and only on a reading the sensor is sure of.
+
+### Fixed
+
+- `docs/WIRING.md` said the accelerometer lives on GPIO6/7. It does not: a scan
+  of this board answers at `0x6B` on the touch controller's bus, and finds
+  nothing at all on GPIO6/7. The warning against putting the reader there is
+  unchanged — the pull-ups are what corrupt a UART, and an empty bus still has
+  them.
+
+
 ## [1.22.0] - 2026-09-05
 
 ### Fixed

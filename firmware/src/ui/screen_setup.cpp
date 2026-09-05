@@ -59,6 +59,10 @@ void onChoice(lv_event_t* e) { s_choice = (int)(intptr_t)lv_event_get_user_data(
 // One screen object reused across all three steps: building and destroying a
 // screen per step would flash the panel between them, and the whole point of
 // this sequence is that it feels like one continuous thing.
+// The header the last frame() built, so a screen can hang one more control in
+// it without frame() having to know about that control.
+lv_obj_t* s_setupHeader = nullptr;
+
 lv_obj_t* frame(const char* title, bool withBack = false) {
     if (!s_screen) {
         s_screen = lv_obj_create(nullptr);
@@ -77,6 +81,7 @@ lv_obj_t* frame(const char* title, bool withBack = false) {
     // they cannot already see - and the 44 px it costs are exactly what the
     // layout needs to breathe.
     if (!title) {
+        s_setupHeader = nullptr;      // headerless screens have nowhere to hang one
         s_body = lv_obj_create(s_screen);
         lv_obj_remove_style_all(s_body);
         lv_obj_set_size(s_body, theme::SCREEN_W, theme::SCREEN_H);
@@ -93,7 +98,7 @@ lv_obj_t* frame(const char* title, bool withBack = false) {
         return s_body;
     }
 
-    lv_obj_t* header = lv_obj_create(s_screen);
+    lv_obj_t* header = s_setupHeader = lv_obj_create(s_screen);
     lv_obj_remove_style_all(header);
     lv_obj_add_style(header, theme::headerStyle(), 0);
     lv_obj_set_size(header, theme::SCREEN_W, theme::HEADER_H);
@@ -225,6 +230,9 @@ lv_obj_t* qr(const char* payload, lv_coord_t size = 132) {
 namespace screen_setup {
 
 static bool s_langBuilt = false;
+bool s_rotate = false;
+void onRotatePress(lv_event_t*) { s_rotate = true; }
+
 void showLanguage(bool force, bool withBack) {
     if (force) { s_active = false; }
     // Leaving without choosing has to be possible. Reached from Settings, this
@@ -242,6 +250,23 @@ void showLanguage(bool force, bool withBack) {
     // question: "Language" matches what the user tapped, and the long form does
     // not fit beside a back chevron - it was clipped mid-word.
     lv_obj_t* body = frame(i18n::T(withBack ? S_LANGUAGE : S_CHOOSE_LANG), withBack);
+
+    // First boot only. Reached from Settings there is a proper control under
+    // Display, and a second way to do the same thing on a screen that already
+    // has a back chevron is clutter.
+    if (!withBack && s_setupHeader) {
+        lv_obj_t* r = lv_btn_create(s_setupHeader);
+        lv_obj_remove_style_all(r);
+        lv_obj_set_size(r, 52, theme::HEADER_H);
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
+        lv_obj_add_event_cb(r, onRotatePress, LV_EVENT_CLICKED, nullptr);
+        lv_obj_t* g = lv_label_create(r);
+        lv_label_set_text(g, LV_SYMBOL_LOOP);
+        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(g, lv_color_hex(theme::TEXT_DIM), 0);
+        lv_obj_center(g);
+    }
+
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
@@ -639,5 +664,7 @@ bool takeBack()          { bool v = s_back; s_back = false; return v; }
 
 void hide()   { s_active = false; }   // next show() rebuilds
 bool active() { return s_active; }
+
+bool takeRotate() { bool v = s_rotate; s_rotate = false; return v; }
 
 }  // namespace screen_setup
