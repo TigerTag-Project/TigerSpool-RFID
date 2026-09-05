@@ -51,25 +51,48 @@ namespace screen_settings {
 
 void invalidate() { s_menuSig = 0; s_pickSig = 0; }
 
+// The four rows whose value and colour a background sync can change. The menu
+// itself never changes: eight rows, same order, always. So it is built once and
+// these are written into - a sync landing while somebody is scrolled down used
+// to rebuild the list under them and send them back to the top.
+lv_obj_t* s_mVal[4]  = { nullptr, nullptr, nullptr, nullptr };
+lv_obj_t* s_mIcon[4] = { nullptr, nullptr, nullptr, nullptr };
+// The screen those pointers belong to. Building any other screen frees them,
+// and writing into freed LVGL objects is a crash rather than a glitch - so the
+// update path proves it is still looking at its own screen before it writes.
+lv_obj_t* s_menuScreen = nullptr;
+
 void showMenu(const MenuState& st) {
-    uint32_t sig = hashOf(st.network) ^ hashOf(st.account)
-                 ^ ((uint32_t)st.visiblePrinters << 8) ^ (uint32_t)st.totalPrinters
-                 ^ (st.wifiUp   ? 0x00010000u : 0u)
-                 ^ (st.signedIn ? 0x00020000u : 0u)
-                 ^ (st.updateWaiting ? 0x5A5A5A5Au : 0u) ^ hashOf(st.latest);
-    if (sig == s_menuSig) return;
-    s_menuSig = sig;
+    char printersVal[16];
+    snprintf(printersVal, sizeof(printersVal), "%d/%d",
+             st.visiblePrinters, st.totalPrinters);
+    const char* upVal = (st.updateWaiting && st.latest && *st.latest)
+                      ? st.latest : TIGERSPOOL_FW_VERSION;
+    const char* vals[4] = { printersVal, st.network, st.account, upVal };
+    const uint32_t tints[4] = {
+        st.totalPrinters ? theme::TEXT : theme::DANGER,
+        st.wifiUp        ? theme::OK   : theme::DANGER,
+        st.signedIn      ? theme::OK   : theme::DANGER,
+        st.updateWaiting ? theme::WARN : theme::TEXT,
+    };
+
+    if (s_menuSig == 0x4D454E55u && s_menuScreen == frame::screen()) {
+        for (int i = 0; i < 4; i++) {
+            if (s_mVal[i])  lv_label_set_text(s_mVal[i], vals[i] ? vals[i] : "");
+            if (s_mIcon[i]) icons::tint(s_mIcon[i], tints[i]);
+        }
+        return;
+    }
+    s_menuSig = 0x4D454E55u;
+    for (int i = 0; i < 4; i++) s_mVal[i] = s_mIcon[i] = nullptr;
 
     lv_obj_t* body = frame::build(i18n::T(S_SETTINGS), onBack);
+    s_menuScreen = frame::screen();
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
-
-    char printersVal[16];
-    snprintf(printersVal, sizeof(printersVal), "%d/%d",
-             st.visiblePrinters, st.totalPrinters);
 
     // The icon carries the state, the label stays white.
     //
@@ -84,20 +107,14 @@ void showMenu(const MenuState& st) {
         // Red on an account with no printers in it: the single most common
         // thing wrong with a new device, and until now you had to open the row
         // to find out.
-        { E_PRINTERS, i18n::T(S_PRINTER),    printersVal,
-          icons::PRINTER, st.totalPrinters ? 0u : theme::DANGER },
-        { E_WIFI,     "Wi-Fi",               st.network,
-          icons::WIFI,    st.wifiUp   ? theme::OK : theme::DANGER },
-        { E_ACCOUNT,  i18n::T(S_TT_ACCOUNT), st.account,
-          icons::USER,    st.signedIn ? theme::OK : theme::DANGER },
+        { E_PRINTERS, i18n::T(S_PRINTER),    vals[0], icons::PRINTER, tints[0] },
+        { E_WIFI,     "Wi-Fi",               vals[1], icons::WIFI,    tints[1] },
+        { E_ACCOUNT,  i18n::T(S_TT_ACCOUNT), vals[2], icons::USER,    tints[2] },
         { E_SCREEN,   i18n::T(S_SCREEN),     "",
           icons::SCREEN,  0 },
         { E_LANGUAGE, i18n::T(S_LANGUAGE),   i18n::name(i18n::current()),
           icons::GLOBE,   0 },
-        { E_UPDATE,   i18n::T(S_UPDATE),
-          st.updateWaiting && st.latest && *st.latest
-              ? st.latest : TIGERSPOOL_FW_VERSION,
-          icons::UPDATE,  st.updateWaiting ? theme::WARN : 0 },
+        { E_UPDATE,   i18n::T(S_UPDATE),    vals[3], icons::UPDATE,  tints[3] },
         { E_RESTART,  i18n::T(S_RESTART),    "",
           icons::RESTART, theme::WARN },
         { E_FACTORY,  i18n::T(S_FACTORY),    "",
@@ -106,6 +123,16 @@ void showMenu(const MenuState& st) {
     for (auto& r : rows) {
         lv_obj_t* row = frame::row(body, r.label, r.value, true, onEntry,
                                    (void*)(intptr_t)r.id, r.icon, r.tint);
+
+        // Keep the four that a sync can change. Children of a row with an icon
+        // and a value are: icon box, label, value, chevron.
+        const int slot = (r.id == E_PRINTERS) ? 0 : (r.id == E_WIFI) ? 1
+                       : (r.id == E_ACCOUNT)  ? 2 : (r.id == E_UPDATE) ? 3 : -1;
+        if (slot >= 0) {
+            s_mIcon[slot] = lv_obj_get_child(row, 0);
+            s_mVal[slot]  = lv_obj_get_child(row, 2);
+        }
+
         if (r.id == E_FACTORY) {
             // The single entry that cannot be undone is the one place the
             // label is tinted too. Its icon alone would put it on the same

@@ -293,4 +293,8 @@ font fallback chain that would restore accents.
   value, so it is correct today - but the settings menu scrolls, and a sync
   landing while someone is scrolled down will move them. Worth the same
   treatment when it next matters.
+- `showMenu` builds once and writes into four value labels and four icons;
+  `icons::tint()` recolours a glyph or a set of drawn strokes in place. The
+  update path checks `frame::screen()` before writing - the pointers do not
+  survive another screen, and writing into freed LVGL objects is a crash.
 

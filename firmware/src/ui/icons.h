@@ -44,6 +44,11 @@ enum Id {
 // every stroke. Returns the box, or nullptr for NONE.
 lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t colour);
 
+// Recolour an icon already on screen. A row whose state changes - Wi-Fi lost,
+// an update arriving - repaints its glyph instead of rebuilding the row that
+// holds it, and therefore instead of rebuilding the list that holds the row.
+void tint(lv_obj_t* box, uint32_t colour);
+
 constexpr lv_coord_t BOX = 22;
 
 }  // namespace icons

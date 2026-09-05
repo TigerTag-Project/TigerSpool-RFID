@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-09-05
+
+### Fixed
+
+- **A background sync no longer scrolls the Settings menu back to the top.**
+  The menu never changes shape — eight rows, same order, always — so only the
+  four values a sync can touch are written into it now: the printer count, the
+  network, the account name and the waiting version, with their icon colours.
+  Icons can be recoloured in place rather than rebuilt.
+
+
 ## [1.21.0] - 2026-09-05
 
 ### Changed

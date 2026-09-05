@@ -59,6 +59,22 @@ lv_obj_t* symbol(lv_obj_t* parent, const char* glyph, uint32_t colour,
 
 }  // namespace
 
+void tint(lv_obj_t* box, uint32_t colour) {
+    if (!box) return;
+    const lv_color_t c = lv_color_hex(colour);
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(box); i++) {
+        lv_obj_t* k = lv_obj_get_child(box, i);
+        if (lv_obj_check_type(k, &lv_label_class)) {
+            lv_obj_set_style_text_color(k, c, 0);           // a symbol or a glyph
+        } else {
+            // A drawn stroke is either an outline or a solid; setting both is
+            // harmless because only one of them is visible on any given piece.
+            lv_obj_set_style_border_color(k, c, 0);
+            lv_obj_set_style_bg_color(k, c, 0);
+        }
+    }
+}
+
 lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c) {
     switch (id) {
     case WIFI:    return symbol(parent, LV_SYMBOL_WIFI, c);
