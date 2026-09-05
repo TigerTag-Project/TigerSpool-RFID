@@ -279,3 +279,18 @@ font fallback chain that would restore accents.
   recurring bug in any long-lived UI - the TigerScale warned about exactly
   this - and here it cost the scroll position on every tap.
 
+## 2026-09-05 - never rebuild a screen to show a value
+
+- Audited every redraw signature. `showUpdate` hashed `percent`, `showWifi`
+  hashed `rssi`, `showFactory` hashed `holdPercent` - all three change many
+  times a second. Each keeps its widgets now and writes into them.
+- Rule added to AGENTS.md's settled table, with the two costs already paid.
+- `/screen`: `lvgl_port::frameCounter()` increments in the flush callback,
+  `/screen.ver` serves it, the page polls that at 120 ms and fetches the 150 KB
+  bitmap only on a change.
+- Still on the list: `showMenu` and `showAccount` rebuild when a background
+  sync changes what they show. That is a real content change rather than a
+  value, so it is correct today - but the settings menu scrolls, and a sync
+  landing while someone is scrolled down will move them. Worth the same
+  treatment when it next matters.
+

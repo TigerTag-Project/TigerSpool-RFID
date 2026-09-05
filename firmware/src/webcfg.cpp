@@ -383,7 +383,7 @@ namespace {
           "<title>TigerSpool screen</title>"
           "<style>body{margin:0;background:#111;color:#888;font:13px system-ui;"
           "display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px}"
-          "img{width:240px;height:320px;max-width:92vw;height:auto;aspect-ratio:240/320;"
+          "img{width:240px;height:auto;max-width:92vw;aspect-ratio:240/320;"
           "image-rendering:pixelated;border-radius:8px;border:1px solid #333;"
           "cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none}"
           "b{color:#ddd}#h{color:#666}</style>"
@@ -392,14 +392,21 @@ namespace {
           "<div id=h>click the screen to tap it &middot; drag to swipe</div>"
           "<script>"
           "const i=document.getElementById('s'),H=document.getElementById('h');"
-          "let n=0,busy=0,timer=0;"
-          "function shot(){clearTimeout(timer);i.src='/screen.bmp?'+Date.now()}"
-          "i.onload=()=>{document.getElementById('n').textContent=++n;"
-          "timer=setTimeout(shot,600)};"
-          "i.onerror=()=>{document.getElementById('e').textContent='erreur';"
-          "timer=setTimeout(shot,2000)};"
-          // Panel pixels from a point in the page, whatever size the image is
-          // being drawn at.
+          "let n=0,busy=0,seen=-1,pending=0;"
+          // The bitmap is 150 KB; the counter is four bytes. Poll the cheap one
+          // often and fetch the expensive one only when the panel actually
+          // repainted - which is what makes moving between screens feel
+          // immediate instead of waiting out an interval sized for the image.
+          "function shot(){if(pending)return;pending=1;"
+          "i.src='/screen.bmp?'+Date.now()}"
+          "i.onload=()=>{pending=0;document.getElementById('n').textContent=++n};"
+          "i.onerror=()=>{pending=0;document.getElementById('e').textContent='erreur'};"
+          "async function poll(){"
+          "try{const v=+await (await fetch('/screen.ver',{cache:'no-store'})).text();"
+          "if(v!==seen){seen=v;shot()}"
+          "document.getElementById('e').textContent=''}"
+          "catch(_){document.getElementById('e').textContent='erreur'}"
+          "setTimeout(poll,120)}"
           "function pt(ev){const r=i.getBoundingClientRect();"
           "const x=Math.round((ev.clientX-r.left)/r.width*240);"
           "const y=Math.round((ev.clientY-r.top)/r.height*320);"
@@ -412,13 +419,10 @@ namespace {
           "const q=far?`x=${d[0]}&y=${d[1]}&x2=${up[0]}&y2=${up[1]}`"
           ":`x=${d[0]}&y=${d[1]}`;"
           "busy=1;H.textContent=(far?'swipe ':'tap ')+q;"
-          // The device pumps LVGL until the screen has settled before it
-          // answers, so the next frame fetched after this resolves already
-          // shows the result. No guessing at a delay.
           "try{await fetch('/api/tap?'+q)}catch(_){H.textContent='tap failed'}"
-          "busy=0;shot()});"
+          "busy=0;seen=-1});"
           "i.addEventListener('pointercancel',()=>{dn=null});"
-          "shot();</script>");
+          "poll();</script>");
         server.send(200, "text/html", p);
     }
 
@@ -1045,6 +1049,10 @@ namespace {
         server.on("/tiger-icon.svg", handleIcon);
         server.on("/screen.bmp", handleShot);      // raw panel capture
         server.on("/screen", handleShotPage);      // page that refreshes it
+        server.on("/screen.ver", []() {            // four bytes, see handleShotPage
+            server.sendHeader("Cache-Control", "no-store");
+            server.send(200, "text/plain", String(lvgl_port::frameCounter()));
+        });
         server.on("/tt-login", HTTP_POST, handleTtLogin);
         server.on("/tt-gstart", handleTtGStart);   // GET: submits nothing, see handleLogin
         server.on("/tt-gpoll", handleTtGPoll);

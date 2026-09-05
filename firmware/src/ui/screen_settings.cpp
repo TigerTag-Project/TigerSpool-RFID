@@ -195,6 +195,17 @@ int  s_newRot    = -1;
 bool s_holding   = false;
 uint32_t s_viewSig = 0;
 
+// Widgets kept from the last build, so a value that changes can be written
+// into the screen instead of rebuilding it. A rebuild throws away the scroll
+// position, the focus and any animation in flight; on a screen whose value
+// changes many times a second it also throws away the whole screen many times
+// a second. Valid only while s_viewSig still names the screen that made them.
+lv_obj_t* s_holdFill  = nullptr;   // factory reset progress
+lv_obj_t* s_holdLabel = nullptr;
+lv_obj_t* s_ring      = nullptr;   // OTA progress ring
+lv_obj_t* s_ringPct   = nullptr;
+lv_obj_t* s_signal    = nullptr;   // Wi-Fi strength readout
+
 void onAction(lv_event_t* e) {
     s_action = (screen_settings::Action)(intptr_t)lv_event_get_user_data(e);
 }
@@ -268,10 +279,19 @@ bool factoryHolding() { return s_holding; }
 
 void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
               int rssi) {
-    uint32_t sig = hashOf(ssid) ^ hashOf(ip) ^ (uint32_t)connected
-                 ^ ((uint32_t)(rssi + 200) << 8);
-    if (sig == s_viewSig) return;
+    // The signal moves by a decibel or two every second. Hashed into the
+    // signature it rebuilt this screen continuously; it is written into its
+    // label instead.
+    char sig_[16];
+    snprintf(sig_, sizeof(sig_), "%d dBm", rssi);
+
+    uint32_t sig = 0xA0000000u ^ hashOf(ssid) ^ hashOf(ip) ^ (uint32_t)connected;
+    if (sig == s_viewSig) {
+        if (s_signal) lv_label_set_text(s_signal, connected ? sig_ : "-");
+        return;
+    }
     s_viewSig = sig;
+    s_signal = nullptr;
 
     lv_obj_t* body = frame::build("Wi-Fi", onBack);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
@@ -290,9 +310,9 @@ void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
     // The number behind the colour of the home screen's Wi-Fi glyph. Printed
     // because "the icon is orange" is not something anyone can act on, and
     // dBm is - it says move the box or move the router.
-    char sig_[16];
-    snprintf(sig_, sizeof(sig_), "%d dBm", rssi);
-    kv(body, i18n::T(S_SIGNAL), connected ? sig_ : "-", theme::TEXT);
+    // kv() hands back the row; the value is its second child.
+    s_signal = lv_obj_get_child(
+        kv(body, i18n::T(S_SIGNAL), connected ? sig_ : "-", theme::TEXT), 1);
     kv(body, "IP", ip, theme::TEXT);
     kv(body, "MAC", mac, theme::TEXT);
 
@@ -419,11 +439,25 @@ static void badge(lv_obj_t* parent, const char* glyph, uint32_t colour) {
 
 void showUpdate(const char* version, const char* channel,
                 int otaState, const char* latest, int percent) {
+    // `percent` is written into the ring, never hashed into the signature.
+    // A download reports a hundred times, and a screen rebuilt on each report
+    // is an arc that restarts from nothing a hundred times instead of sweeping
+    // once - which is the whole reason it is an arc.
     uint32_t sig = 0xC0000000u ^ hashOf(version) ^ hashOf(channel)
-                 ^ ((uint32_t)otaState << 20) ^ hashOf(latest)
-                 ^ ((uint32_t)percent << 8);
-    if (sig == s_viewSig) return;
+                 ^ ((uint32_t)otaState << 20) ^ hashOf(latest);
+    if (sig == s_viewSig) {
+        if (s_ring) {
+            int v = (otaState == ota::DONE) ? 100 : percent;
+            lv_arc_set_value(s_ring, v);
+            if (s_ringPct) {
+                char b[8]; snprintf(b, sizeof(b), "%d%%", v);
+                lv_label_set_text(s_ringPct, b);
+            }
+        }
+        return;
+    }
     s_viewSig = sig;
+    s_ring = s_ringPct = nullptr;
 
     // While the image is being written there is nothing to go back to: the
     // download runs on its own task and leaving would hide it. So the whole
@@ -439,7 +473,7 @@ void showUpdate(const char* version, const char* channel,
         // A ring rather than a bar: it is round, it is centred, and at this
         // size a bar reads as a sliver. Same shape as the scale's, in this
         // product's colours.
-        lv_obj_t* ring = lv_arc_create(body);
+        lv_obj_t* ring = s_ring = lv_arc_create(body);
         lv_obj_set_size(ring, 152, 152);
         lv_arc_set_rotation(ring, 270);          // start at twelve o'clock
         lv_arc_set_bg_angles(ring, 0, 360);
@@ -459,7 +493,7 @@ void showUpdate(const char* version, const char* channel,
 
         // The number sits inside the ring, not under it: the eye is already
         // there, and the ring is empty in the middle by construction.
-        lv_obj_t* pct = lv_label_create(ring);
+        lv_obj_t* pct = s_ringPct = lv_label_create(ring);
         char buf[8];
         snprintf(buf, sizeof(buf), "%d%%", otaState == ota::DONE ? 100 : percent);
         lv_label_set_text(pct, buf);
@@ -584,9 +618,18 @@ void showRestart() {
 }
 
 void showFactory(int holdPercent) {
-    uint32_t sig = 0xE0000000u ^ (uint32_t)(holdPercent + 2);
-    if (sig == s_viewSig) return;
-    s_viewSig = sig;
+    // The hold progress is written into the bar, never rebuilt into it: this
+    // value changes on every frame someone keeps their finger down, and a
+    // screen rebuilt on every frame is a screen that cannot animate at all.
+    const int pct = holdPercent < 0 ? 0 : (holdPercent > 100 ? 100 : holdPercent);
+    if (s_viewSig == 0xE0000000u) {
+        if (s_holdFill)  lv_obj_set_width(s_holdFill, LV_PCT(pct));
+        if (s_holdLabel) lv_label_set_text(s_holdLabel,
+                             pct > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
+        return;
+    }
+    s_viewSig = 0xE0000000u;
+    s_holdFill = s_holdLabel = nullptr;
 
     lv_obj_t* body = frame::build(i18n::T(S_FACTORY), onBack);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
@@ -620,19 +663,18 @@ void showFactory(int holdPercent) {
     lv_obj_add_event_cb(hold, onHoldUp, LV_EVENT_RELEASED, nullptr);
     lv_obj_add_event_cb(hold, onHoldUp, LV_EVENT_PRESS_LOST, nullptr);
 
-    if (holdPercent > 0) {
-        lv_obj_t* fill = lv_obj_create(hold);
-        lv_obj_remove_style_all(fill);
-        lv_obj_set_size(fill, LV_PCT(holdPercent > 100 ? 100 : holdPercent), LV_PCT(100));
-        lv_obj_align(fill, LV_ALIGN_LEFT_MID, 0, 0);
-        lv_obj_set_style_bg_color(fill, lv_color_hex(theme::DANGER), 0);
-        lv_obj_set_style_bg_opa(fill, LV_OPA_80, 0);
-    }
+    // Built at zero width and kept: it exists so it can be widened.
+    s_holdFill = lv_obj_create(hold);
+    lv_obj_remove_style_all(s_holdFill);
+    lv_obj_set_size(s_holdFill, LV_PCT(pct), LV_PCT(100));
+    lv_obj_align(s_holdFill, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_bg_color(s_holdFill, lv_color_hex(theme::DANGER), 0);
+    lv_obj_set_style_bg_opa(s_holdFill, LV_OPA_80, 0);
 
-    lv_obj_t* l = lv_label_create(hold);
-    lv_label_set_text(l, holdPercent > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
-    lv_obj_center(l);
+    s_holdLabel = lv_label_create(hold);
+    lv_label_set_text(s_holdLabel, pct > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
+    lv_obj_set_style_text_font(s_holdLabel, &lv_font_montserrat_14, 0);
+    lv_obj_center(s_holdLabel);
 }
 
 }  // namespace screen_settings

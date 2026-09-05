@@ -7,6 +7,7 @@
 #include "splash.h"
 
 extern LGFX        lcd;
+static volatile uint32_t s_frame = 0;
 extern LGFX_Sprite canvas;      // shadow framebuffer, only for /screen.bmp
 extern bool        canvasReady;
 
@@ -76,7 +77,7 @@ void flushCb(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_t* px) {
     // it on the last: one bus setup per frame instead of one per rectangle.
     // Closing it also matters because the legacy raw-drawn screens still share
     // this bus, and they must not find it held.
-    if (lv_disp_flush_is_last(drv)) { lcd.endWrite(); s_dmaStarted = false; }
+    if (lv_disp_flush_is_last(drv)) { lcd.endWrite(); s_dmaStarted = false; s_frame++; }
 
     lv_disp_flush_ready(drv);
 }
@@ -219,6 +220,8 @@ void begin() {
 }
 
 uint32_t loop() { return lv_timer_handler(); }
+
+uint32_t frameCounter() { return s_frame; }
 
 void requestCapture(bool on) { s_capture = on; }
 bool capturing()             { return s_capture; }

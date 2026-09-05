@@ -18,6 +18,13 @@ uint32_t loop();
 
 // Screenshot support: mirror the next full repaint into the sprite.
 void requestCapture(bool on);
+
+// Increments every time LVGL finishes painting. /screen polls this instead of
+// re-fetching the framebuffer: the bitmap is 150 KB and the counter is four
+// bytes, so a page that only fetches when the panel actually changed reacts in
+// a tenth of a second instead of waiting out a poll interval sized for the
+// cost of the image.
+uint32_t frameCounter();
 bool capturing();
 
 // Queue a synthetic touch at a panel coordinate, as if a finger had landed

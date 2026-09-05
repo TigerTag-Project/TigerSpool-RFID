@@ -7,4 +7,4 @@
 // edit it. Two places to change a version is one place to forget.
 //
 // Semantic versioning: MAJOR.MINOR.PATCH.
-#define TIGERSPOOL_FW_VERSION "1.20.0"
+#define TIGERSPOOL_FW_VERSION "1.21.0"

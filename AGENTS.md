@@ -71,6 +71,7 @@ costs that again.
 
 | Settled | The reason it is settled |
 |---|---|
+| A screen is never rebuilt to reflect a value. | Rebuilding throws away the scroll position, the focus and any animation in flight. Build once, then write changing values into the widgets that hold them - only a change in what the screen CONTAINS justifies rebuilding it. Cost of ignoring it: a printer toggle threw the list back to the top, and the OTA ring restarted from zero a hundred times per download. |
 | **The reader is on GPIO43/44.** | GPIO6/7 is an I²C bus on this board, with pull-ups, shared with the IMU and camera header. A reader wired there enumerates, answers, and returns random UIDs — it looks alive. |
 | **Wi-Fi provisioning is in the main firmware.** | The device raises its own access point, answers the captive-portal probes and joins without rebooting. There is no separate provisioning firmware, and no second flash. |
 | **Account sign-in is email/password or Google pairing.** | The Google path is a code-and-QR pairing served by the TigerTag Cloud Functions. RFC 8628 device flow was evaluated and rejected: Google publishes no `verification_uri_complete`, so a QR cannot carry the code; polling requires a client secret the device must not hold; and it covers Google only. |

@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-09-05
+
+### Changed
+
+- **No screen is rebuilt to reflect a value any more.** Rebuilding throws away
+  the scroll position, the focus and any animation in flight, and three screens
+  were doing it many times a second:
+
+  - the OTA progress ring restarted from zero on every percent reported,
+    instead of sweeping once — which is the entire reason it is a ring;
+  - the Wi-Fi screen rebuilt itself whenever the signal moved by a decibel,
+    which on a real link is constantly;
+  - the factory-reset bar rebuilt on every frame of the press-and-hold, so it
+    could not animate at all.
+
+  Each now builds once and writes the changing value into the widget that holds
+  it. It is written into `AGENTS.md` as a settled rule rather than left as
+  something to rediscover.
+
+- **The live screen page reacts in a tenth of a second.** It polled the
+  framebuffer on a timer — 150 KB an image, so the timer had to be slow, so
+  moving between screens felt laggy. It now polls a four-byte paint counter
+  every 120 ms and fetches the image only when the panel actually changed.
+
+
 ## [1.20.0] - 2026-09-05
 
 ### Fixed
