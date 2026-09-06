@@ -313,3 +313,33 @@ font fallback chain that would restore accents.
   its current orientation and the thresholds are measured, but somebody has to
   hold it upside down.
 
+## 2026-09-06 - "connected permanently", and what that actually means
+
+Answers in `_internal/TIGERSCALE-CLOUD-ANSWERS.md`. The scale separates three
+things people call being connected, and the distinction settles the request:
+
+- **A, a session that is always ready to read and write.** Verified present in
+  this firmware: `refresh`/`uid` in NVS and loaded by `ttcloud::begin()`;
+  `ensureToken()` is lazy - it returns immediately under 50 minutes and is
+  called at the head of each authenticated operation, no timer; the periodic
+  sync runs on a 16 KB task, not the UI loop. So A is done.
+- **B, being told about changes.** The TigerScale does not have this AT ALL. No
+  push, no Listen, no SSE, no RTDB. What looks live in Tiger Studio is a LOCAL
+  WebSocket on the LAN with the scale as server - nothing to do with the
+  account.
+- **C, a heartbeat.** The scale PATCHes telemetry every 30 s / 5 min. We have no
+  write path at all.
+
+Done here: refresh on opening the printer picker - his recommendation 1, and
+90% of the benefit for a few lines.
+
+Not done, and it needs decisions rather than code:
+- **Who owns each field.** The scale has no write conflicts because it never
+  writes a field Studio owns; `displayName` is read and never written. His
+  strongest advice, and it comes before the first line of any write path.
+- **Who writes the signal, and when.** Any push mechanism - command queue or
+  RTDB - is inert until something in the backend writes to it.
+- A blocking `syncNow()` still runs from four webcfg handlers, and the web
+  server is polled from the main loop, so those stall the UI for a second or
+  two. Not new, and only on a page the user is already waiting on.
+

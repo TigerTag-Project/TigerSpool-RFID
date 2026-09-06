@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-09-06
+
+### Changed
+
+- **Opening the printer picker refreshes the account.** It is the one screen
+  where somebody is looking at the list and expecting it to match what they
+  just did in Tiger Studio, so it is the one moment freshness is worth a
+  request. The cached list draws immediately and the answer updates it when it
+  arrives — nothing to wait for.
+
+
 ## [1.23.0] - 2026-09-05
 
 ### Added

@@ -971,6 +971,16 @@ void loop() {
         }
         switch (screen_settings::takeEntry()) {
             case screen_settings::E_PRINTERS:
+                // Refresh the account on the way in. This is the one screen
+                // where somebody is looking at the printer list and expecting
+                // it to match what they just did in Tiger Studio, so it is the
+                // one moment freshness is worth a request. The cached list is
+                // drawn immediately and the answer updates it when it lands -
+                // there is nothing to wait for.
+                //
+                // This is what a permanent connection would buy, bought at the
+                // moment it is worth something instead of continuously.
+                ttcloud::startAsyncSync();
                 screen_settings::invalidate();
                 state = ST_PICK; stateSince = millis();
                 break;
