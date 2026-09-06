@@ -1,4 +1,5 @@
 #include "icons.h"
+#include "theme.h"
 
 namespace icons {
 namespace {
@@ -58,6 +59,90 @@ lv_obj_t* symbol(lv_obj_t* parent, const char* glyph, uint32_t colour,
 }
 
 }  // namespace
+
+// The box is 20x21 and the glyph is bottom-anchored inside it. Both numbers
+// are measured against a panel, not derived: the clip heights below fall in
+// the GAPS between the glyph's three pieces - outer arc, inner arc, dot -
+// rather than across one of them. A five-level scale was tried on the
+// TigerScale first and it cut through the outer arc, leaving its apex dim
+// while its shoulders were lit; the wave read as chopped off at the top.
+static const int WIFI_W = 20, WIFI_H = 21;
+static const uint8_t WIFI_CLIP_H[4] = { 0, 5, 10, WIFI_H };
+
+int wifiLevelFromRssi(int rssi) {
+    if (rssi > -40)  rssi = -40;
+    if (rssi < -100) rssi = -100;
+    int lv = (rssi + 100) * 3 / 60;
+    return (lv < 0) ? 0 : (lv > 3 ? 3 : lv);
+}
+
+lv_obj_t* wifiWave(lv_obj_t* parent) {
+    lv_obj_t* wrap = piece(parent, 0, 0, WIFI_W, WIFI_H);
+
+    lv_obj_t* dim = lv_label_create(wrap);          // child 0
+    lv_label_set_text(dim, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_font(dim, &lv_font_montserrat_16, 0);
+    lv_obj_align(dim, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    lv_obj_t* clip = lv_obj_create(wrap);           // child 1
+    lv_obj_remove_style_all(clip);
+    lv_obj_set_size(clip, WIFI_W, WIFI_H);
+    lv_obj_align(clip, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_clear_flag(clip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(clip, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t* lit = lv_label_create(clip);
+    lv_label_set_text(lit, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_font(lit, &lv_font_montserrat_16, 0);
+    lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, 0);
+    return wrap;
+}
+
+void setSignal(lv_obj_t* box, int level, bool connected) {
+    if (!box || lv_obj_get_child_cnt(box) < 2) return;
+    lv_obj_t* dim  = lv_obj_get_child(box, 0);
+    lv_obj_t* clip = lv_obj_get_child(box, 1);
+    lv_obj_t* lit  = lv_obj_get_child(clip, 0);
+    if (!lit) return;
+
+    if (!connected) {
+        lv_obj_set_style_text_color(dim, lv_color_hex(theme::DANGER), 0);
+        lv_obj_set_style_text_opa(dim, LV_OPA_COVER, 0);
+        lv_obj_add_flag(clip, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    if (level < 0) level = 0;
+    if (level > 3) level = 3;
+
+    // Full signal is ONE uniform glyph, not a stack. A clip box can only cover
+    // the ink it reaches, so at maximum the apex of the outer arc stayed on the
+    // dimmed copy and the wave read as cut off at the top. There is nothing to
+    // dim at full strength.
+    if (level >= 3) {
+        lv_obj_set_style_text_color(dim, lv_color_hex(theme::OK), 0);
+        lv_obj_set_style_text_opa(dim, LV_OPA_COVER, 0);
+        lv_obj_add_flag(clip, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    lv_obj_set_style_text_color(dim, lv_color_hex(theme::OK), 0);
+    // 50%, not the 30% iOS uses: 30 reads on a black status bar and vanishes on
+    // the grey cards of a network picker. 50 reads on both.
+    lv_obj_set_style_text_opa(dim, LV_OPA_50, 0);
+    lv_obj_set_style_text_color(lit, lv_color_hex(theme::OK), 0);
+    lv_obj_set_style_text_opa(lit, LV_OPA_COVER, 0);
+
+    if (level == 0) { lv_obj_add_flag(clip, LV_OBJ_FLAG_HIDDEN); return; }
+
+    lv_obj_clear_flag(clip, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_height(clip, WIFI_CLIP_H[level]);
+    // LVGL does not re-run alignment after a size change. Without these two the
+    // clip box re-centres and the lit copy drifts off the dimmed one - two
+    // waves a few pixels apart, visible, ugly, and a symptom that looks nothing
+    // like its cause.
+    lv_obj_align(clip, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, 0);
+}
 
 void tint(lv_obj_t* box, uint32_t colour) {
     if (!box) return;

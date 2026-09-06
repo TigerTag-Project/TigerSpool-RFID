@@ -13,15 +13,9 @@ lv_obj_t* s_list     = nullptr;
 lv_obj_t* s_account  = nullptr;
 lv_obj_t* s_wifi     = nullptr;
 
-// Four levels, and the thresholds are the ones a phone uses: -60 is a good
-// signal anywhere in a workshop, -75 is where a Bambu's MQTT starts dropping,
-// and below -85 the link is nominally up and practically not.
-int wifiLevel(int rssi) {
-    if (rssi == 0)   return 0;      // not connected
-    if (rssi >= -60) return 3;
-    if (rssi >= -75) return 2;
-    return 1;
-}
+// The level lives in icons::wifiLevelFromRssi now - the TigerScale's own
+// arithmetic, so one network is described identically by both products. The
+// portal's picker was moved onto it too; see `bars()` in net/portal_page.h.
 bool      s_active   = false;
 int       s_tapped   = -1;
 bool      s_settings = false;
@@ -67,9 +61,7 @@ void buildScreen() {
     s_account = icons::build(header, icons::USER, theme::OK);
     lv_obj_align(s_account, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 32, 0);
 
-    s_wifi = lv_label_create(header);
-    lv_label_set_text(s_wifi, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_font(s_wifi, &lv_font_montserrat_16, 0);
+    s_wifi = icons::wifiWave(header);
     lv_obj_align(s_wifi, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 4, 0);
 
     // The gear's hit area is 52 x 44 (6.6 x 5.6 mm) even though the glyph is
@@ -113,7 +105,7 @@ static uint32_t signature(const PrinterCfg* printers, int count,
                           int selected, const bool* online, bool syncing,
                           int wifiRssi, int account) {
     uint32_t h = 2166136261u ^ (uint32_t)selected ^ ((uint32_t)syncing << 16)
-               ^ ((uint32_t)wifiLevel(wifiRssi) << 24)
+               ^ ((uint32_t)icons::wifiLevelFromRssi(wifiRssi) << 24)
                ^ ((uint32_t)account << 12);
     for (int i = 0; i < count; i++) {
         h = h * 16777619u ^ (uint32_t)printers[i].type;
@@ -195,13 +187,14 @@ void show(const PrinterCfg* printers, int count,
         theme::DANGER, theme::BUSY, theme::WARN, theme::OK };
     icons::tint(s_account, ACCT_COLOUR[account < 0 ? 0 : (account > 3 ? 3 : account)]);
 
-    // One glyph, four colours. LVGL has a single Wi-Fi symbol rather than a set
-    // of bar counts, so the strength is carried by colour - which is the rule
-    // the settings rows already follow, so it needs no explaining twice.
-    static const uint32_t WIFI_COLOUR[4] = {
-        theme::DANGER, theme::WARN, theme::ACCENT, theme::OK };
-    lv_obj_set_style_text_color(
-        s_wifi, lv_color_hex(WIFI_COLOUR[wifiLevel(wifiRssi)]), 0);
+    // Length, not colour. The glyph used to go red, orange, then green as the
+    // signal improved, which made a perfectly usable -70 dBm look like a fault
+    // - orange means "something needs your attention" everywhere else on this
+    // device, and a slightly weaker signal does not. The rule this settles, and
+    // the TigerScale has been following it all along: colour carries a STATE
+    // (green connected, red no network), length carries a QUANTITY. Nobody has
+    // to wonder whether a yellow means "middling" or "look out".
+    icons::setSignal(s_wifi, icons::wifiLevelFromRssi(wifiRssi), wifiRssi != 0);
 
     if (!s_active) {
         lv_scr_load(s_screen);

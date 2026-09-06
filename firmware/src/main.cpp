@@ -73,12 +73,18 @@ PrinterBackend* backend = nullptr;
 enum LinkState : uint8_t { LINK_IDLE, LINK_TRYING, LINK_UP, LINK_GAVE_UP };
 LinkState linkState   = LINK_IDLE;
 uint8_t   linkTries   = 0;
+uint8_t   linkBudget  = 5;      // set from LINK_MAX_TRIES / LINK_RETRY_TRIES
 uint32_t  linkStartAt = 0;
 int       linkPrinter = -1;
 // Five attempts, and long enough between them that a printer waking from
 // standby gets a chance. A connect that has not landed in eight seconds is not
 // about to.
 static const uint8_t  LINK_MAX_TRIES = 5;
+// A retry is asked for by someone standing in front of the box, watching a
+// spinner. Five more attempts is forty seconds of that, which is long enough
+// to walk away from. Three is twenty-four - long enough to be a real attempt,
+// short enough to wait through.
+static const uint8_t  LINK_RETRY_TRIES = 3;
 static const uint32_t LINK_ATTEMPT_MS = 8000;
 CrealityBackend            crealityBackend;
 FlashForgeC5Backend  flashForgeBackend;
@@ -497,12 +503,23 @@ static bool wifiConnect() {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+    // Pump LVGL at full rate and touch the screen only when the countdown
+    // actually ticks. This loop used to redraw the screen and then sleep for
+    // 250 ms, which gave the spinner four frames a second - and since the
+    // redraw rebuilt the whole screen, each of those four frames started a
+    // brand new spinner at zero. Between the two it did not turn at all. This
+    // is the first screen anyone sees on a cold boot, so it is also the first
+    // impression the device makes.
     uint32_t t0 = millis();
+    int lastLeft = -1;
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
         int left = (int)((WIFI_TIMEOUT_MS - (millis() - t0)) / 1000) + 1;
-        screen_setup::showWifiConnecting(wifiSsid.c_str(), left);
+        if (left != lastLeft) {
+            lastLeft = left;
+            screen_setup::showWifiConnecting(wifiSsid.c_str(), left);
+        }
         lvgl_port::loop();
-        delay(250);
+        delay(5);
     }
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[wifi] timeout after 30 s with no connection");
@@ -584,7 +601,7 @@ static void linkTick() {
     if (linkPrinter != selectedPrinter) {
         if (backend) { backend->stop(); backend = nullptr; }
         linkPrinter = selectedPrinter;
-        linkState = LINK_IDLE; linkTries = 0;
+        linkState = LINK_IDLE; linkTries = 0; linkBudget = LINK_MAX_TRIES;
     }
 
     if (backend && backend->connected()) {
@@ -603,11 +620,11 @@ static void linkTick() {
 
     if (linkState == LINK_TRYING && millis() - linkStartAt < LINK_ATTEMPT_MS) return;
 
-    if (linkTries >= LINK_MAX_TRIES) {
+    if (linkTries >= linkBudget) {
         linkState = LINK_GAVE_UP;
         if (backend) { backend->stop(); backend = nullptr; }
         Serial.printf("[link] gave up on %s after %u tries\n",
-                      printers[selectedPrinter].name.c_str(), LINK_MAX_TRIES);
+                      printers[selectedPrinter].name.c_str(), linkBudget);
         return;
     }
 
@@ -620,7 +637,7 @@ static void linkTick() {
     }
     backend->begin(printers[selectedPrinter]);
     linkTries++; linkStartAt = millis(); linkState = LINK_TRYING;
-    Serial.printf("[link] attempt %u/%u to %s\n", linkTries, LINK_MAX_TRIES,
+    Serial.printf("[link] attempt %u/%u to %s\n", linkTries, linkBudget,
                   printers[selectedPrinter].name.c_str());
 }
 
@@ -629,7 +646,7 @@ static void linkTick() {
 // five more times.
 static void linkRetry() {
     ttcloud::startAsyncSync();
-    linkTries = 0; linkState = LINK_IDLE;
+    linkTries = 0; linkBudget = LINK_RETRY_TRIES; linkState = LINK_IDLE;
     Serial.println("[link] retry requested - re-reading the account first");
 }
 
@@ -1328,7 +1345,8 @@ void loop() {
 
     case ST_GRID: {
         screen_slots::show(printers[selectedPrinter].name.c_str(), backend,
-                           selSlot, nfcReady, (int)linkState);
+                           selSlot, nfcReady, (int)linkState,
+                           linkTries, linkBudget, ttcloud::asyncBusy());
         lvgl_port::loop();
 
         if (screen_slots::takeRetry()) { linkRetry(); screen_slots::invalidate(); break; }
@@ -1344,8 +1362,7 @@ void loop() {
 
     case ST_SCAN: {
         screen_scan::showScan(backend ? backend->slotLabel(selSlot) : "?",
-                              resultMsg.length() ? resultMsg.c_str() : nullptr,
-                              backend && backend->connected(), nfcReady);
+                              resultMsg.length() ? resultMsg.c_str() : nullptr);
         lvgl_port::loop();
 
         if (screen_scan::takeCancel()) {
@@ -1360,8 +1377,7 @@ void loop() {
     }
 
     case ST_REVIEW: {
-        screen_scan::showReview(backend ? backend->slotLabel(selSlot) : "?", tag,
-                                backend && backend->connected(), nfcReady);
+        screen_scan::showReview(backend ? backend->slotLabel(selSlot) : "?", tag);
         lvgl_port::loop();
 
         if (screen_scan::takeCancel()) {

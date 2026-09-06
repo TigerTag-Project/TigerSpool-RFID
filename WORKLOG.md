@@ -452,4 +452,74 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   reported LINK_UP. Header said K2Pro, grid showed the Ender-3's filament. The
   backends are singletons, so switching printers has to stop one before
   re-pointing it.
+- Benoit, on the failure screen: leave only the title and "Scan the QR code",
+  delete everything under it. He was right and I had already flagged the
+  symptom myself - the fourth cause needed scrolling to reach.
+- Spinner while connecting. First attempt showed a caption and no ring: the
+  slot count comes from the printer MODEL, so an unreachable printer still
+  reports five cells and `n == 0` was never true. The test is whether any slot
+  is `known`, not how many there are.
+- Second attempt still drew no ring: padding on an lv_arc insets the arc inside
+  its own bounds, so 48 top + 14 bottom on a 56 px spinner left negative room.
+  Margin styles are compiled out of this build; a transparent spacer object
+  holds the gap instead.
+- The header dot went red while the spinner said "connecting" - the screen
+  arguing with itself. Hidden while the spinner is up; it returns only when
+  there are slots on screen to be red about.
+- Wi-Fi bars: `icons::signalBars` / `icons::setSignal`, three bars in the same
+  22 px box as every other icon, written into rather than rebuilt.
+- Benoit: the connect animation freezes, and the Wi-Fi one never turns at all.
+  Instrumented the main loop with a 2-second worst-case report instead of
+  guessing. It said `backend=5006` and `passes=1` in a five-second window -
+  WebSockets' blocking connect, default WEBSOCKETS_TCP_TIMEOUT. Set to 1200 and
+  re-measured: 1203 ms, passes back to ~100 per 2 s. The remaining 1.2 s is one
+  stall per 8-second attempt. Removing it entirely means printer I/O on its own
+  task, which is a real change and not one to make in passing - the backends
+  are singletons the UI reads directly, so it needs a handoff that does not
+  race on Strings.
+- The Wi-Fi join screen had BOTH failure modes: rebuilt per pass (new spinner
+  every frame, always at zero) and a 250 ms delay in the wait loop. Added a
+  generation counter to screen_setup so a screen can tell "nothing changed"
+  from "someone cleaned the screen under me" - guessing wrong either way is a
+  blank panel or a spinner that never turns.
+- Wi-Fi icon: arcs, not bars. Benoit's call, and the portal was already right -
+  bars are the GSM symbol. Same four thresholds as `bars()` in portal_page.h.
+  Bench reads -81 dBm and the panel lights the dot alone, which is what the
+  phone shows for that network.
+- Progress line under the spinner. It must NOT be part of the rebuild
+  signature: a counter that rebuilt the screen would destroy the spinner and
+  restart it at zero on every tick, which is precisely the Wi-Fi bug above.
+  Written into a label held in `s_progress`, cleared on every rebuild.
+- Wi-Fi arcs: mine drew correctly and the thresholds matched the portal, but
+  Benoit said the image was still wrong next to the TigerScale. Asked that repo
+  for its LVGL code rather than guessing a fourth time, and the answer was that
+  there is no drawing at all: two stacked LV_SYMBOL_WIFI labels, one dimmed at
+  50% and one lit inside a container whose HEIGHT is the level. Reproducing a
+  shape could never match displaying it. Three attempts at arcs were three
+  attempts at the wrong problem.
+  Details worth keeping: four levels and not five, because the glyph has three
+  pieces and a fifth cut lands mid-arc; clip heights measured off the panel,
+  not calculated; full strength paints ONE copy because a mask cannot reach the
+  apex; 50% and not iOS's 30%, which vanishes on grey cards; and LVGL does not
+  re-run alignment after a size change, so the clip and the lit label must be
+  re-aligned on every level change or the two copies drift apart.
+  Their dBm arithmetic came across too, and I moved the portal's picker onto it
+  as well - otherwise the panel and the phone would have disagreed about the
+  same network, which is the problem I had just finished solving.
+- Benoit asked for a scan page when a slot is tapped. It already existed -
+  ST_SCAN, "present the spool", cancel - and had never been reachable: the
+  colour block swallowed every press. lv_obj is CLICKABLE by default in LVGL 8.
+  This is the third time that default has cost a session; icons.cpp documents
+  it for drawn strokes, and it is worth remembering that it applies to any bare
+  lv_obj_create placed on top of a button.
+- Status dots removed from the scan/review/result screens, and the
+  printerUp/readerUp parameters removed with them rather than left unused.
+- **OPEN, and it matters: pressing Send takes the whole device down.** Benoit
+  reported it and the board was confirmed dead - no network, no USB CDC, esptool
+  could not connect. Not a sleep, not a reboot: a hang. A serial capture was
+  armed to catch the backtrace and the session moved on before it was
+  reproduced, so the cause is still unknown. Do NOT theorise it away - the one
+  thing needed is that trace. The null slot name in the Creality status line was
+  found by reading and fixed, but it invalidates a String rather than faulting,
+  so it is almost certainly not this.
 

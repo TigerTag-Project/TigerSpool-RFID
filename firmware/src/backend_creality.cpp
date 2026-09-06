@@ -132,7 +132,10 @@ bool CrealityBackend::assign(int idx, const TagInfo& t) {
     m["minTemp"] = t.nozMin ? t.nozMin : 190;
     m["maxTemp"] = t.nozMax ? t.nozMax : 230;
     bool ok = sendDoc(d);
-    g_status = ok ? (String("sent -> ") + CREALITY_SLOTS[idx].name) : "send failed";
+    // slotLabel, not the raw name: slot 0 is the external holder and its name
+    // is deliberately null, so concatenating it here produced a String that
+    // Arduino invalidates - an empty status line where a report should be.
+    g_status = ok ? (String("sent -> ") + slotLabel(idx)) : "send failed";
     if (ok) refresh();
     return ok;
 }

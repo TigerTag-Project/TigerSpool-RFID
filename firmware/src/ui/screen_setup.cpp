@@ -63,6 +63,15 @@ void onChoice(lv_event_t* e) { s_choice = (int)(intptr_t)lv_event_get_user_data(
 // it without frame() having to know about that control.
 lv_obj_t* s_setupHeader = nullptr;
 
+// Bumped every time frame() empties the screen. A screen that wants to write
+// into widgets it built earlier - rather than build them again - compares this
+// against the value it saw when it built them: equal means its pointers are
+// still alive, different means somebody else has been here and they are not.
+// Without it a screen cannot tell "nothing changed" from "I was demolished",
+// and guessing wrong either way is a blank panel or a spinner that restarts
+// thirty times a second and therefore never appears to turn at all.
+uint32_t s_gen = 0;
+
 lv_obj_t* frame(const char* title, bool withBack = false) {
     if (!s_screen) {
         s_screen = lv_obj_create(nullptr);
@@ -75,6 +84,7 @@ lv_obj_t* frame(const char* title, bool withBack = false) {
         lv_obj_clear_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
     }
     lv_obj_clean(s_screen);
+    s_gen++;
 
     // A null title means no header at all. On a screen whose whole content is
     // "scan this square", a bar repeating "Wi-Fi setup" tells nobody anything
@@ -348,8 +358,30 @@ void showWifi(const char* apSsid, const char* apPass) {
     // not theirs.
 }
 
+// The countdown is written in, never rebuilt around.
+//
+// This screen used to call frame() on every pass, and frame() empties the
+// screen: the spinner was destroyed and created again thirty times a second,
+// so its animation restarted before it had turned a degree. It looked frozen
+// because it WAS frozen - a new spinner every frame, each one at zero. The
+// rule the rest of this UI follows applies here too: build once, write values
+// into the widgets that are already on the glass.
 void showWifiConnecting(const char* ssid, int secondsLeft) {
+    static uint32_t   myGen = 0;
+    static lv_obj_t*  s_cd  = nullptr;
+    static char       lastSsid[33] = "";
+
+    if (myGen == s_gen && s_active && s_cd && strncmp(lastSsid, ssid, 32) == 0) {
+        char t[40];
+        snprintf(t, sizeof(t), "%s  %ds", i18n::T(S_CONNECTING), secondsLeft);
+        lv_label_set_text(s_cd, t);
+        return;
+    }
+
     frame("Wi-Fi");
+    myGen = s_gen;
+    snprintf(lastSsid, sizeof(lastSsid), "%s", ssid);
+
     lv_obj_t* sp = lv_spinner_create(s_body, 1200, 60);
     lv_obj_set_size(sp, 72, 72);
     lv_obj_set_style_arc_color(sp, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
@@ -358,9 +390,9 @@ void showWifiConnecting(const char* ssid, int secondsLeft) {
     lv_label_set_text(n, ssid);
     lv_obj_set_style_text_font(n, &lv_font_montserrat_16, 0);
 
-    char t[32];
+    char t[40];
     snprintf(t, sizeof(t), "%s  %ds", i18n::T(S_CONNECTING), secondsLeft);
-    caption(t);
+    s_cd = caption(t);
 }
 
 void showWifiFailed(const char* ssid) {

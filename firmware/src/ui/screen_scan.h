@@ -5,11 +5,12 @@
 // read, see what the printer actually stored.
 namespace screen_scan {
 
-void showScan(const char* slotLabel, const char* errorOrNull,
-              bool printerUp, bool readerUp);
+// No status dots: reaching this screen already proves the printer answered and
+// the tap came off its slot grid, so a pair of green dots would only repeat
+// what the user just did.
+void showScan(const char* slotLabel, const char* errorOrNull);
 
-void showReview(const char* slotLabel, const TagInfo& tag,
-                bool printerUp, bool readerUp);
+void showReview(const char* slotLabel, const TagInfo& tag);
 
 // `sentColour` is what the printer ended up with. When it differs from the
 // tag's own colour the screen shows both and says so - several printers accept

@@ -53,6 +53,35 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t colour, int scale = 100);
 // holds it, and therefore instead of rebuilding the list that holds the row.
 void tint(lv_obj_t* box, uint32_t colour);
 
+// Wi-Fi strength, and it is the TigerScale's own icon rather than a copy of it.
+//
+// Two LV_SYMBOL_WIFI labels stacked: a dimmed one at 50% showing the whole
+// glyph, and a lit one inside a container whose HEIGHT is the signal level.
+// The arcs that light up are not objects at all - they are what a horizontal
+// mask lets through of a single glyph. That is the whole trick, and it is why
+// three arcs drawn with lv_arc could never match: this displays the original
+// shape instead of reproducing it.
+//
+// The box is deliberately larger than the glyph. At 16x17 the top arc was
+// clipped and the icon read as a broken drawing; the clip heights are measured
+// from the BOTTOM and everything is bottom-anchored, so a taller box reveals
+// more without moving a single threshold.
+lv_obj_t* wifiWave(lv_obj_t* parent);
+
+// level 0..3, and `connected` is a separate statement from a bad signal: a
+// disconnected device paints the whole glyph solid red, where one bar lights
+// the dot in green over dimmed arcs. "No network" and "dreadful network" have
+// to be told apart at a glance, which they cannot be if one of them is just
+// zero bars. Written into the labels already on screen.
+void setSignal(lv_obj_t* box, int level, bool connected);
+
+// 0..3 from dBm. Integer truncation on purpose - it is what fixes the bands 20
+// dBm apart. Taken verbatim from the TigerScale so that one network is
+// described identically by both products; changing it here alone would have
+// two devices on the same shelf reporting different strengths, which is worse
+// than two different drawings.
+int wifiLevelFromRssi(int rssi);
+
 constexpr lv_coord_t BOX = 22;
 
 }  // namespace icons

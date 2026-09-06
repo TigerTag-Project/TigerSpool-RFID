@@ -7,6 +7,79 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-09-06
+
+### Changed
+
+- **The connection failure screen says one thing.** It listed four causes under
+  the QR code, and the most useful of them - a Bambu that has run out of
+  connection slots - was below the fold on a 240 x 320 panel. A screen that has
+  to be scrolled to reach its point has no point. Title, QR, "Scan the QR
+  code", and nothing else; the causes live on the wiki, where they can be
+  corrected without shipping firmware.
+- **Wi-Fi strength is the TigerScale's own icon now, not colour.** The glyph
+  used to go red, then orange, then green as the signal improved, so a
+  perfectly usable -70 dBm looked like a fault - orange means "this needs your
+  attention" everywhere else on this device. It is two stacked copies of
+  LV_SYMBOL_WIFI now: a dimmed one showing the whole shape, and a lit one
+  inside a container whose height is the signal. The arcs that light up are not
+  objects, they are what a mask lets through of one glyph - which is why three
+  arcs drawn by hand could never have matched. The dBm arithmetic came across
+  with it, and the portal's network picker moved onto the same arithmetic, so
+  one network is now described by one number in three places.
+
+  The rule this settles: **colour carries a state, length carries a quantity.**
+  Green connected, red no network - and nothing in between, so nobody has to
+  wonder whether a yellow means "middling" or "look out".
+
+### Added
+
+- **Connecting to a printer now looks like something is happening, and says
+  what.** A turning ring replaces the grid of empty cells that made an
+  unreachable printer look like a broken box, and the line under it names the
+  step: reading the account first - the address may be what was wrong - then
+  "Attempt 1/3", "2/3", "3/3". A spinner says the device is busy; a counter
+  says it has a plan and how much of it is left. Retrying spends three attempts
+  rather than five: someone who has just pressed the button is standing there
+  watching, and forty seconds of that is long enough to walk away from.
+
+### Fixed
+
+- **The scan, review and result screens no longer carry status dots.** Getting
+  there is already the proof: the slot grid is only reachable through a printer
+  that answered, and the tap that opened the screen came off that grid. Two
+  green dots repeating it spent the top of the panel telling the user what they
+  had just done.
+- **A Creality status line came out empty after a send to the external
+  holder.** That slot's name is deliberately null - it is a word, not a
+  position, and comes from the translation table - and concatenating it made
+  Arduino invalidate the whole string.
+- **Tapping a slot did nothing.** The cell was a button, but the coloured block
+  inside it covers almost all of it and a bare LVGL object is clickable by
+  default - so every press aimed at a spool landed on the block and stopped
+  there. The grid could only be operated by hitting the three millimetres of
+  text above or below the colour, which reads as a screen that ignores you. The
+  scan screen behind it was there the whole time.
+- **The whole interface froze for five seconds at a time while connecting to a
+  printer.** Measured on the bench: `backend->loop()` took 5006 ms per attempt,
+  and the main loop ran once in that span. The WebSocket library opens its TCP
+  connection with a blocking connect, from the same loop that draws the screen,
+  and its default timeout is five seconds - which is what an unreachable
+  printer costs, every attempt. Capped at 1200 ms, measured again at 1203 ms:
+  a printer on the same network answers in tens of milliseconds, so this only
+  shortens the wait for one that is never going to answer.
+- **The spinner on the Wi-Fi connecting screen did not turn at all.** Two
+  reasons at once, and either alone was enough. The screen rebuilt itself on
+  every pass to update its countdown, destroying the spinner and creating a new
+  one at zero; and the loop around it slept 250 ms between frames. Built once
+  and written into now, and LVGL runs at full rate while the join is waited on.
+  This is the first screen a cold boot shows.
+- **The slot screen was building a new retry button every frame.** The
+  unchanged path - the one taken on almost every loop - re-ran the header code
+  meant for a rebuild, stacking a fresh button on the previous one for as long
+  as the screen was up.
+
+
 ## [1.29.0] - 2026-09-06
 
 ### Added

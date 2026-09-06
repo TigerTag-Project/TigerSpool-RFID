@@ -38,19 +38,18 @@ namespace screen_scan {
 
 void invalidate() { s_which = NONE; s_sig = 0; }
 
-void showScan(const char* slotLabel, const char* errorOrNull,
-              bool printerUp, bool readerUp) {
+// No status dots on any of these three screens. Getting here is already the
+// proof: the slot grid is only reachable through a printer that answered, and
+// the tap that opened this screen came off that grid. A pair of green dots
+// repeating it spends the top of the panel saying what the user just did.
+void showScan(const char* slotLabel, const char* errorOrNull) {
     uint32_t sig = hashStr(slotLabel) ^ hashStr(errorOrNull ? errorOrNull : "");
-    if (s_which == SCAN && sig == s_sig) {
-        frame::setDots(-1, printerUp, readerUp);
-        return;
-    }
+    if (s_which == SCAN && sig == s_sig) return;
     s_which = SCAN; s_sig = sig;
 
     char title[24];
     snprintf(title, sizeof(title), "%s %s", i18n::T(S_SLOT), slotLabel);
     lv_obj_t* body = frame::build(title, onCancel);
-    frame::setDots(-1, printerUp, readerUp);
 
     lv_obj_t* sp = lv_spinner_create(body, 1400, 55);
     lv_obj_set_size(sp, 104, 104);
@@ -68,8 +67,7 @@ void showScan(const char* slotLabel, const char* errorOrNull,
     frame::button(body, i18n::T(S_CANCEL), 2, onCancel);
 }
 
-void showReview(const char* slotLabel, const TagInfo& tag,
-                bool printerUp, bool readerUp) {
+void showReview(const char* slotLabel, const TagInfo& tag) {
     uint32_t sig = hashStr(slotLabel) ^ (tag.r << 16 | tag.g << 8 | tag.b)
                  ^ hashStr(tag.material.c_str()) ^ hashStr(tag.brand.c_str());
     if (s_which == REVIEW && sig == s_sig) return;
@@ -78,7 +76,6 @@ void showReview(const char* slotLabel, const TagInfo& tag,
     char title[28];
     snprintf(title, sizeof(title), "%s %s", LV_SYMBOL_RIGHT, slotLabel);
     lv_obj_t* body = frame::build(title, onCancel);
-    frame::setDots(-1, printerUp, readerUp);
     lv_obj_set_style_pad_row(body, 4, 0);
 
     swatch(body, tag.r, tag.g, tag.b, 68);

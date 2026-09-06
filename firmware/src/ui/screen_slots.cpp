@@ -14,6 +14,7 @@ lv_obj_t* s_grid = nullptr;
 bool s_built = false;
 int  s_tapped = -1;
 bool s_back = false;
+lv_obj_t* s_progress = nullptr;   // the line under the spinner, or null
 int  s_lastCount = -1;
 uint32_t s_lastSig = 0;
 
@@ -25,6 +26,11 @@ void onBack()              { s_back = true; }
 // cancel the scroll under the user's finger.
 uint32_t signature(PrinterBackend* b, int n, int selected, int link) {
     uint32_t h = 2166136261u ^ (uint32_t)selected ^ ((uint32_t)link << 8);
+    // `s.known` below carries more weight than it looks: a backend reports its
+    // slot count from the printer's model before it has connected, so an
+    // unreachable printer still yields five cells. Known-ness is what separates
+    // the spinner from the grid, and folding it in here is what lets the first
+    // real answer replace the spinner.
     if (!b) return h;
     for (int i = 0; i < n; i++) {
         const SlotState& s = b->slot(i);
@@ -46,46 +52,52 @@ void invalidate() { s_built = false; s_lastCount = -1; s_lastSig = 0; }
 bool s_retry = false;
 void onRetry(lv_event_t*) { s_retry = true; }
 
+// What to say under the spinner. Reading the account comes first because it is
+// what actually happens first on a retry - the address may be what was wrong,
+// so it is re-read before anything is dialled - and "Attempt 2 of 3" is worth
+// more than a bare spinner: it says the device has a plan and how much of it
+// is left.
+void progressText(char* out, size_t n, int tries, int budget, bool fetching) {
+    if (fetching)   { snprintf(out, n, "%s", i18n::T(S_LINK_FETCH)); return; }
+    if (tries <= 0) { snprintf(out, n, "%s", i18n::T(S_LINK_TRY));   return; }
+    snprintf(out, n, i18n::T(S_LINK_ATTEMPT), tries, budget);
+}
+
 void show(const char* printerName, PrinterBackend* backend,
-          int selected, bool readerReady, int link) {
+          int selected, bool readerReady, int link,
+          int tries, int budget, bool fetching) {
     // No backend is a state to DRAW, not a reason to draw nothing. When the
     // link has given up there is no backend at all, and that is exactly the
     // moment the user needs a screen with a retry button on it.
     const int n = backend ? backend->slotCount() : 0;
+    bool anyKnown = false;
+    for (int i = 0; i < n && !anyKnown; i++) anyKnown = backend->slot(i).known;
     const uint32_t sig = signature(backend, n, selected, link);
+    // Nothing has changed: leave the screen alone. The header was built with
+    // this same `link`, so its dot and its retry button are already right -
+    // rebuilding them here once per frame stacked a fresh button on the old
+    // one every loop, and the spinner below would have restarted mid-turn.
     if (s_built && n == s_lastCount && sig == s_lastSig) {
-        // The reader dot is gone: it was green on every screen, always, because
-    // the reader is always ready - a pixel that says nothing. What it used to
-    // claim is now provable under Settings, on a screen that actually reads a
-    // tag. Only the printer connection is reported here, where it varies.
-    // Idle and connecting are the same thing to a user - it is working on it -
-    // so they share the blue. Given up is not a colour, it is a button.
-    if (link == 3) {
-        lv_obj_t* r = lv_btn_create(frame::header());
-        lv_obj_remove_style_all(r);
-        lv_obj_set_size(r, 52, theme::HEADER_H);
-        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
-        lv_obj_add_event_cb(r, onRetry, LV_EVENT_CLICKED, nullptr);
-        lv_obj_t* g = lv_label_create(r);
-        lv_label_set_text(g, LV_SYMBOL_REFRESH);
-        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
-        lv_obj_set_style_text_color(g, lv_color_hex(theme::WARN), 0);
-        lv_obj_center(g);
-        frame::setDots(-1, -1, -1);
-    } else {
-        frame::setDots(-1, link == 2 ? 1 : 0, -1);
-    }
+        // The one thing that may change without a rebuild. Written into the
+        // label that is already there, so the spinner beside it keeps turning.
+        if (s_progress) {
+            char t[48];
+            progressText(t, sizeof(t), tries, budget, fetching);
+            lv_label_set_text(s_progress, t);
+        }
         return;
     }
     s_built = true; s_lastCount = n; s_lastSig = sig;
+    s_progress = nullptr;              // whatever it pointed at is about to go
 
     lv_obj_t* body = frame::build(printerName, onBack);
     // The reader dot is gone: it was green on every screen, always, because
     // the reader is always ready - a pixel that says nothing. What it used to
     // claim is now provable under Settings, on a screen that actually reads a
     // tag. Only the printer connection is reported here, where it varies.
-    // Idle and connecting are the same thing to a user - it is working on it -
-    // so they share the blue. Given up is not a colour, it is a button.
+    // Connecting is not a colour either - it is the spinner in the body, and
+    // the dot stays hidden rather than flashing red at someone who is already
+    // being told the box is working on it. Given up is a button.
     if (link == 3) {
         lv_obj_t* r = lv_btn_create(frame::header());
         lv_obj_remove_style_all(r);
@@ -99,7 +111,11 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_center(g);
         frame::setDots(-1, -1, -1);
     } else {
-        frame::setDots(-1, link == 2 ? 1 : 0, -1);
+        // While the spinner is up it IS the indicator; a red dot beside a
+        // ring that says "connecting" is the screen arguing with itself. The
+        // dot comes back the moment there is something to be red about - a
+        // link that was working and dropped, with the last slots still drawn.
+        frame::setDots(-1, link == 2 ? 1 : (anyKnown ? 0 : -1), -1);
     }
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -116,10 +132,40 @@ void show(const char* printerName, PrinterBackend* backend,
     // The rule generalises past this printer: FIRST slot alone, the rest four
     // to a line. A Bambu with four AMS units gets its external spool on top and
     // four rows of four beneath, which is also how those units are grouped.
-    // Giving up is a screen of its own, not an empty grid. It says what to
-    // check, and carries the QR because four causes do not fit on a 240 px
-    // panel and the wiki can hold the long version - and be corrected later
-    // without a firmware release.
+    // Giving up is a screen of its own, not an empty grid. It says one thing
+    // and offers one action. The causes - printer off, wrong network, wrong
+    // settings, a Bambu that has run out of connection slots - all live behind
+    // the QR, where a wiki page can be corrected the day a new printer joins
+    // that list. A panel 240 px wide cannot argue a case; it can point at one.
+    // Trying is not nothing, and it must not look like nothing. An empty grid
+    // for forty seconds is what made the box feel broken when the printer was
+    // merely off; a turning ring says the device is working on it, and it is
+    // the difference between waiting and wondering. It replaces the grid only
+    // while there is no grid to show - a reconnection after a drop keeps the
+    // slots on screen, because stale filament is better than a blank screen.
+    if (link < 2 && !anyKnown) {
+        // A transparent box to hold the gap. Margin styles are compiled out of
+        // this build, and padding on the arc itself insets the arc inside its
+        // own bounds - 48 top and 14 bottom on a 56 px spinner left negative
+        // room and it drew nothing at all, a caption sitting alone under a gap.
+        lv_obj_t* pad = lv_obj_create(body);
+        lv_obj_remove_style_all(pad);
+        lv_obj_set_size(pad, 56, 116);
+        lv_obj_clear_flag(pad, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t* sp = lv_spinner_create(pad, 1000, 60);
+        lv_obj_set_size(sp, 56, 56);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::LINE), LV_PART_MAIN);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::BUSY), LV_PART_INDICATOR);
+        lv_obj_set_style_arc_width(sp, 6, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(sp, 6, LV_PART_INDICATOR);
+        lv_obj_align(sp, LV_ALIGN_TOP_MID, 0, 44);
+        char t[48];
+        progressText(t, sizeof(t), tries, budget, fetching);
+        s_progress = frame::caption(t, theme::TEXT_DIM);
+        return;
+    }
+
     if (link == 3) {
         lv_obj_t* t = lv_label_create(body);
         lv_label_set_text(t, i18n::T(S_LINK_FAIL));
@@ -135,16 +181,6 @@ void show(const char* printerName, PrinterBackend* backend,
 
         frame::caption(i18n::T(S_LF_SCAN), theme::TEXT_DIM);
 
-        const StrId why[] = { S_LF_POWER, S_LF_NETWORK, S_LF_SETTINGS, S_LF_BUSY };
-        for (StrId id : why) {
-            lv_obj_t* l = lv_label_create(body);
-            lv_label_set_text_fmt(l, "%s %s", LV_SYMBOL_BULLET, i18n::T(id));
-            lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
-            lv_obj_set_width(l, theme::SCREEN_W - 2 * theme::PAD - 6);
-            lv_obj_set_style_text_font(l, &lv_font_montserrat_12, 0);
-            lv_obj_set_style_text_color(l, lv_color_hex(theme::TEXT_DIM), 0);
-            lv_obj_set_style_pad_top(l, 5, 0);
-        }
         return;
     }
 
@@ -212,6 +248,13 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_style_bg_color(block,
             st.known ? lv_color_make(st.r, st.g, st.b) : lv_color_hex(0x3A424E), 0);
         lv_obj_clear_flag(block, LV_OBJ_FLAG_SCROLLABLE);
+        // And not clickable. A bare lv_obj is clickable by default in LVGL 8,
+        // and this one covers almost the whole cell - so every press aimed at
+        // the slot landed on the colour block and stopped there. The cell was
+        // a button that could only be pressed on the three millimetres of text
+        // above and below it, which reads as a grid that simply does not
+        // respond. Same trap as the drawn icons in icons.cpp.
+        lv_obj_clear_flag(block, LV_OBJ_FLAG_CLICKABLE);
 
         // Black on a pale spool, white on a dark one. Perceived brightness,
         // not the arithmetic mean: the eye reads green as far brighter than
