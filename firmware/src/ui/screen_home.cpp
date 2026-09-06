@@ -1,4 +1,5 @@
 #include "screen_home.h"
+#include "icons.h"
 #include "theme.h"
 #include "../i18n.h"
 #include "i18n.h"
@@ -9,7 +10,7 @@ namespace {
 
 lv_obj_t* s_screen   = nullptr;
 lv_obj_t* s_list     = nullptr;
-lv_obj_t* s_syncDot  = nullptr;
+lv_obj_t* s_account  = nullptr;
 lv_obj_t* s_wifi     = nullptr;
 
 // Four levels, and the thresholds are the ones a phone uses: -60 is a good
@@ -59,16 +60,17 @@ void buildScreen() {
     lv_obj_set_style_text_color(title, lv_color_hex(theme::TEXT), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, 9, 0);
 
-    // Wi-Fi first, then the sync dot, then the gear. The order is left to
-    // right in importance: nothing else on this screen works without the
-    // first, and the reason a printer shows as unreachable is usually here.
+    // Account, then Wi-Fi, then the gear. Two things this screen depends on
+    // and cannot show you otherwise: the printers come from the account, and
+    // they are reached over Wi-Fi. The same person glyph the Account row in
+    // Settings uses, so the two are recognisably the same subject.
+    s_account = icons::build(header, icons::USER, theme::OK);
+    lv_obj_align(s_account, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 32, 0);
+
     s_wifi = lv_label_create(header);
     lv_label_set_text(s_wifi, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_font(s_wifi, &lv_font_montserrat_16, 0);
     lv_obj_align(s_wifi, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 4, 0);
-
-    s_syncDot = makeDot(header, theme::TEXT_DIM);
-    lv_obj_align(s_syncDot, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 32, 0);
 
     // The gear's hit area is 52 x 44 (6.6 x 5.6 mm) even though the glyph is
     // small. Sizing a target to its icon is how a 2 mm button happens.
@@ -109,9 +111,10 @@ namespace screen_home {
 // else, and the screen looks frozen while the device is perfectly healthy.
 static uint32_t signature(const PrinterCfg* printers, int count,
                           int selected, const bool* online, bool syncing,
-                          int wifiRssi) {
+                          int wifiRssi, int account) {
     uint32_t h = 2166136261u ^ (uint32_t)selected ^ ((uint32_t)syncing << 16)
-               ^ ((uint32_t)wifiLevel(wifiRssi) << 24);
+               ^ ((uint32_t)wifiLevel(wifiRssi) << 24)
+               ^ ((uint32_t)account << 12);
     for (int i = 0; i < count; i++) {
         h = h * 16777619u ^ (uint32_t)printers[i].type;
         h = h * 16777619u ^ (uint32_t)printers[i].visible;
@@ -123,12 +126,13 @@ static uint32_t signature(const PrinterCfg* printers, int count,
 }
 
 void show(const PrinterCfg* printers, int count,
-          int selected, const bool* online, bool syncing, int wifiRssi) {
+          int selected, const bool* online, bool syncing, int wifiRssi,
+          int account) {
     if (!s_screen) buildScreen();
 
     static uint32_t lastSig = 0;
     static bool     everBuilt = false;
-    uint32_t sig = signature(printers, count, selected, online, syncing, wifiRssi);
+    uint32_t sig = signature(printers, count, selected, online, syncing, wifiRssi, account);
     if (everBuilt && s_active && sig == lastSig) return;
     lastSig = sig; everBuilt = true;
 
@@ -179,8 +183,17 @@ void show(const PrinterCfg* printers, int count,
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
     }
 
-    lv_obj_set_style_bg_color(s_syncDot,
-        lv_color_hex(syncing ? theme::OK : theme::TEXT_DIM), 0);
+    // Green reachable, orange signed in but unreachable - which on this device
+    // means the internet is down, and is the case worth seeing - red not
+    // signed in at all.
+    // Red no account to be connected to, blue linked and working on it, orange
+    // linked but the last exchange failed - the one a user can act on - green
+    // the last exchange succeeded. Green is a claim about the exchange, not
+    // about holding a token: a device whose network died stops claiming to be
+    // fine instead of waiting half an hour for its token to expire.
+    static const uint32_t ACCT_COLOUR[4] = {
+        theme::DANGER, theme::BUSY, theme::WARN, theme::OK };
+    icons::tint(s_account, ACCT_COLOUR[account < 0 ? 0 : (account > 3 ? 3 : account)]);
 
     // One glyph, four colours. LVGL has a single Wi-Fi symbol rather than a set
     // of bar counts, so the strength is carried by colour - which is the rule

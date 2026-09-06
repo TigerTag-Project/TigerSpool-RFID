@@ -75,7 +75,8 @@ void tint(lv_obj_t* box, uint32_t colour) {
     }
 }
 
-lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c) {
+lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c, int scale) {
+    const auto S = [scale](int v) { return v * scale / 100; };
     switch (id) {
     case WIFI:    return symbol(parent, LV_SYMBOL_WIFI, c);
     case UPDATE:  return symbol(parent, LV_SYMBOL_DOWNLOAD, c);
@@ -88,7 +89,7 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c) {
     default:      break;
     }
 
-    lv_obj_t* box = piece(parent, 0, 0, BOX, BOX);
+    lv_obj_t* box = piece(parent, 0, 0, S(BOX), S(BOX));
 
     switch (id) {
     case USER:
@@ -100,8 +101,8 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c) {
         // The head follows the box; the shoulders must keep overflowing by
         // about a third of their diameter, or the cut rises and the bust
         // becomes a half-circle.
-        disc(box, 7, 1, 8, c);
-        disc(box, 2, 13, 17, c);
+        disc(box, S(7), S(1), S(8), c);
+        disc(box, S(2), S(13), S(17), c);
         break;
 
     case GLOBE:
@@ -110,9 +111,9 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c) {
         // coordinates for a 22 px box, taken as given rather than scaled from
         // its 26 px ones - a 2 px stroke does not scale with the shape it
         // draws, so scaled coordinates come out wrong.
-        ring(box, 1, 1, 19, c);
-        bar(box, 1, 10, 19, 2, 0, c);
-        outline(box, 7, 1, 8, 19, 4, c);
+        ring(box, S(1), S(1), S(19), c);
+        bar(box, S(1), S(10), S(19), 2, 0, c);
+        outline(box, S(7), S(1), S(8), S(19), 4, c);
         break;
 
     case PRINTER:
@@ -122,9 +123,9 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c) {
         // it did not read better - the heavy block at the bottom took over the
         // icon and the printer stopped looking like a printer. Reverted to the
         // first version, which was balanced.
-        bar(box, 6, 0, 10, 5, 1, c);
-        outline(box, 2, 6, 18, 10, 2, c);
-        bar(box, 6, 17, 10, 5, 1, c);
+        bar(box, S(6), S(0), S(10), S(5), 1, c);
+        outline(box, S(2), S(6), S(18), S(10), 2, c);
+        bar(box, S(6), S(17), S(10), S(5), 1, c);
         break;
 
     default:

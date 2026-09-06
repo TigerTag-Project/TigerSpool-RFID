@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-09-06
+
+### Added
+
+- **The home screen shows the account, next to the Wi-Fi.** The same person
+  glyph the Account row in Settings uses, so the two are recognisably the same
+  subject. Four states: red when no account is linked, blue while it is
+  connecting, orange when the last exchange with the account failed, green when
+  it succeeded.
+
+  Green is a claim about the **last exchange**, not about holding a token. A
+  device whose network dies stops claiming to be fine, instead of staying green
+  until its token expires half an hour later — which is what the same indicator
+  does on the TigerScale, and what its author recommended changing on both
+  products. Blue exists so a healthy device does not announce "no account" for
+  the few seconds of every boot before its token arrives.
+
+### Changed
+
+- `scripts/flash.sh` identifies the board by MAC before it writes anything, and
+  refuses if the expected one is not plugged in. See the incident below.
+
+
 ## [1.24.0] - 2026-09-06
 
 ### Changed

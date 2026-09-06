@@ -4,6 +4,7 @@
 #   bash scripts/flash.sh                 build, then flash
 #   bash scripts/flash.sh --monitor       ... and open the serial console
 #   bash scripts/flash.sh --port /dev/... when auto-detection picks the wrong one
+#   bash scripts/flash.sh --any          skip the board identity check
 #   bash scripts/flash.sh --fs            also upload the LittleFS image
 #   bash scripts/flash.sh --erase         wipe the whole chip first - see below
 #
@@ -36,6 +37,7 @@ cd "$(dirname "$0")/.."
 
 ENV=tigerspool
 PORT=""
+ANY=0
 MONITOR=0
 FS=0
 ERASE=0
@@ -43,6 +45,7 @@ ERASE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --port)    PORT="${2:?--port needs a device path}"; shift 2 ;;
+    --any)     ANY=1; shift ;;
     --monitor) MONITOR=1; shift ;;
     --fs)      FS=1; shift ;;
     --erase)   ERASE=1; shift ;;
@@ -56,6 +59,64 @@ command -v pio >/dev/null 2>&1 || {
   echo "       ~/.platformio/penv/bin/pio"
   exit 2
 }
+
+# ---------------------------------------------------------------------------
+#  Which board is on the other end of that cable?
+#
+#  The incident this exists for: a TigerScale and a TigerSpool were plugged
+#  into the same Mac. The TigerSpool's port disappeared and reappeared under a
+#  different name, the remaining port was assumed to be it, and TigerSpool
+#  firmware was written to the TigerScale four times before anyone noticed.
+#
+#  A serial port name is not an identity - it is whatever the OS handed out
+#  this time. The MAC is the identity, and esptool can read it without writing
+#  anything. So: read first, match, and only then upload.
+#
+#  The expected MAC lives in .bench-mac, which is gitignored - it is a fact
+#  about one desk, not about the project.
+# ---------------------------------------------------------------------------
+ESPTOOL="$HOME/.platformio/penv/bin/python -m esptool"
+EXPECT="${TIGERSPOOL_MAC:-$(cat .bench-mac 2>/dev/null || true)}"
+
+mac_of() { $ESPTOOL --port "$1" --no-stub read_mac 2>/dev/null \
+             | awk '/^MAC:/ { print tolower($2); exit }'; }
+
+if [ "$ANY" = 1 ]; then
+  echo "== --any: skipping the board check"
+elif [ -z "$EXPECT" ]; then
+  ports=(/dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM*)
+  found=(); for p in "${ports[@]}"; do [ -e "$p" ] && found+=("$p"); done
+  if [ "${#found[@]}" -eq 1 ]; then
+    m="$(mac_of "${found[0]}")"
+    echo "== no .bench-mac yet; one board present: ${found[0]} ($m)"
+    echo "   record it so this can never go to the wrong board:"
+    echo "       echo $m > .bench-mac"
+    PORT="${found[0]}"
+  else
+    echo "error: more than one board is plugged in and .bench-mac is not set."
+    for p in "${found[@]}"; do echo "       $p  $(mac_of "$p")"; done
+    echo "       Record the TigerSpool's MAC:  echo <mac> > .bench-mac"
+    exit 2
+  fi
+else
+  match=""
+  for p in /dev/cu.usbmodem* /dev/ttyUSB* /dev/ttyACM*; do
+    [ -e "$p" ] || continue
+    m="$(mac_of "$p")"
+    echo "== $p is $m"
+    [ "$m" = "$EXPECT" ] && match="$p"
+  done
+  if [ -z "$match" ]; then
+    echo "error: no board with MAC $EXPECT is plugged in."
+    echo "       Nothing was written. Use --any to override deliberately."
+    exit 2
+  fi
+  if [ -n "$PORT" ] && [ "$PORT" != "$match" ]; then
+    echo "note: --port said $PORT, but $EXPECT is on $match - using $match"
+  fi
+  PORT="$match"
+  echo "== target confirmed: $PORT ($EXPECT)"
+fi
 
 cd firmware
 PORT_ARG=()

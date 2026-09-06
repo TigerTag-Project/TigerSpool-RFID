@@ -82,3 +82,6 @@ TODO.local.md
 
 # Build-time font downloads, keyed on their pinned tag. Never committed.
 .cache/
+
+# Which board is on this desk. One desk, not the project.
+.bench-mac

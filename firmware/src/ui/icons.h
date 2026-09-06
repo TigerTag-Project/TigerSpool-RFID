@@ -42,7 +42,11 @@ enum Id {
 
 // Builds the icon into a 22x22 box parented to `parent`. `colour` is applied to
 // every stroke. Returns the box, or nullptr for NONE.
-lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t colour);
+// `scale` in percent of the 22 px box. A row gives an icon a whole 48 px line
+// to itself and 22 reads there; a header puts it beside 16 px glyphs where the
+// same drawing collapses into a blob, so it needs room rather than a different
+// picture - the point of using the same glyph is that it is the same glyph.
+lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t colour, int scale = 100);
 
 // Recolour an icon already on screen. A row whose state changes - Wi-Fi lost,
 // an update arriving - repaints its glyph instead of rebuilding the row that

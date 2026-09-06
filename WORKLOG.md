@@ -343,3 +343,36 @@ Not done, and it needs decisions rather than code:
   server is polled from the main loop, so those stall the UI for a second or
   two. Not new, and only on a page the user is already waiting on.
 
+## 2026-09-06 - INCIDENT: firmware written to the wrong board
+
+TigerSpool firmware was flashed onto the bench TigerScale four times.
+
+**What happened.** Both boards were plugged into the same Mac. The TigerSpool's
+port (`/dev/cu.usbmodem141401`) disappeared and a different port
+(`/dev/cu.usbmodem12101`) was present, so it was assumed to be the same device
+re-enumerated. It was the TigerScale. `esptool read_mac` afterwards:
+`dc:b4:d9:24:99:18` is the TigerSpool, `20:6e:f1:9a:17:b4` is the TigerScale.
+
+**What it cost beyond the TigerScale.** Every build in that window went to the
+wrong board, so the TigerSpool kept running older firmware - and the "account
+icon renders as a dot" bug chased for an hour did not exist. What was on screen
+was the OLD sync dot, on a device that had never received the new code. A
+question was sent to the sibling project about a bug that was never real.
+
+**The fix.** `flash.sh` now reads the MAC with `esptool --no-stub read_mac`
+before uploading, matches it against `.bench-mac` (gitignored), and picks that
+port among all of them. No match, no write. `--any` overrides deliberately.
+With no `.bench-mac` and one board it proceeds and prints the line to record;
+with several it refuses and lists them.
+
+**The lesson, and it generalises.** A serial port name is not an identity - it
+is whatever the OS handed out this time. Anything destructive addressed by a
+name the OS chooses needs to verify what is on the other end first.
+
+### Added
+
+- Account health on the home screen. `ttcloud::health()` returns 0..3 and green
+  asserts that the LAST EXCHANGE succeeded: `g_lastOkMs` is stamped by every
+  successful token refresh and sync, with a 12 minute TTL - two missed syncs.
+- `theme::BUSY` (#2F7FFF), the fourth state colour.
+

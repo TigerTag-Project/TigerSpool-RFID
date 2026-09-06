@@ -16,8 +16,13 @@ namespace screen_home {
 // four levels before it reaches the screen's redraw signature: raw dBm moves by
 // a few points every second on a still desk, and a screen that rebuilds itself
 // on that loses the scroll position while someone is reading it.
+// `account` is ttcloud::health(): 2 reachable, 1 signed in but unreachable,
+// 0 not signed in. It replaced a dot that reported whether a sync happened to
+// be running - true for a second every five minutes, and grey the rest of the
+// time, which is not something anyone can act on.
 void show(const PrinterCfg* printers, int count,
-          int selected, const bool* online, bool syncing, int wifiRssi);
+          int selected, const bool* online, bool syncing, int wifiRssi,
+          int account);
 
 // True while this screen owns the display, so the legacy raw-drawn screens know
 // to leave the canvas alone.

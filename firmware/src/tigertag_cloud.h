@@ -48,6 +48,16 @@ namespace ttcloud {
     // loading" from "this account really has no printers" - two states that
     // look identical on an empty list and mean opposite things.
     bool   everSynced();
+
+    // Four answers, and green is an assertion about the LAST EXCHANGE rather
+    // than about holding a token. A device whose token is valid but whose
+    // network died reports trouble instead of staying green until the token
+    // expires half an hour later.
+    //   3  the last exchange with the account succeeded          - nothing to do
+    //   2  linked, but the last exchange failed or has gone stale - fix something
+    //   1  linked, working on it - bounded, so it cannot mean "stuck" for ever
+    //   0  no account linked                                     - link one
+    int    health();
     bool   syncNow(String& summary);      // blocking; prefer startAsyncSync()
     bool   consumeChanged();              // true once, if the last sync changed anything
 

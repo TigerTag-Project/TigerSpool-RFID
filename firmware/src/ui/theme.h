@@ -35,6 +35,10 @@ constexpr uint32_t DANGER    = 0xE0483C;   // unreachable, destructive
 // reset is red. Without the distinction everything consequential turns red
 // and red stops meaning anything.
 constexpr uint32_t WARN      = 0xE8821E;   // interrupts, destroys nothing
+// Working on it. The state that stops a device announcing a problem it is in
+// the middle of solving - without it, every boot showed "no account" for the
+// seconds before the token arrived, which is a support call.
+constexpr uint32_t BUSY      = 0x2F7FFF;
 constexpr uint32_t GO_BG     = 0x1E5B33;   // confirm button
 constexpr uint32_t NO_BG     = 0x5A2320;   // cancel button
 

@@ -26,6 +26,13 @@ namespace {
     uint32_t g_tokenAt = 0, g_lastSync = 0, g_bootAt = 0;
     bool     g_changed = false;
     String   g_lastResult = "";
+    // When the account last answered anything at all - a token refresh, a
+    // sync, a profile read. Green is a claim about THIS, so everything that
+    // talks to the account touches it.
+    uint32_t g_lastOkMs = 0;
+    // Two missed syncs. Long enough that one dropped request is not an alarm,
+    // short enough that a real outage shows while the user is still nearby.
+    const uint32_t OK_TTL_MS = 12UL * 60 * 1000;
 
     // ---- HTTPS ----------------------------------------------------------------
     int httpsPOST(const String& url, const String& body, String& resp, const char* bearer = nullptr) {
@@ -129,6 +136,7 @@ namespace {
         JsonDocument r;
         if (deserializeJson(r, resp)) return false;
         g_idToken = r["id_token"] | "";
+        if (g_idToken.length()) g_lastOkMs = millis();
         String nr = r["refresh_token"] | "";
         if (nr.length() && nr != g_refresh) { g_refresh = nr; saveSession(); }
         String nu = r["user_id"] | "";
@@ -324,6 +332,14 @@ static bool g_syncedOk = false;
 
 bool ttcloud::everSynced() { return g_lastSync != 0; }
 
+int ttcloud::health() {
+    if (!haveSession())    return 0;              // nothing to be connected to
+    if (g_lastOkMs == 0)   return 1;              // linked, still working on it
+    if (!g_syncedOk && g_lastSync) return 2;      // it answered once, then failed
+    if (millis() - g_lastOkMs > OK_TTL_MS) return 2;
+    return 3;
+}
+
 bool ttcloud::due() {
     if (!haveSession() || WiFi.status() != WL_CONNECTED) return false;
     if (g_lastSync == 0) return (millis() - g_bootAt > 8000);         // first sync about 8 s after boot
@@ -512,6 +528,7 @@ bool ttcloud::syncNow(String& summary) {
     k.end();
 
     g_syncedOk = (okBrands > 0);
+    if (g_syncedOk) g_lastOkMs = millis();   // green is a claim about this
     if (diff) g_changed = true;
     Serial.printf("[account] sync total %lu ms\n", (unsigned long)(millis() - tSync));
     if (!g_syncedOk) { summary = g_lastResult = "TigerTag: no answer (TLS/network)"; return false; }
