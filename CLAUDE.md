@@ -139,6 +139,16 @@ Run `pio pkg install` in `firmware/` once and the two agree again.
 - **When a rule here turns out to be wrong, change it in the same session.** A
   file that describes a repository it no longer matches is worse than no file.
 
+## The roadmap
+
+`docs/ROADMAP.md` holds what is deliberately not done yet, why, and what has to
+be **decided** before it can be built. Two of its entries are blocked on
+decisions rather than on work - who owns each account field, and who writes the
+change signal - and starting either without the answer produces something that
+has to be undone.
+
+An item leaves that file by being built or by being ruled out. Never by rotting.
+
 ## Reviews
 
 `docs/REVIEW-BRIEF.md` is the standing brief: reviews are read-only, the axes to

@@ -220,6 +220,7 @@ document.
 | [OTA.md](docs/OTA.md) | Partitions, the manifest, and what is settled before the first release |
 | [PRINTER-COMPATIBILITY.md](docs/PRINTER-COMPATIBILITY.md) | Per-brand status and slot naming |
 | [WIRING.md](docs/WIRING.md) | The four wires |
+| [ROADMAP.md](docs/ROADMAP.md) | What is deliberately not done yet, and what has to be decided first |
 
 Contributors and agents start at **[AGENTS.md](AGENTS.md)** and
 **[CODEMAP.md](CODEMAP.md)**.
