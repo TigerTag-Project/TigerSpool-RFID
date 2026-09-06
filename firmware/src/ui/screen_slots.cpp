@@ -1,4 +1,9 @@
 #include "screen_slots.h"
+
+// Where a failure sends someone. A wiki rather than text on the panel: four
+// causes do not fit on 240 px, and a page can be corrected the day a new
+// printer joins the list without shipping firmware to do it.
+static const char* LINK_HELP_URL = "https://wiki.tigersystem.io";
 #include "frame.h"
 #include "theme.h"
 #include "i18n.h"
@@ -111,6 +116,38 @@ void show(const char* printerName, PrinterBackend* backend,
     // The rule generalises past this printer: FIRST slot alone, the rest four
     // to a line. A Bambu with four AMS units gets its external spool on top and
     // four rows of four beneath, which is also how those units are grouped.
+    // Giving up is a screen of its own, not an empty grid. It says what to
+    // check, and carries the QR because four causes do not fit on a 240 px
+    // panel and the wiki can hold the long version - and be corrected later
+    // without a firmware release.
+    if (link == 3) {
+        lv_obj_t* t = lv_label_create(body);
+        lv_label_set_text(t, i18n::T(S_LINK_FAIL));
+        lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_color(t, lv_color_hex(theme::DANGER), 0);
+        lv_obj_set_style_pad_bottom(t, 8, 0);
+
+        lv_obj_t* q = lv_qrcode_create(body, 104, lv_color_black(), lv_color_white());
+        lv_qrcode_update(q, LINK_HELP_URL, strlen(LINK_HELP_URL));
+        lv_obj_set_style_border_width(q, 5, 0);      // quiet zone
+        lv_obj_set_style_border_color(q, lv_color_white(), 0);
+        lv_obj_set_style_pad_bottom(q, 6, 0);
+
+        frame::caption(i18n::T(S_LF_SCAN), theme::TEXT_DIM);
+
+        const StrId why[] = { S_LF_POWER, S_LF_NETWORK, S_LF_SETTINGS, S_LF_BUSY };
+        for (StrId id : why) {
+            lv_obj_t* l = lv_label_create(body);
+            lv_label_set_text_fmt(l, "%s %s", LV_SYMBOL_BULLET, i18n::T(id));
+            lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+            lv_obj_set_width(l, theme::SCREEN_W - 2 * theme::PAD - 6);
+            lv_obj_set_style_text_font(l, &lv_font_montserrat_12, 0);
+            lv_obj_set_style_text_color(l, lv_color_hex(theme::TEXT_DIM), 0);
+            lv_obj_set_style_pad_top(l, 5, 0);
+        }
+        return;
+    }
+
     s_grid = lv_obj_create(body);
     lv_obj_remove_style_all(s_grid);
     lv_obj_set_width(s_grid, LV_PCT(100));

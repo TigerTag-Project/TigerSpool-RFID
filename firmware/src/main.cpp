@@ -574,8 +574,15 @@ static void linkTick() {
     if (!WiFi.isConnected() || selectedPrinter < 0) return;
     if (printers[selectedPrinter].type == PT_NONE) return;
 
-    // A different printer means a different link. Start over.
+    // A different printer means a different link. Hang up FIRST.
+    //
+    // Without the stop, the next line saw the previous printer's session still
+    // connected and declared the link up - so the header named one printer
+    // while the grid showed another's filament, and no reconnection was ever
+    // attempted. The backends are singletons, so re-pointing one at a new host
+    // means stopping it, not just calling begin() again.
     if (linkPrinter != selectedPrinter) {
+        if (backend) { backend->stop(); backend = nullptr; }
         linkPrinter = selectedPrinter;
         linkState = LINK_IDLE; linkTries = 0;
     }

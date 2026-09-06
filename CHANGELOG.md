@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-09-06
+
+### Added
+
+- **A connection failure now explains itself.** After the five attempts, the
+  screen says so and lists what to check — is the printer on, is it on this
+  network, are its settings right in Tiger Studio Manager, and whether it is
+  simply out of connection slots, which is routine on Bambu A1, A1 Mini, A2L,
+  P1 and P1S. A QR code goes to `wiki.tigersystem.io` for the long version: a
+  page can be corrected the day a new printer joins that list, and a string
+  compiled into firmware cannot.
+
+### Fixed
+
+- **Switching printers could leave the previous one's filament on screen.** The
+  session is held open now, and the link check saw the old printer still
+  connected and declared itself up — so the header named one printer while the
+  grid showed another's spools, and no reconnection was ever attempted. The
+  link hangs up before it changes printer.
+
+
 ## [1.28.0] - 2026-09-06
 
 ### Changed

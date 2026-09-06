@@ -444,4 +444,12 @@ it has given up). The home screen still shows per-printer reachability from the
 probe rather than the link state, and the settings screens show nothing. "Every
 view" is therefore partly true - worth finishing once we agree where it goes,
 since the header is already carrying the account and Wi-Fi at 240 px wide.
+- Connection failure screen: title, QR to wiki.tigersystem.io, four causes.
+  Drawn by `screen_slots` when `link == 3`, which is why that screen had to
+  learn to render with no backend at all.
+- **Bug I introduced in 1.28.0 and caught on hardware:** holding the session
+  open meant `linkTick` saw the PREVIOUS printer's backend connected and
+  reported LINK_UP. Header said K2Pro, grid showed the Ender-3's filament. The
+  backends are singletons, so switching printers has to stop one before
+  re-pointing it.
 
