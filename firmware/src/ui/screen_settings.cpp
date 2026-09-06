@@ -14,6 +14,35 @@ namespace {
 screen_settings::Entry s_entry = screen_settings::E_NONE;
 bool s_back = false;
 int  s_toggled = -1;
+uint32_t s_viewSig = 0;
+
+// WHICH screen the signature belongs to, and it is not a nicety.
+//
+// Every view in this file shared one `s_viewSig` and each folded a distinct
+// constant into its own hash - 0xA0000000 for Wi-Fi, 0xB1000000 for the NFC
+// tester, and so on. That is not a namespace: the constant is XORed with a
+// hash of the content, so one screen's signature can land on another's. When
+// it does, the second screen takes its "nothing changed" path and writes into
+// the widget pointers the FIRST one cached - which LVGL destroyed when the
+// screen was rebuilt.
+//
+// It crashed exactly there, and the assert named the real cause:
+//   assert failed: heap_caps_free ... "free() target pointer is outside heap"
+//   lv_label_set_text <- screen_settings::showWifi
+// after reading a tag and walking back through Settings. The tester hashes the
+// tag's product id, so which spool you scanned decided whether you got a
+// collision - a crash that depended on the contents of a chip.
+//
+// The owner is the function's own address. Two different screens cannot share
+// one, and adding a screen cannot forget to pick a unique constant.
+const void* s_viewOwner = nullptr;
+
+inline bool sameView(const void* owner, uint32_t sig) {
+    return s_viewOwner == owner && s_viewSig == sig;
+}
+inline void claimView(const void* owner, uint32_t sig) {
+    s_viewOwner = owner; s_viewSig = sig;
+}
 uint32_t s_menuSig = 0;
 uint32_t s_pickSig = 0;
 
@@ -49,7 +78,14 @@ uint32_t hashOf(const char* s, uint32_t h = 2166136261u) {
 
 namespace screen_settings {
 
-void invalidate() { s_menuSig = 0; s_pickSig = 0; }
+void invalidate() {
+    s_menuSig = 0; s_pickSig = 0;
+    // And drop the ownership claim. Leaving a screen means its widgets are
+    // about to be destroyed, so no later call has any business writing into
+    // the pointers it cached - clearing the owner is what makes that true
+    // rather than merely likely.
+    s_viewOwner = nullptr; s_viewSig = 0;
+}
 
 // The four rows whose value and colour a background sync can change. The menu
 // itself never changes: eight rows, same order, always. So it is built once and
@@ -221,7 +257,7 @@ int  s_newBright = -1;
 int  s_newSleep  = -1;
 int  s_newRot    = screen_settings::ROT_NONE;
 bool s_holding   = false;
-uint32_t s_viewSig = 0;
+
 
 // Widgets kept from the last build, so a value that changes can be written
 // into the screen instead of rebuilding it. A rebuild throws away the scroll
@@ -290,7 +326,7 @@ lv_obj_t* kv(lv_obj_t* parent, const char* k, const char* v, uint32_t colour) {
     lv_obj_t* b = lv_label_create(row);
     lv_label_set_text(b, v);
     lv_label_set_long_mode(b, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_max_width(b, 150, 0);
+    lv_obj_set_style_max_width(b, 132, 0);
     lv_obj_set_style_text_font(b, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(b, lv_color_hex(colour), 0);
     return row;
@@ -314,11 +350,11 @@ void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
     snprintf(sig_, sizeof(sig_), "%d dBm", rssi);
 
     uint32_t sig = 0xA0000000u ^ hashOf(ssid) ^ hashOf(ip) ^ (uint32_t)connected;
-    if (sig == s_viewSig) {
+    if (sameView((const void*)showWifi, sig)) {
         if (s_signal) lv_label_set_text(s_signal, connected ? sig_ : "-");
         return;
     }
-    s_viewSig = sig;
+    claimView((const void*)showWifi, sig);
     s_signal = nullptr;
 
     lv_obj_t* body = frame::build("Wi-Fi", onBack);
@@ -354,8 +390,8 @@ void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
 
 void showAccount(const char* email, int printers, bool linked) {
     uint32_t sig = hashOf(email) ^ ((uint32_t)printers << 8) ^ (uint32_t)linked;
-    if (sig == s_viewSig) return;
-    s_viewSig = sig;
+    if (sameView((const void*)showAccount, sig)) return;
+    claimView((const void*)showAccount, sig);
 
     lv_obj_t* body = frame::build(i18n::T(S_TT_ACCOUNT), onBack);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER,
@@ -391,8 +427,8 @@ void showScreen(uint8_t brightness, int sleepSeconds, int rotation, bool autoRot
     uint32_t sig = 0xB0000000u ^ ((uint32_t)brightness << 16)
                  ^ (uint32_t)sleepSeconds ^ ((uint32_t)rotation << 12)
                  ^ (autoRot ? 0x00000800u : 0u);
-    if (sig == s_viewSig) return;
-    s_viewSig = sig;
+    if (sameView((const void*)showScreen, sig)) return;
+    claimView((const void*)showScreen, sig);
 
     lv_obj_t* body = frame::build(i18n::T(S_SCREEN), onBack);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
@@ -479,7 +515,7 @@ void showUpdate(const char* version, const char* channel,
     // once - which is the whole reason it is an arc.
     uint32_t sig = 0xC0000000u ^ hashOf(version) ^ hashOf(channel)
                  ^ ((uint32_t)otaState << 20) ^ hashOf(latest);
-    if (sig == s_viewSig) {
+    if (sameView((const void*)showUpdate, sig)) {
         if (s_ring) {
             int v = (otaState == ota::DONE) ? 100 : percent;
             lv_arc_set_value(s_ring, v);
@@ -490,7 +526,7 @@ void showUpdate(const char* version, const char* channel,
         }
         return;
     }
-    s_viewSig = sig;
+    claimView((const void*)showUpdate, sig);
     s_ring = s_ringPct = nullptr;
 
     // While the image is being written there is nothing to go back to: the
@@ -587,9 +623,9 @@ void showUpdate(const char* version, const char* channel,
         break;
 
     case ota::AVAILABLE:
-        badge(body, LV_SYMBOL_DOWNLOAD, theme::ACCENT);
+        badge(body, LV_SYMBOL_DOWNLOAD, theme::WARN);
         frame::caption(i18n::T(S_AVAILABLE), theme::TEXT_DIM);
-        frame::bigLabel(latest, theme::ACCENT);
+        frame::bigLabel(latest, theme::WARN);
         frame::button(body, i18n::T(S_INSTALL), 1, onInstall);
         break;
 
@@ -608,8 +644,8 @@ void showUpdate(const char* version, const char* channel,
 
 void showUpdateNotice(const char* current, const char* latest) {
     uint32_t sig = 0xF0000000u ^ hashOf(current) ^ hashOf(latest);
-    if (sig == s_viewSig) return;
-    s_viewSig = sig;
+    if (sameView((const void*)showUpdateNotice, sig)) return;
+    claimView((const void*)showUpdateNotice, sig);
 
     // No back chevron: the two buttons are the whole answer, and one of them
     // is "later". A dismissal that has to be discovered is not a dismissal.
@@ -638,8 +674,8 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
     // spool held there does not.
     uint32_t sig = 0xB1000000u ^ (uint32_t)ready
                  ^ (tag && tag->ok ? (tag->idProduct * 2654435761u) : 0u);
-    if (sig == s_viewSig) return;
-    s_viewSig = sig;
+    if (sameView((const void*)showReader, sig)) return;
+    claimView((const void*)showReader, sig);
 
     lv_obj_t* body = frame::build(i18n::T(S_READER), onBack);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
@@ -663,47 +699,158 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
         return;
     }
 
-    // What the chip actually holds. This is the screen someone opens to answer
-    // "did it read, and did it read the RIGHT thing" - so it shows the decoded
-    // values, not a verdict.
+    // Every decoded field, labelled, in one column. This is a bench instrument,
+    // not a spool card: the question it answers is "did each value come off the
+    // chip correctly", and that needs the values themselves rather than a
+    // headline. The colour disc stays, because a colour is the one field a
+    // number cannot be checked against - you compare it with the spool.
     lv_obj_t* sw = lv_obj_create(body);
     lv_obj_remove_style_all(sw);
-    lv_obj_set_size(sw, 46, 46);
+    lv_obj_set_size(sw, 44, 44);
     lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(sw, lv_color_make(tag->r, tag->g, tag->b), 0);
     lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_bottom(sw, 10, 0);
 
-    // Material and brand carry themselves - they are the words a person reads
-    // off a spool - so they are the headline rather than two labelled rows.
-    frame::bigLabel(tag->material.c_str(), theme::TEXT);
-    frame::caption(tag->brand.c_str(), theme::TEXT_DIM);
-
-    char b[24];
-    snprintf(b, sizeof(b), "%u-%u", tag->nozMin, tag->nozMax);
-    kv(body, i18n::T(S_NOZZLE), b, theme::TEXT);
-    snprintf(b, sizeof(b), "%u-%u", tag->bedMin, tag->bedMax);
-    kv(body, i18n::T(S_BED), b, theme::TEXT);
+    char b[40];
+    kv(body, "UID", tag->uid.length() ? tag->uid.c_str() : "-", theme::TEXT);
     snprintf(b, sizeof(b), "%lu", (unsigned long)tag->idProduct);
-    kv(body, "ID", b, theme::TEXT_DIM);
+    kv(body, i18n::T(S_TAG_PRODUCT), b, theme::TEXT);
+    kv(body, i18n::T(S_TAG_TYPE),  tag->material.c_str(), theme::TEXT);
+    kv(body, i18n::T(S_TAG_BRAND), tag->brand.c_str(), theme::TEXT);
+    snprintf(b, sizeof(b), "%u-%u\xC2\xB0""C", tag->nozMin, tag->nozMax);
+    kv(body, i18n::T(S_NOZZLE), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%u / %u\xC2\xB0""C", tag->bedMin, tag->bedMax);
+    kv(body, i18n::T(S_BED), b, theme::TEXT);
+
+    snprintf(b, sizeof(b), "%s / %s",
+             tag->aspect1Label.c_str(), tag->aspect2Label.c_str());
+    kv(body, i18n::T(S_TAG_ASPECT), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%s  %s mm",
+             tag->kindLabel.c_str(), tag->diameterLabel.c_str());
+    kv(body, i18n::T(S_TAG_KIND), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%s", tag->protocolLabel.c_str());
+    kv(body, i18n::T(S_TAG_PROTOCOL), b, theme::TEXT);
+    // Seconds since 2000-01-01 GMT, shown as the date it means. The raw number
+    // stays in the serial log: on the panel a date can be checked against when
+    // a spool was made, and 836340782 cannot be checked against anything.
+    // Page 0x0C also carries the twin tag id, so a value that lands outside a
+    // plausible range is printed raw rather than dressed up as a date.
+    {
+        const time_t t = (time_t)tag->stamp + 946684800L;   // 2000-01-01 -> epoch
+        struct tm g;
+        if (tag->stamp && gmtime_r(&t, &g)) {
+            snprintf(b, sizeof(b), "%04d-%02d-%02d %02d:%02d",
+                     g.tm_year + 1900, g.tm_mon + 1, g.tm_mday, g.tm_hour, g.tm_min);
+        } else {
+            snprintf(b, sizeof(b), "%lu", (unsigned long)tag->stamp);
+        }
+        kv(body, i18n::T(S_TAG_STAMP), b, theme::TEXT);
+    }
+    snprintf(b, sizeof(b), "%u\xC2\xB0""C / %uh", tag->dryTemp, tag->dryHours);
+    kv(body, i18n::T(S_TAG_DRY), b, theme::TEXT);
+
+    // Remaining first, quantity second. On a box that sits next to a printer
+    // the useful number is how much is left - the factory figure is context
+    // for it, which is why they share a line rather than compete for one.
+    snprintf(b, sizeof(b), "%lu %s", (unsigned long)tag->available,
+             tag->unitLabel.c_str());
+    kv(body, i18n::T(S_TAG_LEFT), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%lu %s", (unsigned long)tag->measure,
+             tag->unitLabel.c_str());
+    kv(body, i18n::T(S_TAG_QTY), b, theme::TEXT_DIM);
+
+    snprintf(b, sizeof(b), "%u.%u", tag->tdRaw / 10, tag->tdRaw % 10);
+    kv(body, i18n::T(S_TAG_TD), b, theme::TEXT_DIM);
+
+    // Two swatches on the value side, or a dash. A colour is the one field a
+    // number cannot be checked against, so the second and third are shown the
+    // same way the first is - as colour.
+    {
+        lv_obj_t* r2 = kv(body, i18n::T(S_TAG_COLOURS),
+                          (tag->hasColor2 || tag->hasColor3) ? "" : "-",
+                          theme::TEXT_DIM);
+        if (tag->hasColor2 || tag->hasColor3) {
+            lv_obj_t* box = lv_obj_create(r2);
+            lv_obj_remove_style_all(box);
+            lv_obj_set_size(box, 44, 16);
+            lv_obj_set_flex_flow(box, LV_FLEX_FLOW_ROW);
+            lv_obj_set_flex_align(box, LV_FLEX_ALIGN_END,
+                                  LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_column(box, 4, 0);
+            lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+            const uint8_t rgb[2][3] = { { tag->c2r, tag->c2g, tag->c2b },
+                                        { tag->c3r, tag->c3g, tag->c3b } };
+            const bool has[2] = { tag->hasColor2, tag->hasColor3 };
+            for (int i = 0; i < 2; i++) {
+                if (!has[i]) continue;
+                lv_obj_t* d = lv_obj_create(box);
+                lv_obj_remove_style_all(d);
+                lv_obj_set_size(d, 14, 14);
+                lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+                lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+                lv_obj_set_style_bg_color(
+                    d, lv_color_make(rgb[i][0], rgb[i][1], rgb[i][2]), 0);
+                lv_obj_clear_flag(d, LV_OBJ_FLAG_SCROLLABLE);
+            }
+        }
+    }
+
+    kv(body, i18n::T(S_TAG_MESSAGE),
+       tag->message.length() ? tag->message.c_str() : "-", theme::TEXT_DIM);
+
+    // The one row on this screen that is a verdict rather than a value, so it
+    // is the one row that gets a colour. Everything else is data.
+    {
+        StrId id = S_SIG_UNREAD;
+        uint32_t col = theme::TEXT_DIM;
+        switch (tag->signature) {
+            case TagInfo::SIG_VALID:   id = S_SIG_VALID;   col = theme::OK;     break;
+            case TagInfo::SIG_INVALID: id = S_SIG_INVALID; col = theme::DANGER; break;
+            case TagInfo::SIG_NONE:    id = S_SIG_NONE;    break;
+            case TagInfo::SIG_NO_KEY:  id = S_SIG_NOKEY;   break;
+            default: break;
+        }
+        kv(body, i18n::T(S_TAG_SIG), i18n::T(id), col);
+    }
+
+    if (tag->pages.length()) {
+        lv_obj_t* raw = lv_label_create(body);
+        lv_label_set_text(raw, tag->pages.c_str());
+        lv_label_set_long_mode(raw, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(raw, theme::SCREEN_W - 2 * theme::PAD - 6);
+        lv_obj_set_style_text_font(raw, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(raw, lv_color_hex(theme::TEXT_DIM), 0);
+        lv_obj_set_style_pad_top(raw, 10, 0);
+    }
 }
 
 void showRestart() {
-    if (s_viewSig == 0xD0000000u) return;
-    s_viewSig = 0xD0000000u;
+    if (sameView((const void*)showRestart, 0xD0000000u)) return;
+    claimView((const void*)showRestart, 0xD0000000u);
 
     lv_obj_t* body = frame::build(i18n::T(S_RESTART), onBack);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    frame::bigLabel(i18n::T(S_RESTART_Q), theme::TEXT);
+    // Not bigLabel. At 20 px "Redemarrer le boitier ?" wrapped with the question
+    // mark alone on the second line, and it does in German too - the header
+    // above already carries the weight, so the question does not need to.
+    lv_obj_t* q = lv_label_create(body);
+    lv_label_set_text(q, i18n::T(S_RESTART_Q));
+    lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(q, theme::SCREEN_W - 2 * theme::PAD - 6);
+    lv_obj_set_style_text_align(q, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(q, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(q, lv_color_hex(theme::TEXT), 0);
+    lv_obj_set_style_pad_bottom(q, 6, 0);
     frame::caption(i18n::T(S_RESTART_NOTE), theme::TEXT_DIM);
 
     lv_obj_t* spacer = lv_obj_create(body);
     lv_obj_remove_style_all(spacer);
     lv_obj_set_size(spacer, 1, 22);
 
-    frame::button(body, i18n::T(S_RESTART), 1, []() { s_action = A_RESTART; });
+    frame::button(body, i18n::T(S_RESTART), 3, []() { s_action = A_RESTART; });
 }
 
 void showFactory(int holdPercent) {
@@ -711,13 +858,13 @@ void showFactory(int holdPercent) {
     // value changes on every frame someone keeps their finger down, and a
     // screen rebuilt on every frame is a screen that cannot animate at all.
     const int pct = holdPercent < 0 ? 0 : (holdPercent > 100 ? 100 : holdPercent);
-    if (s_viewSig == 0xE0000000u) {
+    if (sameView((const void*)showFactory, 0xE0000000u)) {
         if (s_holdFill)  lv_obj_set_width(s_holdFill, LV_PCT(pct));
         if (s_holdLabel) lv_label_set_text(s_holdLabel,
                              pct > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
         return;
     }
-    s_viewSig = 0xE0000000u;
+    claimView((const void*)showFactory, 0xE0000000u);
     s_holdFill = s_holdLabel = nullptr;
 
     lv_obj_t* body = frame::build(i18n::T(S_FACTORY), onBack);

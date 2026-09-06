@@ -330,12 +330,27 @@ bool ttcloud::signInWithCustomToken(const String& customToken, const String& ema
 
 static bool g_syncedOk = false;
 
+// True from the first line of syncNow to its last, whichever way it leaves.
+//
+// Without it the account icon turned orange every five minutes for as long as a
+// sync took, on every screen. syncNow clears g_syncedOk when it STARTS - it has
+// not succeeded yet, which is true - and health() read that as "it answered once
+// and then failed". The indicator was reporting work in progress as a fault. A
+// sync in flight is not news; only a sync that finished badly is.
+static volatile bool g_syncInFlight = false;
+struct SyncFlight {
+    SyncFlight()  { g_syncInFlight = true; }
+    ~SyncFlight() { g_syncInFlight = false; }
+};
+
 bool ttcloud::everSynced() { return g_lastSync != 0; }
 
 int ttcloud::health() {
     if (!haveSession())    return 0;              // nothing to be connected to
     if (g_lastOkMs == 0)   return 1;              // linked, still working on it
-    if (!g_syncedOk && g_lastSync) return 2;      // it answered once, then failed
+    // A sync that is running is judged on the last one that finished, never on
+    // its own unfinished state.
+    if (!g_syncInFlight && !g_syncedOk && g_lastSync) return 2;
     if (millis() - g_lastOkMs > OK_TTL_MS) return 2;
     return 3;
 }
@@ -348,6 +363,7 @@ bool ttcloud::due() {
 }
 
 bool ttcloud::syncNow(String& summary) {
+    SyncFlight inFlight;
     uint32_t tSync = millis();
     g_lastSync = millis();
     g_syncedOk = false;
@@ -566,7 +582,14 @@ bool ttcloud::startAsyncSync() {
     if (g_asyncBusy) return false;
     g_asyncBusy = true; g_asyncDone = false;
     // 16 KB: mbedTLS needs room, and the JSON parsing runs on this stack too.
-    if (xTaskCreatePinnedToCore(syncTaskFn, "ttSync", 16384, nullptr, 1, nullptr, 1) != pdPASS) {
+    //
+    // CORE 0, not core 1. A full sync is fifteen seconds of TLS and JSON, and
+    // on core 1 it shares that core with the Arduino loop at the same priority
+    // - so the interface got half the processor for a quarter of a minute,
+    // every five minutes, and every screen felt like treacle while it ran.
+    // Core 0 already carries Wi-Fi and the reachability probe; this belongs
+    // with them, next to the radio it is talking through.
+    if (xTaskCreatePinnedToCore(syncTaskFn, "ttSync", 16384, nullptr, 1, nullptr, 0) != pdPASS) {
         g_asyncBusy = false;
         Serial.println("[account] xTaskCreate failed - sync skipped");
         return false;

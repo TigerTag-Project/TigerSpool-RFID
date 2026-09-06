@@ -1,6 +1,6 @@
 """Which characters the compiled UI font can actually draw.
 
-One source of truth for a fact that two places need: `firmware/tools/gen_db.py`
+One source of truth for a fact that two places need: `firmware/tools/tigertag_db/gen_db.py`
 validating its input, and `scripts/check-ui-fonts.py` validating every string
 that reaches the panel. Writing the range out twice means that the day a Latin
 subset font ships, one of them is wrong and nothing says so.

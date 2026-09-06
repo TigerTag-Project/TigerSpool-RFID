@@ -4,12 +4,16 @@
 // causes do not fit on 240 px, and a page can be corrected the day a new
 // printer joins the list without shipping firmware to do it.
 static const char* LINK_HELP_URL = "https://wiki.tigersystem.io";
+
 #include "frame.h"
 #include "theme.h"
 #include "i18n.h"
 #include <lvgl.h>
 
 namespace {
+// The white margin a scanner needs around a QR code, in pixels, on every side.
+const lv_coord_t QUIET = 7;
+
 lv_obj_t* s_grid = nullptr;
 bool s_built = false;
 int  s_tapped = -1;
@@ -156,7 +160,7 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_t* sp = lv_spinner_create(pad, 1000, 60);
         lv_obj_set_size(sp, 56, 56);
         lv_obj_set_style_arc_color(sp, lv_color_hex(theme::LINE), LV_PART_MAIN);
-        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::BUSY), LV_PART_INDICATOR);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
         lv_obj_set_style_arc_width(sp, 6, LV_PART_MAIN);
         lv_obj_set_style_arc_width(sp, 6, LV_PART_INDICATOR);
         lv_obj_align(sp, LV_ALIGN_TOP_MID, 0, 44);
@@ -173,13 +177,69 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_style_text_color(t, lv_color_hex(theme::DANGER), 0);
         lv_obj_set_style_pad_bottom(t, 8, 0);
 
-        lv_obj_t* q = lv_qrcode_create(body, 104, lv_color_black(), lv_color_white());
-        lv_qrcode_update(q, LINK_HELP_URL, strlen(LINK_HELP_URL));
-        lv_obj_set_style_border_width(q, 5, 0);      // quiet zone
-        lv_obj_set_style_border_color(q, lv_color_white(), 0);
-        lv_obj_set_style_pad_bottom(q, 6, 0);
+        // The quiet zone is a white BOX around the code, not a border on it.
+        //
+        // A border grows an lv_qrcode outward from its canvas, and the bottom
+        // edge came out as a white strip with a dark line through it - visible
+        // on the panel as a bar cutting across the last row of modules, which
+        // is also the row a scanner needs. A plain white container with padding
+        // gives the same margin and draws nothing of its own.
+        // The card takes ITS size from the code, not the other way round.
+        //
+        // lv_qrcode picks the largest whole number of pixels per module that
+        // fits the size asked for, so it comes out at 99 rather than 104 - and
+        // a fixed 114 box then left 7 px on one side and 8 on the other, and
+        // 6 against 7 vertically. Sized to content with equal padding, the
+        // quiet zone is exactly the padding on all four sides whatever size
+        // the code lands on, and it stays right if the URL ever gets longer.
+        lv_obj_t* frameBox = lv_obj_create(body);
+        lv_obj_remove_style_all(frameBox);
+        lv_obj_set_style_pad_all(frameBox, 0, 0);
+        lv_obj_set_style_bg_color(frameBox, lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(frameBox, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(frameBox, 4, 0);
+        lv_obj_clear_flag(frameBox, LV_OBJ_FLAG_SCROLLABLE);
+        // No padding on this box. lv_obj_center places a child inside the
+        // CONTENT area, so a bottom pad of 6 pushed the code three pixels up
+        // and left an uneven margin - a quiet zone that is wider on one side
+        // than the other is exactly what a quiet zone must not be. The gap to
+        // the caption below is the caption's business, set on it instead.
 
-        frame::caption(i18n::T(S_LF_SCAN), theme::TEXT_DIM);
+        lv_obj_t* q = lv_qrcode_create(frameBox, 104, lv_color_black(),
+                                       lv_color_white());
+        lv_qrcode_update(q, LINK_HELP_URL, strlen(LINK_HELP_URL));
+
+        // Size the card from the code's ACTUAL width, measured after the fact.
+        //
+        // Two attempts got this wrong in ways worth writing down. A fixed 114
+        // box left 7 px against 8, because lv_qrcode rounds the size down to a
+        // whole number of pixels per module and comes out at 99, not 104.
+        // LV_SIZE_CONTENT with padding was worse: 112 wide but 118 tall, so the
+        // card was not even square. Asking the widget how big it ended up and
+        // adding the quiet zone twice is the only version that is exact, and it
+        // stays exact if the URL changes length.
+        // Layout FIRST. lv_qrcode_update resizes the canvas to the real code,
+        // but the new width is not readable until the layout pass has run -
+        // asking before it does returns a placeholder, and the card came out
+        // the size of a postage stamp with the code shrunk inside it.
+        lv_obj_update_layout(q);
+        const lv_coord_t qw = lv_obj_get_width(q);
+        // Square it explicitly. lv_qrcode_update narrows the canvas to the real
+        // code but leaves the object's HEIGHT at the size it was created with,
+        // so width came back 98 and height 104 - and the card built from them
+        // was 112 x 118, six pixels taller than it was wide. That, and not the
+        // alignment, is what made the code look off-centre.
+        lv_obj_set_size(q, qw, qw);
+        lv_obj_set_size(frameBox, qw + 2 * QUIET, qw + 2 * QUIET);
+        // Placed, not centred. lv_obj_center halves an odd leftover and hands
+        // one pixel to one side - which is what left 6 against 7. Pinning the
+        // code to the top-left at exactly QUIET makes all four margins equal by
+        // construction, and the card is sized from the code so there is no
+        // leftover to distribute in the first place.
+        lv_obj_align(q, LV_ALIGN_TOP_LEFT, QUIET, QUIET);
+
+        lv_obj_set_style_pad_top(
+            frame::caption(i18n::T(S_LF_SCAN), theme::TEXT_DIM), 8, 0);
 
         return;
     }

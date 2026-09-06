@@ -96,6 +96,24 @@ def main() -> int:
             problems.append(f"{name}: not valid UTF-8 ({e.reason} at byte {e.start})")
             continue
 
+        # The one exemption, and it is narrow on purpose.
+        #
+        # firmware/tools/tigertag_db/ is a MIRROR of the public TigerTag API, kept
+        # current by db_update.py. Two brand names arrive from it with a
+        # no-break space between the words. Editing them here would be undone by
+        # the next download, so this guard would fail on the day someone runs
+        # the updater and pass again only if they hand-edited data back out of
+        # sync with its source - which is the opposite of what a mirror is for.
+        #
+        # The hazard is still covered, downstream and by a checker that can
+        # actually act on it: gen_db.py validates every label against the
+        # compiled font, repairs the no-break space to an ordinary one, and
+        # names each entry it repaired so the upstream defect stays visible.
+        # Nothing invisible reaches the panel, and nothing invisible reaches a
+        # C string literal.
+        if name.startswith("firmware/tools/tigertag_db/"):
+            continue
+
         for lineno, line in enumerate(text.splitlines(), 1):
             for ch in line:
                 if ord(ch) in INVISIBLE:

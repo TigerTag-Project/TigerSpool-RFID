@@ -17,7 +17,18 @@ repeated here.
 |---|---|
 | `main.cpp` | Owns the state machine and the only writable copy of device state — and also owns the display device itself (`lcd`, and the PSRAM `canvas` sprite that exists solely so `/screen.bmp` has something to serialise). It draws no widgets, and must not start: screens render from state passed in. It also carries an inline Creality LAN scanner, which is not where anyone looks for it. |
 | `webcfg.cpp` | Serves **two** web interfaces — the captive portal for setup, and a separate legacy configuration page over the LAN once provisioned — and has **two** independent Wi-Fi scanners, one async and JSON for the portal, one blocking and HTML for the legacy page. "Change the web page" or "fix the scan" usually means changing the wrong one. |
+| `tt_db.cpp` | The TigerTag reference tables exist **twice**, and every lookup goes through here rather than through `tigertag_db.h`. The compiled tables are the floor - what a brand-new box knows offline - and the downloaded ones in LittleFS are preferred when they parse. The fallback is per table, not all-or-nothing, so a corrupt brand file does not throw away a good material file. Calling `tt_material()` directly bypasses the whole mechanism and looks identical until a spool from last month reads as `brand#48804`. |
 | `tigertag_cloud.cpp` | Its network calls are on a **mixed** regime, not a uniform one. The sync and the pairing start run on their own FreeRTOS tasks; `pairPoll()` and `signInWithCustomToken()` are called straight from the main loop and stall it for about a second each. Neither pattern is the rule, so check which one a call is on before adding another. |
+
+### One board, three TLS talkers
+
+The account sync, the firmware check and the reference-table update each open
+their own `WiFiClientSecure`. Two at once is fine; **three is not** - the third
+gets a refused connection, because internal RAM is what LVGL's draw buffers and
+every TLS session compete for, and PSRAM does not help. That is why the table
+update runs on its own clock ninety seconds after boot rather than beside the
+update check, and skips while either of the other two is talking. It is not a
+scheduling preference; it was measured, as `HTTP -1` on every attempt.
 
 ## Landmines
 

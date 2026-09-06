@@ -61,7 +61,7 @@ teaches people to reach for `--no-verify`.
 - **Never commit, tag or push unless asked.** A pushed tag is the one action no
   later edit undoes: the release workflow acts on it.
 - **Generated files are never hand-edited.** `firmware/include/tigertag_db.h`
-  comes from `firmware/tools/gen_db.py`. Change the JSON input, re-run the
+  comes from `firmware/tools/tigertag_db/gen_db.py`. Change the JSON input, re-run the
   generator, commit its output.
 
 ## Things that are settled — do not re-litigate

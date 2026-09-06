@@ -60,9 +60,16 @@ ALLOWED = {
     "Wi-Fi", "MAC", "IP", "OK", "TigerSpool", "TigerTag", "Google",
     "DHCP", "mDNS", "AP", "SSID", "NFC", "USB", "LAN", "QR", "PN532",
     "ID",
+    # The chip's own serial. UID is what every NFC tool, datasheet and spec
+    # calls it, in every language - a translated one would be harder to match
+    # against a reader log, which is the entire point of showing it.
+    "UID",
     # A unit symbol, not a word: it is dBm in every language this device
     # speaks, and translating it would be inventing something.
     "dBm",
+    # Millimetres. Same argument as dBm: it is the symbol, not the word, and it
+    # is written mm in every language this device speaks.
+    "mm",
 }
 
 WORD = re.compile(r"[A-Za-z]{2,}")

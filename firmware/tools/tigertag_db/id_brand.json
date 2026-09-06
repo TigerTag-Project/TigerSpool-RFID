@@ -220,7 +220,7 @@
   },
   {
     "id": 8921,
-    "name": "Duramic 3D",
+    "name": "Duramic 3D",
     "type_ids": [
       142
     ]
@@ -284,6 +284,13 @@
   {
     "id": 11501,
     "name": "InnovateFil",
+    "type_ids": [
+      142
+    ]
+  },
+  {
+    "id": 11750,
+    "name": "VOXELPLA",
     "type_ids": [
       142
     ]
@@ -812,6 +819,14 @@
     ]
   },
   {
+    "id": 53146,
+    "name": "EPAX",
+    "type_ids": [
+      142,
+      173
+    ]
+  },
+  {
     "id": 53640,
     "name": "Magigoo",
     "type_ids": [
@@ -834,7 +849,7 @@
   },
   {
     "id": 55229,
-    "name": "Filament PM",
+    "name": "Filament PM",
     "type_ids": [
       142
     ]

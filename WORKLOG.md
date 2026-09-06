@@ -522,4 +522,23 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   thing needed is that trace. The null slot name in the Creality status line was
   found by reading and fixed, but it invalidates a String rather than faulting,
   so it is almost certainly not this.
+- The NFC-tester "freeze" was a reboot. Decoding the backtrace was what turned
+  a week of guessing into ten minutes: lv_label_set_text <- showWifi, on a heap
+  assert. One shared s_viewSig across screens, each XORing a constant into a
+  content hash - so the tester's product-id hash could collide with the Wi-Fi
+  screen's and make it write into freed widgets. A crash whose reproducibility
+  depended on the contents of a chip.
+- Everything else this round came from the same 2-second worst-case reporter:
+  reader::read at 575 ms per frame, a 20-attempt failing read at 6.8 s,
+  backend->loop at 1.2 s on every screen, webcfg::loop at 12 s while a browser
+  watched, and the account sync sharing core 1 with the UI.
+- Three attempts at the QR quiet zone, all wrong for different reasons, worth
+  remembering: lv_qrcode rounds the requested size down to whole pixels per
+  module (104 -> 98); LV_SIZE_CONTENT plus padding gave a card 6 px taller than
+  wide; and lv_qrcode_update narrows the canvas WIDTH but leaves the object's
+  height at the creation size. Measure the object after a layout pass, square
+  it yourself, and size the card from that.
+- Runtime reference tables: LittleFS was never mounted before this, and the
+  partition is labelled `littlefs` while Arduino's LittleFS.begin() looks for
+  one called `spiffs` - it returns false, formats nothing, and says nothing.
 

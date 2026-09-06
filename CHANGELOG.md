@@ -7,6 +7,78 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-09-07
+
+### Fixed
+
+- **The device rebooted while you used it, and which spool you scanned decided
+  whether it did.** Every settings screen shared one signature variable, each
+  folding its own constant into a hash of its contents - which is not a
+  namespace: one screen's signature can land on another's. The NFC tester
+  hashes the tag's product id, so scanning a particular spool and then walking
+  back through Settings could make the Wi-Fi screen take its "nothing changed"
+  path and write into a label LVGL had already destroyed. The assert named it
+  exactly: `free() target pointer is outside heap areas`. Screens now claim
+  their view by identity rather than by a number that can collide.
+- **The NFC tester could not be left with a spool on the reader.** The back
+  press was read twice - once to clear the tag, once to leave - and the second
+  read found the flag already spent. The chevron cleared the tag and stayed
+  put, and the spool put it straight back.
+- **Reading a tag froze the interface.** `reader::read()` costs 575 ms - nine
+  page transactions and a signature check - and the tester called it on every
+  pass for as long as a spool lay there: one frame every 610 ms. It reads once
+  per spool now, and the poll that watches for one is rate-limited. A read that
+  never succeeds is also bounded in time; one that ran its full twenty attempts
+  used to delay a back press by 6.8 seconds.
+- **A switched-off printer made every screen stutter.** The WebSocket client
+  opens its connection with a blocking connect, from the loop that draws the
+  panel, so an unreachable printer cost 1.2 seconds a go - in Settings, in the
+  tester, everywhere. The reachability probe already knew the answer; the link
+  asks it before dialling now, and hangs up so the library stops retrying on
+  its own.
+- **The account sync ran on the same core as the interface.** Fifteen seconds
+  of TLS and JSON at the same priority as the Arduino loop, every five minutes.
+  It moved to the core that already carries Wi-Fi, along with the reference
+  table update.
+- **Watching the device made it stutter.** The whole 230 KB of a screenshot was
+  serialised inside the web handler, blocking the main loop for as long as
+  twelve seconds. The frame is copied once into PSRAM and streamed from there,
+  with the panel free to run between chunks.
+- **The QR code on the failure screen had a white bar across its last row of
+  modules** - the row a scanner needs. It was a border growing outward from the
+  code; the quiet zone is a white card sized from the code itself now.
+
+### Added
+
+- **The NFC tester is a data sheet.** Every field the chip carries, labelled:
+  UID, product id, type, brand, aspects, kind and diameter, nozzle and bed
+  windows, drying, timestamp as a date, quantity and what is left of it, the
+  second and third colours, the HueForge distance, the custom message - and the
+  raw pages underneath, because the question this screen answers is "did each
+  value come off the chip correctly".
+- **A spool can be proved genuine with no network at all.** ECDSA-P256 over
+  SHA-256 of the UID and the two identity words, against the public key that
+  ships with the protocol version. It is the one row on that screen that gets a
+  colour, because it is the one row that is a verdict rather than a value.
+- **The device downloads its own reference tables.** The tables compiled into
+  the firmware are the floor - what a new box knows offline on its first
+  second - not the source. It fetches the current ones into its filesystem and
+  prefers those, per table, so a corrupt brand file cannot throw away a good
+  material file, and a failed download costs nothing. Aspects, types,
+  diameters, units and protocol versions joined materials and brands; all of
+  them are refreshed by `firmware/tools/tigertag_db/db_update.py` at build time
+  and by the device itself every six hours.
+
+### Changed
+
+- **"Lecteur NFC" is "NFC Tester"** - it is for testing what a read returns,
+  and the name now says so.
+- **Cancelling a scan no longer wears the colour of Factory reset.** Restart
+  wears the colour it has in the menu instead of an installer's green.
+- **A result you can read.** A success clears itself after four seconds; a
+  failure waits to be acknowledged, and only the failure says so.
+
+
 ## [1.30.0] - 2026-09-06
 
 ### Changed

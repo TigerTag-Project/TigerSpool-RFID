@@ -64,7 +64,10 @@ void showScan(const char* slotLabel, const char* errorOrNull) {
     if (errorOrNull && *errorOrNull)
         frame::caption(errorOrNull, theme::DANGER);
 
-    frame::button(body, i18n::T(S_CANCEL), 2, onCancel);
+    // Tone 0, not the destructive red. Cancelling a scan throws nothing away -
+    // it wore the same colour as Sign out and Factory reset, which teaches
+    // people to hesitate over the one button on this screen that is harmless.
+    frame::button(body, i18n::T(S_CANCEL), 0, onCancel);
 }
 
 void showReview(const char* slotLabel, const TagInfo& tag) {
@@ -73,8 +76,11 @@ void showReview(const char* slotLabel, const TagInfo& tag) {
     if (s_which == REVIEW && sig == s_sig) return;
     s_which = REVIEW; s_sig = sig;
 
+    // No glyph in front of the slot name. A right chevron sat beside the back
+    // chevron in the same bar, pointing the other way, and read as a stray
+    // character rather than as a direction.
     char title[28];
-    snprintf(title, sizeof(title), "%s %s", LV_SYMBOL_RIGHT, slotLabel);
+    snprintf(title, sizeof(title), "%s", slotLabel);
     lv_obj_t* body = frame::build(title, onCancel);
     lv_obj_set_style_pad_row(body, 4, 0);
 
@@ -147,7 +153,11 @@ void showResult(const char* slotLabel, bool ok, const char* message,
         frame::caption(t, theme::TEXT_DIM);
     }
 
-    frame::caption(i18n::T(S_TAP_BACK), theme::TEXT_DIM);
+    // Only when the screen is going to wait. A success clears itself after four
+    // seconds, so telling someone to touch it is an instruction that expires
+    // under their finger; a failure stays until it is acknowledged, and then
+    // the line is the truth. The two behaviours now agree with what is written.
+    if (!ok) frame::caption(i18n::T(S_TAP_BACK), theme::TEXT_DIM);
 }
 
 bool takeCancel()  { bool v = s_cancel;  s_cancel = false;  return v; }

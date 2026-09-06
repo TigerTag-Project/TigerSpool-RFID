@@ -21,6 +21,7 @@
 #include "config.h"
 #include "i18n.h"
 #include "reader.h"
+#include "tt_db.h"
 #include "printer.h"
 #include "backend_creality.h"
 #include "backend_ff.h"
@@ -166,6 +167,10 @@ static int onlineCount();                   // fwd
 // printer and the loop only ever reads them; a 32-bit store is atomic on this
 // core, so there is no lock to get wrong.
 static TaskHandle_t pProbeTask = nullptr;
+// Incremented once per printer probed. Until a printer has been LOOKED AT, the
+// absence of a timestamp means nothing, and treating it as "offline" would stop
+// the very first connection of every boot.
+static volatile uint32_t pProbed[MAX_PRINTERS] = {0};
 namespace disc { void sweep(); }   // defined below; the task drives it
 
 static void probeTaskFn(void*) {
@@ -180,6 +185,7 @@ static void probeTaskFn(void*) {
                 int i = (pProbeIdx + k) % MAX_PRINTERS;
                 if (printers[i].type == PT_NONE) continue;
                 if (probeOne(printers[i])) pLastSeen[i] = millis() ? millis() : 1;
+                pProbed[i]++;
                 pProbeIdx = (i + 1) % MAX_PRINTERS;
                 break;
             }
@@ -628,6 +634,35 @@ static void linkTick() {
         return;
     }
 
+    // Do not dial a printer the probe says is not there.
+    //
+    // This is the fix for the freezes, and it is measured: backend->loop()
+    // spends 1.2 seconds inside a blocking TCP connect for an unreachable host,
+    // in the main loop, on EVERY screen - so selecting a switched-off printer
+    // and then walking into Settings made the whole interface stutter for the
+    // forty seconds the attempts lasted. The reachability probe already runs on
+    // its own task and already knows the answer; asking it costs nothing.
+    //
+    // A printer that has never been probed is still dialled: on the first
+    // seconds of a boot the absence of a timestamp means "not looked at yet",
+    // not "not there", and refusing on that would delay every first connection.
+    // The attempt is still SPENT, so five of them still end at the failure
+    // screen with its retry button - the user gets the same answer, just
+    // without the device seizing up while it arrives.
+    if (pProbed[selectedPrinter] && !isOnline(selectedPrinter)) {
+        // And hang up, not just refrain from dialling. The WebSocket client
+        // reconnects on its own schedule once it has been given a host, so a
+        // session left open kept paying the 1.2-second connect out of the main
+        // loop no matter what this function decided. Anything still connected
+        // has already returned above, so there is nothing here worth keeping.
+        if (backend) { backend->stop(); backend = nullptr; }
+        linkTries++; linkStartAt = millis(); linkState = LINK_TRYING;
+        Serial.printf("[link] attempt %u/%u to %s - probe says unreachable,"
+                      " not dialling\n", linkTries, linkBudget,
+                      printers[selectedPrinter].name.c_str());
+        return;
+    }
+
     if (backend) backend->stop();
     switch (printers[selectedPrinter].type) {
         case PT_FF_C5:     backend = &flashForgeBackend; break;
@@ -705,6 +740,7 @@ void setup() {
     lvgl_port::setRotation(screenRotation);
     ttcloud::begin();
 
+    tt_db::begin();
     nfcReady = reader::begin();
     if (!nfcReady) Serial.printf("[reader] %s\n", reader::lastError().c_str());
 
@@ -773,6 +809,11 @@ void loop() {
                        || state == ST_ACCOUNT || state == ST_WEB_PAIR);
     lvgl_port::sleepTick(inSetup ? 0 : screenSleepSec, screenBrightness);
 
+    // The account is kept fresh from here rather than from one screen, so the
+    // freshness the header reports is a fact about the network and not about
+    // where the user happens to be standing.
+    if (ttcloud::due() && !ttcloud::asyncBusy()) ttcloud::startAsyncSync();
+
     if (backend) backend->loop();
     linkTick();                  // keep the printer link up, everywhere
     if (webStarted || webcfg::apActive()) webcfg::loop();
@@ -824,6 +865,23 @@ void loop() {
     if (WiFi.isConnected() && (int32_t)(millis() - nextCheckAt) >= 0) {
         if (ota::checkAsync()) { everChecked = true; nextCheckAt = millis() + CHECK_EVERY_MS; }
         else                     nextCheckAt = millis() + 60000;   // busy or offline: soon
+    }
+
+    // The reference tables go stale the same way the firmware does -
+    // continuously and invisibly - so they are checked on the same six-hour
+    // rhythm. On a DIFFERENT clock, though, and that is not cosmetic: three
+    // TLS sessions at once is more internal RAM than this board has spare
+    // while LVGL holds its draw buffers, and the third one simply fails to
+    // connect. Measured, not guessed - the first version of this fired
+    // alongside the update check and the account sync, and returned a refused
+    // connection every time. Ninety seconds after boot, then every six hours,
+    // and never while one of the other two is already talking.
+    static uint32_t nextDbAt = 90000;
+    if (WiFi.isConnected() && (int32_t)(millis() - nextDbAt) >= 0
+        && ota::state() != ota::CHECKING && ota::state() != ota::DOWNLOADING
+        && !ttcloud::asyncBusy()) {
+        if (tt_db::updateAsync()) nextDbAt = millis() + CHECK_EVERY_MS;
+        else                      nextDbAt = millis() + 60000;
     }
 
     // Told once per version, not once per boot and not once per check. An
@@ -1045,11 +1103,13 @@ void loop() {
     }
 
     case ST_PRINTER: {
-        // Account re-sync, ON ITS OWN TASK. This is the screen the user returns
-        // to constantly and it must never wait on the network: the list always
-        // comes from NVS, and the sync only updates it if something changed.
-        // The reload happens here, in the UI loop, so nothing races printers[].
-        if (ttcloud::due() && !ttcloud::asyncBusy()) ttcloud::startAsyncSync();
+        // FETCHING happens in loop(), on every screen. APPLYING happens here.
+        //
+        // The split matters: a fetch is harmless wherever it runs, but reloading
+        // printers[] while the slot grid is open would move the selection out
+        // from under the user. Tying both to this screen meant a device parked
+        // on a printer never talked to the account at all, and came back with a
+        // stale indicator that blamed the network for our own scheduling.
         {
             String s;
             if (ttcloud::asyncTake(s)) {
@@ -1293,16 +1353,50 @@ void loop() {
         // Reads continuously while this screen is up. It is the one place
         // whose whole purpose is "does the reader work", so it should answer
         // that by working rather than by claiming to.
+        // Read ONCE per spool, not once per frame.
+        //
+        // Measured: reader::read() is 575 ms - nine page transactions and an
+        // ECDSA verification - and this screen used to call it on every pass
+        // for as long as a tag sat on the reader. One frame every 610 ms, a
+        // back chevron that only answered if you pressed it in the gap, and a
+        // device that looked hung. The screen shows what is on the chip, and
+        // what is on the chip does not change while it lies there.
+        //
+        // The poll is rate-limited too: it is 33 ms with a tag in the field and
+        // up to 120 without one, which at frame rate is most of the loop.
         static TagInfo seen;
-        if (nfcReady && reader::present()) {
-            TagInfo t;
-            if (reader::read(t)) seen = t;
+        static uint8_t seenUid[7] = {0};
+        static uint8_t seenLen = 0;
+        static uint32_t lastPoll = 0;
+        if (nfcReady && millis() - lastPoll > 300) {
+            lastPoll = millis();
+            uint8_t uid[7] = {0}; uint8_t ul = 0;
+            if (!reader::present(uid, &ul)) {
+                // Gone. Forget it, so putting the SAME spool back reads it
+                // again - which is what someone testing a reader expects.
+                if (seen.ok) { seen = TagInfo(); seenLen = 0; }
+            } else if (!seen.ok || ul != seenLen || memcmp(uid, seenUid, ul) != 0) {
+                TagInfo t;
+                if (reader::read(t)) {
+                    seen = t;
+                    memcpy(seenUid, uid, ul > 7 ? 7 : ul);
+                    seenLen = ul;
+                }
+            }
         }
         screen_settings::showReader(nfcReady, reader::lastError().c_str(),
                                     seen.ok ? &seen : nullptr);
         lvgl_port::loop();
-        if (screen_settings::takeBack()) { seen = TagInfo(); }
-        BACK_TO_SETTINGS();
+        // One take, one use. This read the flag to clear `seen` and then let
+        // BACK_TO_SETTINGS ask for it again - by which time it was already
+        // spent, so the chevron cleared the tag and stayed put. With a spool
+        // sitting on the reader the tag came straight back, and the screen
+        // could not be left at all.
+        if (screen_settings::takeBack()) {
+            seen = TagInfo();
+            screen_settings::invalidate();
+            state = ST_SETTINGS; stateSince = millis();
+        }
         break;
     }
 
@@ -1369,9 +1463,16 @@ void loop() {
             selSlot = -1; screen_slots::invalidate();
             state = ST_GRID; break;
         }
-        if (reader::present()) {
-            if (reader::read(tag) && tag.ok) { state = ST_REVIEW; stateSince = millis(); }
-            else resultMsg = reader::lastError();
+        // Same rate limit, for the same reason: an empty field costs a 120 ms
+        // timeout, and paying it every pass is most of a frame budget on the
+        // one screen whose whole content is an animation.
+        static uint32_t lastScanPoll = 0;
+        if (millis() - lastScanPoll > 300) {
+            lastScanPoll = millis();
+            if (reader::present()) {
+                if (reader::read(tag) && tag.ok) { state = ST_REVIEW; stateSince = millis(); }
+                else resultMsg = reader::lastError();
+            }
         }
         break;
     }
@@ -1411,7 +1512,10 @@ void loop() {
                                 sendOk, resultMsg.c_str(), tag, landed);
         lvgl_port::loop();
 
-        if (screen_scan::takeDismiss() || millis() - stateSince > 4000) {
+        // A success may clear itself; a failure waits to be read. Four seconds
+        // is plenty to see a tick and nowhere near enough to take in what went
+        // wrong and what to do about it.
+        if (screen_scan::takeDismiss() || (sendOk && millis() - stateSince > 4000)) {
             selSlot = -1; screen_slots::invalidate();
             state = ST_GRID;
         }

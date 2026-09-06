@@ -347,9 +347,23 @@ namespace {
         server.send(200, "image/bmp", "");
         server.sendContent((const char*)hdr, 54);
 
-        static uint8_t row[720];
+        // Convert the whole frame FIRST, into its own buffer, then send that.
+        //
+        // Two problems, one answer. Measured on the bench: this transfer runs
+        // inside handleClient(), so the main loop was blocked for as long as
+        // 230 KB took to leave - twelve seconds with a browser watching. The
+        // obvious fix, pumping LVGL between rows, produced a torn screenshot:
+        // LVGL goes on painting into the canvas while it is being read, so the
+        // top of the image came from one frame and the bottom from another.
+        //
+        // Reading it out in one pass costs about 230 KB of PSRAM for the length
+        // of one request, which this board has eight megabytes of. After that
+        // the pixels are ours, LVGL can repaint as much as it likes, and the
+        // send can stop to let it.
+        uint8_t* shot = (uint8_t*)ps_malloc(dataSize);
+        if (!shot) { server.sendContent("", 0); return; }
+        uint8_t* o = shot;
         for (int y = H - 1; y >= 0; y--) {          // BMP stores the last row first
-            uint8_t* o = row;
             for (int x = 0; x < W; x++) {
                 uint32_t c = canvas.readPixel(x, y);    // RGB565 -> RGB888
                 uint8_t r = (c >> 8) & 0xF8, g = (c >> 3) & 0xFC, b = (c << 3) & 0xF8;
@@ -357,8 +371,14 @@ namespace {
                 *o++ = g | (g >> 6);
                 *o++ = r | (r >> 5);
             }
-            server.sendContent((const char*)row, rowBytes);
         }
+        for (uint32_t sent = 0; sent < dataSize; ) {
+            const uint32_t chunk = min<uint32_t>(rowBytes * 8, dataSize - sent);
+            server.sendContent((const char*)(shot + sent), chunk);
+            sent += chunk;
+            lv_timer_handler();      // the panel keeps moving while this goes out
+        }
+        free(shot);
         server.sendContent("", 0);
     }
 

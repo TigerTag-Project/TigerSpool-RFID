@@ -40,7 +40,8 @@ constexpr uint32_t WARN      = 0xE8821E;   // interrupts, destroys nothing
 // seconds before the token arrived, which is a support call.
 constexpr uint32_t BUSY      = 0x2F7FFF;
 constexpr uint32_t GO_BG     = 0x1E5B33;   // confirm button
-constexpr uint32_t NO_BG     = 0x5A2320;   // cancel button
+constexpr uint32_t NO_BG     = 0x5A2320;   // destructive button
+constexpr uint32_t WARN_BG   = 0x6B3D12;   // interrupts, destroys nothing
 
 // ---- geometry, in device pixels --------------------------------------------
 constexpr lv_coord_t SCREEN_W   = 240;

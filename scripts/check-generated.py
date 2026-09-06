@@ -29,7 +29,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 # destination as arguments, and a wrapper script whose only job is to hold those
 # arguments would be a second place the filename lives.
 GENERATED = [
-    (["firmware/tools/gen_db.py"],
+    (["firmware/tools/tigertag_db/gen_db.py"],
      REPO / "firmware" / "include" / "tigertag_db.h"),
     (["scripts/gen-font-range.py"],
      REPO / "scripts" / "font_range.json"),

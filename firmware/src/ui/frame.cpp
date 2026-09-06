@@ -148,6 +148,10 @@ lv_obj_t* button(lv_obj_t* parent, const char* text, int tone, Callback onClick)
     lv_obj_set_size(b, LV_PCT(100), theme::BUTTON_H);
     if (tone == 1) lv_obj_set_style_bg_color(b, lv_color_hex(theme::GO_BG), 0);
     if (tone == 2) lv_obj_set_style_bg_color(b, lv_color_hex(theme::NO_BG), 0);
+    // 3: it interrupts and destroys nothing - the palette's own definition of
+    // WARN, and what the Restart row in the menu already says. A restart button
+    // in the green of an install claimed the wrong thing about itself.
+    if (tone == 3) lv_obj_set_style_bg_color(b, lv_color_hex(theme::WARN_BG), 0);
     lv_obj_add_event_cb(b, clickCb, LV_EVENT_CLICKED, (void*)onClick);
     lv_obj_t* l = lv_label_create(b);
     lv_label_set_text(l, text);

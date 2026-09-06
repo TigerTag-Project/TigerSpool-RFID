@@ -4,6 +4,24 @@
 #include <Arduino.h>
 
 struct TTEntry { uint16_t id; const char* label; };
+struct TTEntry32 { uint32_t id; const char* label; };
+struct TTKey { uint32_t id; const char* pem; };
+
+static const TTEntry32 TT_VERSIONS[] = {
+  { 0u, "RFID Empty" },
+  { 1542820452u, "TigerTag" },
+  { 1816240865u, "TigerTag Init" },
+  { 3155151767u, "TigerTag+" },
+};
+static const size_t TT_VERSIONS_N = 4;
+
+static const TTKey TT_KEYS[] = {
+  { 0u, "" },
+  { 1542820452u, "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwtX8JRYMoAXTbkU7EXJYKX7g4Mf0\nZ3WUuuGzlfyiEiS5UseXT6l1t1ZbMgzsg5IVA0TB7+/w6eyTlgnz/HXONw==\n-----END PUBLIC KEY-----" },
+  { 1816240865u, "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwtX8JRYMoAXTbkU7EXJYKX7g4Mf0\nZ3WUuuGzlfyiEiS5UseXT6l1t1ZbMgzsg5IVA0TB7+/w6eyTlgnz/HXONw==\n-----END PUBLIC KEY-----" },
+  { 3155151767u, "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwtX8JRYMoAXTbkU7EXJYKX7g4Mf0\nZ3WUuuGzlfyiEiS5UseXT6l1t1ZbMgzsg5IVA0TB7+/w6eyTlgnz/HXONw==\n-----END PUBLIC KEY-----" },
+};
+static const size_t TT_KEYS_N = 4;
 
 static const TTEntry TT_MATERIALS[] = {
   { 425, "ABS-CF" },
@@ -163,6 +181,7 @@ static const TTEntry TT_BRANDS[] = {
   { 11379, "Filaments.ca" },
   { 11429, "3D4Makers" },
   { 11501, "InnovateFil" },
+  { 11750, "VOXELPLA" },
   { 12345, "MakerBot" },
   { 12498, "Forshape" },
   { 12635, "Snapmaker" },
@@ -233,6 +252,7 @@ static const TTEntry TT_BRANDS[] = {
   { 52467, "Geeetech" },
   { 52757, "Yumi" },
   { 53043, "FormFutura" },
+  { 53146, "EPAX" },
   { 53640, "Magigoo" },
   { 53856, "Lattice Medical" },
   { 54112, "Kexcelled" },
@@ -256,7 +276,65 @@ static const TTEntry TT_BRANDS[] = {
   { 65178, "Smart3DPT" },
   { 65535, "Generic" },
 };
-static const size_t TT_BRANDS_N = 132;
+static const size_t TT_BRANDS_N = 134;
+
+static const TTEntry TT_ASPECTS[] = {
+  { 0, "-" },
+  { 21, "Clear" },
+  { 24, "Tricolor" },
+  { 64, "Glitter" },
+  { 67, "Translucent" },
+  { 91, "Glow in the Dark" },
+  { 92, "Silk" },
+  { 97, "Lithophane" },
+  { 104, "Basic" },
+  { 123, "Wood" },
+  { 126, "Pearl" },
+  { 129, "Gloss" },
+  { 132, "Fiber" },
+  { 134, "Satin" },
+  { 145, "Rainbow" },
+  { 168, "Thermoreactif" },
+  { 173, "Stone" },
+  { 216, "Neon" },
+  { 220, "Pastel" },
+  { 226, "Metal" },
+  { 232, "Marble" },
+  { 238, "Carbon" },
+  { 247, "Matt" },
+  { 252, "Bicolor" },
+  { 255, "None" },
+};
+static const size_t TT_ASPECTS_N = 25;
+
+static const TTEntry TT_TYPES[] = {
+  { 41, "Spare Part" },
+  { 116, "Accessories" },
+  { 142, "Filament" },
+  { 173, "Resin" },
+};
+static const size_t TT_TYPES_N = 4;
+
+static const TTEntry TT_DIAMETERS[] = {
+  { 56, "1.75" },
+  { 221, "2.85" },
+};
+static const size_t TT_DIAMETERS_N = 2;
+
+static const TTEntry TT_UNITS[] = {
+  { 10, "mg" },
+  { 21, "g" },
+  { 35, "kg" },
+  { 48, "ml" },
+  { 62, "cl" },
+  { 79, "L" },
+  { 95, "m3" },
+  { 112, "mm" },
+  { 130, "cm" },
+  { 149, "m" },
+  { 170, "m2" },
+};
+static const size_t TT_UNITS_N = 11;
 
 static inline const char* tt_lookup(const TTEntry* t, size_t n, uint16_t id) {
   size_t lo = 0, hi = n;
@@ -267,5 +345,23 @@ static inline const char* tt_lookup(const TTEntry* t, size_t n, uint16_t id) {
   }
   return nullptr;
 }
-static inline const char* tt_material(uint16_t id) { return tt_lookup(TT_MATERIALS, TT_MATERIALS_N, id); }
-static inline const char* tt_brand(uint16_t id)    { return tt_lookup(TT_BRANDS,    TT_BRANDS_N,    id); }
+static inline const char* tt_lookup32(const TTEntry32* t, size_t n, uint32_t id) {
+  size_t lo = 0, hi = n;
+  while (lo < hi) {
+    size_t mid = (lo + hi) / 2;
+    if (t[mid].id == id) return t[mid].label;
+    if (t[mid].id < id) lo = mid + 1; else hi = mid;
+  }
+  return nullptr;
+}
+static inline const char* tt_material(uint16_t id) { return tt_lookup(TT_MATERIALS,  TT_MATERIALS_N,  id); }
+static inline const char* tt_brand(uint16_t id)    { return tt_lookup(TT_BRANDS,     TT_BRANDS_N,     id); }
+static inline const char* tt_aspect(uint16_t id)   { return tt_lookup(TT_ASPECTS,    TT_ASPECTS_N,    id); }
+static inline const char* tt_type(uint16_t id)     { return tt_lookup(TT_TYPES,      TT_TYPES_N,      id); }
+static inline const char* tt_diameter(uint16_t id) { return tt_lookup(TT_DIAMETERS,  TT_DIAMETERS_N,  id); }
+static inline const char* tt_unit(uint16_t id)     { return tt_lookup(TT_UNITS,      TT_UNITS_N,      id); }
+static inline const char* tt_public_key(uint32_t id) {
+  for (size_t i = 0; i < TT_KEYS_N; i++) if (TT_KEYS[i].id == id) return TT_KEYS[i].pem;
+  return nullptr;
+}
+static inline const char* tt_version(uint32_t id)  { return tt_lookup32(TT_VERSIONS, TT_VERSIONS_N,   id); }
