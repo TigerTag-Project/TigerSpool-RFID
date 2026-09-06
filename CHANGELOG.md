@@ -7,6 +7,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-09-06
+
+### Fixed
+
+- **The interface no longer freezes while the network is busy.** Two blocking
+  jobs were running inside the main loop, both on the home screen — the screen
+  people spend their time on. Measured before and after rather than guessed:
+  **600 to 1550 ms per pass, now 62 to 71 ms.**
+
+  The reachability probe is a synchronous TCP connect with a 900 ms timeout,
+  called every 1.2 seconds. One switched-off printer froze everything for most
+  of every second.
+
+  And the LAN sweep that finds a Creality whose address has changed probed four
+  addresses per pass at 150 ms each — 600 ms a time, sixty times in a row,
+  every time a Creality was unreachable.
+
+  Both now run on their own task. What stayed in the loop is the half that
+  rewrites the printer list, because the screens read that same array while it
+  is being written. The sweep also went from four addresses per pass to
+  sixteen: off the loop, the only cost is how long it takes.
+
+### Changed
+
+- **The slot grid puts the external spool on its own row**, with the CFS's four
+  underneath on one line — they belong together and the external one is a
+  different thing that happens to sit next to them. The rule generalises: first
+  slot alone, the rest four to a line.
+- The cards around each slot are gone, and the colour blocks are portrait
+  rectangles. A block is already an object; wrapping it in a second rounded
+  panel drew a box around a box.
+
+
 ## [1.26.0] - 2026-09-06
 
 ### Changed

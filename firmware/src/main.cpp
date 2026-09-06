@@ -125,21 +125,52 @@ static bool isOnline(int i) {
         && (millis() - pLastSeen[i] < ONLINE_TTL_MS);
 }
 static int onlineCount();                   // fwd
-static void probeTick() {                   // one printer per call, round-robin
-    // When nothing answers at all - wrong network, everything switched off -
-    // slow right down. Otherwise the log fills with connect() errors every
-    // second and hides anything useful.
-    uint32_t gap = (onlineCount() > 0) ? 1200 : 6000;
-    if (millis() - pProbeAt < gap) return;
-    pProbeAt = millis();
-    for (int k = 0; k < MAX_PRINTERS; k++) {
-        int i = (pProbeIdx + k) % MAX_PRINTERS;
-        if (printers[i].type == PT_NONE) continue;
-        if (probeOne(printers[i])) pLastSeen[i] = millis() ? millis() : 1;
-        pProbeIdx = (i + 1) % MAX_PRINTERS;
-        return;
+
+// The reachability probe runs on its own task, and this is not a refinement -
+// it is the difference between an interface that responds and one that does
+// not.
+//
+// probeOne() is a synchronous TCP connect with a 900 ms timeout. Called from
+// the main loop, as it was, a single switched-off printer froze everything for
+// most of every second: measured at 600 to 1550 ms per pass on the home
+// screen, which is the screen people spend their time on. Taps landed late,
+// scrolling stuttered, and nothing on screen explained why.
+//
+// Nothing here needs to be in the loop. The probe produces one timestamp per
+// printer and the loop only ever reads them; a 32-bit store is atomic on this
+// core, so there is no lock to get wrong.
+static TaskHandle_t pProbeTask = nullptr;
+namespace disc { void sweep(); }   // defined below; the task drives it
+
+static void probeTaskFn(void*) {
+    for (;;) {
+        // Slow right down when nothing answers at all - wrong network,
+        // everything switched off. Otherwise the log fills with connect()
+        // errors and hides anything useful.
+        const uint32_t gap = (onlineCount() > 0) ? 1200 : 6000;
+
+        if (WiFi.status() == WL_CONNECTED) {
+            for (int k = 0; k < MAX_PRINTERS; k++) {
+                int i = (pProbeIdx + k) % MAX_PRINTERS;
+                if (printers[i].type == PT_NONE) continue;
+                if (probeOne(printers[i])) pLastSeen[i] = millis() ? millis() : 1;
+                pProbeIdx = (i + 1) % MAX_PRINTERS;
+                break;
+            }
+        }
+        disc::sweep();   // the other blocking network job, off the loop for the
+                         // same reason: 254 connects at 150 ms apiece.
+        vTaskDelay(pdMS_TO_TICKS(gap));
     }
 }
+
+static void startProbeTask() {
+    if (pProbeTask) return;
+    // 4 KB: a socket, a connect, nothing else. Core 0, because the Arduino
+    // loop and LVGL have core 1 and the whole point is to stay off it.
+    xTaskCreatePinnedToCore(probeTaskFn, "probe", 4096, nullptr, 1, &pProbeTask, 0);
+}
+
 static int onlineCount() {
     int n = 0;
     for (int i = 0; i < MAX_PRINTERS; i++) if (isOnline(i)) n++;
@@ -239,7 +270,17 @@ namespace disc {
         Serial.printf("[discovery] done: %d K2 on the LAN, %s\n", nFound, changed ? "IPs corrected" : "no change");
     }
 
-    void tick() {
+    // Split in two on purpose.
+    //
+    // sweep() is 254 blocking connects at 150 ms each. In the loop it probed
+    // four addresses per pass - 600 ms of frozen interface, sixty-odd times in
+    // a row, every time a Creality was unreachable. It runs on the probe task
+    // now.
+    //
+    // finish() stays in the loop, because reconcile() rewrites printers[].host
+    // and commits to NVS while the screens are reading that same array. The
+    // slow half moved; the half that touches shared state did not.
+    void sweep() {
         if (st == IDLE) {
             if (!WiFi.isConnected()) return;
             if (lastRun && millis() - lastRun < 180000) return;       // no max 1x / 3 min
@@ -252,7 +293,10 @@ namespace disc {
             Serial.printf("[discovery] varrer %d.%d.%d.1-254 :9999...\n", base[0], base[1], base[2]);
         }
         if (st == SWEEP) {
-            for (int k = 0; k < 4 && cur <= 254; k++, cur++) {
+            // Sixteen at a time now rather than four: off the loop, the only
+            // cost is how long the sweep takes, and 254 addresses at 150 ms
+            // apiece is worth getting through.
+            for (int k = 0; k < 16 && cur <= 254; k++, cur++) {
                 IPAddress ip = base; ip[3] = cur;
                 if (ip == WiFi.localIP()) continue;
                 String sn;
@@ -263,8 +307,9 @@ namespace disc {
             }
             if (cur > 254) st = RECONCILE;
         }
-        if (st == RECONCILE) { reconcile(); st = IDLE; }
     }
+
+    void finish() { if (st == RECONCILE) { reconcile(); st = IDLE; } }
 }
 
 // ---- printer list helpers ------------------------------------------------
@@ -916,8 +961,8 @@ void loop() {
                 }
             }
         }
-        probeTick();                 // background online/offline indicator
-        disc::tick();                // LAN sweep when a Creality is unreachable
+        startProbeTask();            // reachability, off the loop - see probeTaskFn
+        disc::finish();              // the sweep itself runs on the probe task
 
         {
             bool online[MAX_PRINTERS];
@@ -1277,4 +1322,6 @@ void loop() {
     }
 
     delay(15);
+
 }
+

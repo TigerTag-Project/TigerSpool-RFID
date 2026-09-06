@@ -405,3 +405,23 @@ draw the last known slot contents while reconnecting.
   the cell shows "-", which is honest rather than blank.
 - `check-ui-translated.py`: "ID" added to the allow list, beside IP and MAC.
 
+## 2026-09-06 - what was blocking the interface
+
+Instrumented the loop to name whatever held it for more than a frame, rather
+than reading the code and guessing. It printed `state 12` - ST_PRINTER, the
+home screen - at 600 to 1550 ms, over and over.
+
+Two causes, both in that state:
+- `probeOne()`: `WiFiClient::connect(host, port, 900)`, one printer per pass,
+  every 1200 ms. Blocking, and a printer that is off costs the full 900 ms.
+- `disc::tick()`: four `connect(ip, 9999, 150)` per pass = 600 ms, repeated
+  until 254 addresses are done.
+
+Both moved to a 4 KB task on core 0. `disc` split into `sweep()` on the task
+and `finish()` in the loop, because `reconcile()` rewrites `printers[].host`
+and commits NVS while the screens read that array - the slow half moved, the
+half that touches shared state did not.
+
+After: 62-71 ms. The 420 ms spikes that remain are `/api/tap` pumping LVGL for
+400 ms so a remote capture is stable; a real finger never goes through it.
+
