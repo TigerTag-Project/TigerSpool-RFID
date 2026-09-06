@@ -7,6 +7,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-09-06
+
+### Changed
+
+- **The slot grid is laid out like the mobile app.** Slot name above, a
+  coloured block with the material written inside it, the brand underneath —
+  so somebody with both in front of them is reading one design rather than two.
+  A block rather than a disc, because the material has to sit *inside* the
+  colour and a word inside a circle either overflows it or shrinks it until the
+  colour stops carrying. The text inside flips between black and white on the
+  spool's perceived brightness, not on an arithmetic mean of its channels: the
+  eye reads green as far brighter than blue, and a mean puts black on navy.
+- Slots now carry the brand the printer reports, so the Creality vendor field
+  reaches the screen instead of being written and never read back.
+
+### Added
+
+- **An NFC reader screen under Settings.** It reports the reader and then reads
+  a tag: hold a spool against the box and it shows the colour, the material,
+  the brand, the two temperature ranges and the product id. It answers "is my
+  reader working" by working, rather than by claiming to — and it answers "what
+  is actually on this spool", which nothing else did.
+
+### Removed
+
+- The reader dot from the slot screen. It was green on every screen, always,
+  because the reader is always ready. A pixel that never varies reports
+  nothing; what it used to claim is now provable on a screen that exercises it.
+  Only the printer connection is still reported there, because that one varies.
+
+
 ## [1.25.0] - 2026-09-06
 
 ### Added

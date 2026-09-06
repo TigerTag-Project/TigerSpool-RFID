@@ -68,7 +68,7 @@ bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
-             ST_WEB_PAIR, ST_UPDATE_NOTICE };
+             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER };
 State   state = ST_LANG;
 // Whether the language screen was opened from Settings rather than reached on
 // first boot. It decides two things: that the screen offers a way back, and
@@ -999,6 +999,10 @@ void loop() {
             case screen_settings::E_SCREEN:
                 screen_settings::invalidate();
                 state = ST_SET_SCREEN; stateSince = millis(); break;
+            case screen_settings::E_READER:
+                screen_settings::invalidate();
+                state = ST_SET_READER; stateSince = millis();
+                break;
             case screen_settings::E_UPDATE:
                 screen_settings::invalidate();
                 // Opening the page is the question. Asking the user to then
@@ -1139,6 +1143,23 @@ void loop() {
             screen_home::leave();
             state = ST_PRINTER; stateSince = millis();
         }
+        break;
+    }
+
+    case ST_SET_READER: {
+        // Reads continuously while this screen is up. It is the one place
+        // whose whole purpose is "does the reader work", so it should answer
+        // that by working rather than by claiming to.
+        static TagInfo seen;
+        if (nfcReady && reader::present()) {
+            TagInfo t;
+            if (reader::read(t)) seen = t;
+        }
+        screen_settings::showReader(nfcReady, reader::lastError().c_str(),
+                                    seen.ok ? &seen : nullptr);
+        lvgl_port::loop();
+        if (screen_settings::takeBack()) { seen = TagInfo(); }
+        BACK_TO_SETTINGS();
         break;
     }
 

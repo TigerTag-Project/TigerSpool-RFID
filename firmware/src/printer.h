@@ -40,6 +40,7 @@ struct PrinterCfg {
 struct SlotState {
     bool    known = false;           // has the printer reported this slot yet?
     String  type;                    // "PLA", "PETG", ...
+    String  brand;                   // "eSun", "Creality", ... empty if unknown
     uint8_t r = 90, g = 90, b = 90;  // grey until the printer says otherwise
     uint8_t percent = 0;
     bool    selected = false;        // loaded / active in the printer

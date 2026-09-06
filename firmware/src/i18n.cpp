@@ -98,6 +98,10 @@ static const Row STR[S_COUNT] = {
 /* S_LATER          */ {{ "Later", "Plus tard", "Spater", "Mas tarde", "Piu tardi", "Pozniej", "Depois", "Mais tarde" }},
 /* S_SIGNAL         */ {{ "Signal", "Signal", "Signal", "Senal", "Segnale", "Sygnal", "Sinal", "Sinal" }},
 /* S_AUTO           */ {{ "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto" }},
+/* S_READER         */ {{ "NFC reader", "Lecteur NFC", "NFC-Leser", "Lector NFC", "Lettore NFC", "Czytnik NFC", "Leitor NFC", "Leitor NFC" }},
+/* S_READER_OK      */ {{ "Reader ready", "Lecteur pret", "Leser bereit", "Lector listo", "Lettore pronto", "Czytnik gotowy", "Leitor pronto", "Leitor pronto" }},
+/* S_READER_NONE    */ {{ "Reader not found", "Lecteur introuvable", "Leser nicht gefunden", "Lector no encontrado", "Lettore non trovato", "Nie znaleziono czytnika", "Leitor nao encontrado", "Leitor nao encontrado" }},
+/* S_PRESENT_TAG    */ {{ "Hold a spool against the box", "Approchez une bobine du boitier", "Spule an das Gerat halten", "Acerca una bobina a la caja", "Avvicina una bobina alla scatola", "Przyloz szpule do urzadzenia", "Aproxime uma bobina da caixa", "Aproxime uma bobina da caixa" }},
 /* S_ORIENTATION   */ {{ "Orientation", "Orientation", "Ausrichtung", "Orientacion", "Orientamento", "Orientacja", "Orientacao", "Orientacao" }},
 /* S_RESTARTING     */ {{ "Installed. Restarting...", "Installe. Redemarrage...", "Installiert. Neustart...", "Instalado. Reiniciando...", "Installato. Riavvio...", "Zainstalowano. Restart...", "Instalado. Reiniciando...", "Instalado. A reiniciar..." }},
 };

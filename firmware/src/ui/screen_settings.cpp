@@ -114,6 +114,7 @@ void showMenu(const MenuState& st) {
           icons::SCREEN,  0 },
         { E_LANGUAGE, i18n::T(S_LANGUAGE),   i18n::name(i18n::current()),
           icons::GLOBE,   0 },
+        { E_READER,   i18n::T(S_READER),   "",      icons::SCREEN,  0 },
         { E_UPDATE,   i18n::T(S_UPDATE),    vals[3], icons::UPDATE,  tints[3] },
         { E_RESTART,  i18n::T(S_RESTART),    "",
           icons::RESTART, theme::WARN },
@@ -630,6 +631,61 @@ void showUpdateNotice(const char* current, const char* latest) {
 
     frame::button(body, i18n::T(S_INSTALL), 1, []() { s_action = A_INSTALL_NOW; });
     frame::button(body, i18n::T(S_LATER),   0, []() { s_action = A_LATER; });
+}
+
+void showReader(bool ready, const char* err, const TagInfo* tag) {
+    // The tag's own identity is the signature: a new spool rebuilds, the same
+    // spool held there does not.
+    uint32_t sig = 0xB1000000u ^ (uint32_t)ready
+                 ^ (tag && tag->ok ? (tag->idProduct * 2654435761u) : 0u);
+    if (sig == s_viewSig) return;
+    s_viewSig = sig;
+
+    lv_obj_t* body = frame::build(i18n::T(S_READER), onBack);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+
+    lv_obj_t* st = lv_label_create(body);
+    lv_label_set_text(st, ready ? i18n::T(S_READER_OK) : i18n::T(S_READER_NONE));
+    lv_obj_set_style_text_font(st, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(st, lv_color_hex(ready ? theme::OK : theme::DANGER), 0);
+    lv_obj_set_style_pad_bottom(st, 12, 0);
+
+    if (!ready && err && *err) {
+        frame::caption(err, theme::TEXT_DIM);
+        return;
+    }
+
+    if (!tag || !tag->ok) {
+        frame::caption(i18n::T(S_PRESENT_TAG), theme::TEXT_DIM);
+        return;
+    }
+
+    // What the chip actually holds. This is the screen someone opens to answer
+    // "did it read, and did it read the RIGHT thing" - so it shows the decoded
+    // values, not a verdict.
+    lv_obj_t* sw = lv_obj_create(body);
+    lv_obj_remove_style_all(sw);
+    lv_obj_set_size(sw, 46, 46);
+    lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(sw, lv_color_make(tag->r, tag->g, tag->b), 0);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_bottom(sw, 10, 0);
+
+    // Material and brand carry themselves - they are the words a person reads
+    // off a spool - so they are the headline rather than two labelled rows.
+    frame::bigLabel(tag->material.c_str(), theme::TEXT);
+    frame::caption(tag->brand.c_str(), theme::TEXT_DIM);
+
+    char b[24];
+    snprintf(b, sizeof(b), "%u-%u", tag->nozMin, tag->nozMax);
+    kv(body, i18n::T(S_NOZZLE), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%u-%u", tag->bedMin, tag->bedMax);
+    kv(body, i18n::T(S_BED), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%lu", (unsigned long)tag->idProduct);
+    kv(body, "ID", b, theme::TEXT_DIM);
 }
 
 void showRestart() {

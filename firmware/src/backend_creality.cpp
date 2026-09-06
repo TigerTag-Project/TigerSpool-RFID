@@ -44,6 +44,7 @@ namespace {
                 int st = m["state"] | 0;
                 s.known = (st != 0) || strlen(type);
                 s.type = type;
+                s.brand = (const char*)(m["vendor"] | "");
                 s.percent = m["percent"] | 0;
                 s.selected = (m["selected"] | 0) != 0;
                 uint8_t r = 90, g = 90, b = 90;

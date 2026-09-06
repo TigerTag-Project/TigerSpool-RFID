@@ -107,6 +107,10 @@ enum StrId : uint8_t {
     S_LATER,
     S_SIGNAL,
     S_AUTO,
+    S_READER,
+    S_READER_OK,
+    S_READER_NONE,
+    S_PRESENT_TAG,
     S_ORIENTATION,
     S_RESTARTING,
     S_COUNT

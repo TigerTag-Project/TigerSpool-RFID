@@ -376,3 +376,32 @@ name the OS chooses needs to verify what is on the other end first.
   successful token refresh and sync, with a 12 minute TTL - two missed syncs.
 - `theme::BUSY` (#2F7FFF), the fourth state colour.
 
+## 2026-09-06 - the printer workflow, measured
+
+Benoit's proposed workflow: sessions held open continuously to every active
+printer, for live slot contents. Measured before building any of it, and the
+measurement said not to.
+
+- `backend->begin()` blocks **0 ms**. It starts a connection, it does not wait.
+- On a reachable printer (Ender-3, Creality), `connected()` goes true after
+  **264 ms**. There is no latency problem to solve.
+- The "long loading" was a printer that is switched off. The grid appears
+  instantly with the right slot labels, then waits for contents that never
+  arrive, and says nothing about it. Persistent connections would not have
+  changed that by one millisecond.
+- And they do not fit: `MAX_PRINTERS` is 8, the Bambu backend holds a
+  `WiFiClientSecure` plus a **51 200 byte** MQTT buffer, so one Bambu session is
+  80-100 KB of internal RAM against 320 KB total with 37 already in LVGL's draw
+  buffer. Two would be tight. Eight is impossible.
+
+Still to do on that screen: say "unreachable" instead of waiting for ever, and
+draw the last known slot contents while reconnecting.
+
+### Added
+
+- `showReader()` under Settings, and `ST_SET_READER` which reads continuously
+  while it is open. The reader dot is gone from the slot screen.- Slot cell rebuilt to the app's three-part shape; `SlotState` gained `brand`,
+  parsed from Creality's `vendor`. The other three backends leave it empty and
+  the cell shows "-", which is honest rather than blank.
+- `check-ui-translated.py`: "ID" added to the allow list, beside IP and MAC.
+

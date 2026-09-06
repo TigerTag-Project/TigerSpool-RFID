@@ -59,6 +59,7 @@ PROTOCOL = re.compile(r"^WIFI:|^https?:|^[%\s\d./:;=-]*$")
 ALLOWED = {
     "Wi-Fi", "MAC", "IP", "OK", "TigerSpool", "TigerTag", "Google",
     "DHCP", "mDNS", "AP", "SSID", "NFC", "USB", "LAN", "QR", "PN532",
+    "ID",
     # A unit symbol, not a word: it is dBm in every language this device
     # speaks, and translating it would be inventing something.
     "dBm",

@@ -42,13 +42,21 @@ void show(const char* printerName, PrinterBackend* backend,
     const int n = backend->slotCount();
     const uint32_t sig = signature(backend, n, selected);
     if (s_built && n == s_lastCount && sig == s_lastSig) {
-        frame::setDots(-1, backend->connected(), readerReady);
+        // The reader dot is gone: it was green on every screen, always, because
+    // the reader is always ready - a pixel that says nothing. What it used to
+    // claim is now provable under Settings, on a screen that actually reads a
+    // tag. Only the printer connection is reported here, where it varies.
+    frame::setDots(-1, backend->connected(), -1);
         return;
     }
     s_built = true; s_lastCount = n; s_lastSig = sig;
 
     lv_obj_t* body = frame::build(printerName, onBack);
-    frame::setDots(-1, backend->connected(), readerReady);
+    // The reader dot is gone: it was green on every screen, always, because
+    // the reader is always ready - a pixel that says nothing. What it used to
+    // claim is now provable under Settings, on a screen that actually reads a
+    // tag. Only the printer connection is reported here, where it varies.
+    frame::setDots(-1, backend->connected(), -1);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
@@ -82,26 +90,47 @@ void show(const char* printerName, PrinterBackend* backend,
             lv_obj_set_style_outline_color(cell, lv_color_hex(theme::ACCENT), 0);
         }
 
-        // The colour disc is the whole point: a user recognises their own spool
-        // by colour without reading a word.
-        lv_obj_t* disc = lv_obj_create(cell);
-        lv_obj_remove_style_all(disc);
-        lv_obj_set_size(disc, 42, 42);
-        lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_opa(disc, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(disc,
-            st.known ? lv_color_make(st.r, st.g, st.b) : lv_color_hex(0x2A313B), 0);
-        lv_obj_set_style_border_width(disc, 1, 0);
-        lv_obj_set_style_border_color(disc, lv_color_hex(0x4A535F), 0);
-
+        // Slot name above, the colour block with its material written inside,
+        // the brand underneath - the same three-part cell the mobile app uses,
+        // so somebody who has both in front of them is reading one design.
+        //
+        // A block rather than a disc: the material has to sit INSIDE the
+        // colour, and a word inside a circle either overflows the circle or
+        // shrinks the circle until the colour stops carrying.
         lv_obj_t* label = lv_label_create(cell);
         lv_label_set_text(label, backend->slotLabel(i));
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(label, lv_color_hex(theme::TEXT_DIM), 0);
 
-        lv_obj_t* mat = lv_label_create(cell);
-        lv_label_set_text(mat, st.known && st.type.length() ? st.type.c_str() : "--");
-        lv_obj_set_style_text_color(mat, lv_color_hex(theme::TEXT_DIM), 0);
+        lv_obj_t* block = lv_obj_create(cell);
+        lv_obj_remove_style_all(block);
+        lv_obj_set_size(block, 74, 46);
+        lv_obj_set_style_radius(block, 8, 0);
+        lv_obj_set_style_bg_opa(block, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(block,
+            st.known ? lv_color_make(st.r, st.g, st.b) : lv_color_hex(0x3A424E), 0);
+        lv_obj_clear_flag(block, LV_OBJ_FLAG_SCROLLABLE);
+
+        // Black on a pale spool, white on a dark one. Perceived brightness,
+        // not the arithmetic mean: the eye reads green as far brighter than
+        // blue, and a mean puts black text on navy.
+        const int lum = st.known ? (st.r * 299 + st.g * 587 + st.b * 114) / 1000 : 0;
+        lv_obj_t* mat = lv_label_create(block);
+        lv_label_set_text(mat, st.known && st.type.length() ? st.type.c_str() : "?");
+        lv_label_set_long_mode(mat, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(mat, 66);
+        lv_obj_set_style_text_align(mat, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_font(mat, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(mat, lv_color_hex(lum > 150 ? 0x101010 : 0xFFFFFF), 0);
+        lv_obj_center(mat);
+
+        lv_obj_t* brand = lv_label_create(cell);
+        lv_label_set_text(brand, st.brand.length() ? st.brand.c_str() : "-");
+        lv_label_set_long_mode(brand, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(brand, 90);
+        lv_obj_set_style_text_align(brand, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(brand, lv_color_hex(theme::TEXT_DIM), 0);
+        lv_obj_set_style_text_font(brand, &lv_font_montserrat_12, 0);
     }
 
     if (n == 0) frame::caption(i18n::T(S_FIND_PRINTERS), theme::TEXT_DIM);

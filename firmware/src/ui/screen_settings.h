@@ -1,5 +1,6 @@
 #pragma once
 #include "printer.h"
+#include "reader.h"
 
 // Settings, and the printer picker that lives inside it.
 namespace screen_settings {
@@ -13,6 +14,7 @@ enum Entry {
     E_ACCOUNT,
     E_SCREEN,
     E_LANGUAGE,
+    E_READER,
     E_UPDATE,
     E_RESTART,
     E_FACTORY,
@@ -79,6 +81,13 @@ void showUpdate(const char* version, const char* channel,
 // update nobody installs, and the Settings row alone is only seen by someone
 // who already went looking.
 void showUpdateNotice(const char* current, const char* latest);
+
+// The reader's own screen. It exists because the header used to carry a dot
+// for "reader ready" - permanently green, because the reader is always ready,
+// which is a pixel that says nothing on every screen it appears on. Moved here
+// and made to earn its place: it reports the reader AND reads a tag, so it
+// answers "is my reader working" and "what is on this spool" in one place.
+void showReader(bool ready, const char* err, const TagInfo* tag);
 
 void showRestart();
 void showFactory(int holdPercent);   // -1 = not holding
