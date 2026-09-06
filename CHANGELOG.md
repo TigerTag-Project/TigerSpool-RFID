@@ -7,6 +7,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-09-06
+
+### Changed
+
+- **The printer connection is held open instead of being opened per screen.**
+  It used to be opened by selecting a printer and closed the moment you pressed
+  Back, so it existed in exactly one view and every return cost a reconnection.
+  It now comes up as soon as there is a network and a chosen printer — before
+  anyone navigates anywhere — and stays up.
+- **It gives up after five attempts** and offers a retry instead of trying for
+  ever. An indicator that spins indefinitely is one nobody believes, and a
+  device that reconnects for ever to a printer that has been sold never stops
+  using its radio. The retry re-reads the account first, because a changed IP
+  is the most likely reason five attempts failed and retrying the same stale
+  address five more times answers nothing.
+
+
 ## [1.27.0] - 2026-09-06
 
 ### Fixed

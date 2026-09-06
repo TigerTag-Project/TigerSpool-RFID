@@ -60,6 +60,26 @@ PrinterCfg printers[MAX_PRINTERS];
 int     selectedPrinter = 0;
 
 PrinterBackend* backend = nullptr;
+
+// The printer link is held open, and held open is a state machine rather than
+// a call. It used to be opened by selecting a printer and closed by leaving
+// the slot screen: one view, no reconnection, and nothing anywhere else on the
+// device could say whether the printer was reachable.
+//
+// Now: as soon as there is a network and a chosen printer, connect. Retry a
+// bounded number of times, then STOP and say so - an indicator that spins for
+// ever is one nobody believes, and a device that reconnects for ever to a
+// printer that has been sold is one that never stops using the radio.
+enum LinkState : uint8_t { LINK_IDLE, LINK_TRYING, LINK_UP, LINK_GAVE_UP };
+LinkState linkState   = LINK_IDLE;
+uint8_t   linkTries   = 0;
+uint32_t  linkStartAt = 0;
+int       linkPrinter = -1;
+// Five attempts, and long enough between them that a printer waking from
+// standby gets a chance. A connect that has not landed in eight seconds is not
+// about to.
+static const uint8_t  LINK_MAX_TRIES = 5;
+static const uint32_t LINK_ATTEMPT_MS = 8000;
 CrealityBackend            crealityBackend;
 FlashForgeC5Backend  flashForgeBackend;
 BambuBackend         bambuBackend;
@@ -540,25 +560,78 @@ static void goAfterLang() {
 static void backToPrinters() {
     screen_home::leave();            // force a full LVGL repaint on re-entry
     screen_slots::invalidate();
-    if (backend) { backend->stop(); backend = nullptr; }
+    // The session STAYS UP. It used to be torn down here, so the link existed
+    // in exactly one view and every return to the list cost a reconnection on
+    // the way back in. Leaving a screen is not a reason to hang up on a
+    // printer.
     selSlot = -1;
-    // Probe every printer again from scratch: whatever was known about
-    // reachability is stale the moment we stop talking to one.
-    for (int i = 0; i < MAX_PRINTERS; i++) pLastSeen[i] = 0;
     state = ST_PRINTER;
     stateSince = millis();
 }
+// Brings the link up and keeps it up. Called every loop; does nothing at all
+// once connected, which is the common case.
+static void linkTick() {
+    if (!WiFi.isConnected() || selectedPrinter < 0) return;
+    if (printers[selectedPrinter].type == PT_NONE) return;
+
+    // A different printer means a different link. Start over.
+    if (linkPrinter != selectedPrinter) {
+        linkPrinter = selectedPrinter;
+        linkState = LINK_IDLE; linkTries = 0;
+    }
+
+    if (backend && backend->connected()) {
+        if (linkState != LINK_UP) {
+            linkState = LINK_UP; linkTries = 0;
+            Serial.printf("[link] up: %s\n", printers[selectedPrinter].name.c_str());
+        }
+        return;
+    }
+
+    if (linkState == LINK_GAVE_UP) return;      // waiting for the user
+
+    // Connected a moment ago and now not: that is a drop, not a fresh start,
+    // and it is worth its own attempts rather than inheriting a spent budget.
+    if (linkState == LINK_UP) { linkState = LINK_IDLE; linkTries = 0; }
+
+    if (linkState == LINK_TRYING && millis() - linkStartAt < LINK_ATTEMPT_MS) return;
+
+    if (linkTries >= LINK_MAX_TRIES) {
+        linkState = LINK_GAVE_UP;
+        if (backend) { backend->stop(); backend = nullptr; }
+        Serial.printf("[link] gave up on %s after %u tries\n",
+                      printers[selectedPrinter].name.c_str(), LINK_MAX_TRIES);
+        return;
+    }
+
+    if (backend) backend->stop();
+    switch (printers[selectedPrinter].type) {
+        case PT_FF_C5:     backend = &flashForgeBackend; break;
+        case PT_BAMBU:     backend = &bambuBackend;      break;
+        case PT_SNAPMAKER: backend = &snapmakerBackend;  break;
+        default:           backend = &crealityBackend;   break;
+    }
+    backend->begin(printers[selectedPrinter]);
+    linkTries++; linkStartAt = millis(); linkState = LINK_TRYING;
+    Serial.printf("[link] attempt %u/%u to %s\n", linkTries, LINK_MAX_TRIES,
+                  printers[selectedPrinter].name.c_str());
+}
+
+// The user asking again. The address may be what was wrong, so the account is
+// re-read before the next attempt rather than retrying the same stale host
+// five more times.
+static void linkRetry() {
+    ttcloud::startAsyncSync();
+    linkTries = 0; linkState = LINK_IDLE;
+    Serial.println("[link] retry requested - re-reading the account first");
+}
+
 static void selectPrinter(int i) {
     if (i < 0 || i >= MAX_PRINTERS || printers[i].type == PT_NONE) return;
-    if (backend) backend->stop();
     selectedPrinter = i; saveSel(i);
-    switch (printers[i].type) {
-        case PT_FF_C5:     backend = &flashForgeBackend;    break;
-        case PT_BAMBU:     backend = &bambuBackend; break;
-        case PT_SNAPMAKER: backend = &snapmakerBackend;  break;
-        default:           backend = &crealityBackend;    break;
-    }
-    backend->begin(printers[i]);
+    // The link is not opened here any more - linkTick owns it, and it will
+    // have noticed the printer changed before the next frame is drawn.
+    linkTick();
     selSlot = -1; resultMsg = "";
     state = ST_GRID; stateSince = millis();
     Serial.printf("[ui] printer %d '%s' (%s)\n", i, printers[i].name.c_str(), typeTag(printers[i].type));
@@ -677,6 +750,7 @@ void loop() {
     lvgl_port::sleepTick(inSetup ? 0 : screenSleepSec, screenBrightness);
 
     if (backend) backend->loop();
+    linkTick();                  // keep the printer link up, everywhere
     if (webStarted || webcfg::apActive()) webcfg::loop();
 
     // A Google pairing started from the phone puts the same QR on this screen
@@ -1247,9 +1321,10 @@ void loop() {
 
     case ST_GRID: {
         screen_slots::show(printers[selectedPrinter].name.c_str(), backend,
-                           selSlot, nfcReady);
+                           selSlot, nfcReady, (int)linkState);
         lvgl_port::loop();
 
+        if (screen_slots::takeRetry()) { linkRetry(); screen_slots::invalidate(); break; }
         if (screen_slots::takeBack()) { backToPrinters(); break; }
         int slot = screen_slots::takeTappedSlot();
         if (slot >= 0) {

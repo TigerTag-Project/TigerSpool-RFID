@@ -425,3 +425,23 @@ half that touches shared state did not.
 After: 62-71 ms. The 420 ms spikes that remain are `/api/tap` pumping LVGL for
 400 ms so a remote capture is stable; a real finger never goes through it.
 
+## 2026-09-06 - the printer link is a state, not a call
+
+Asked to confirm the connection is permanent and visible everywhere. It was
+neither: `backToPrinters()` did `backend->stop(); backend = nullptr;`, so the
+session lived in one view and nothing opened it when the network came up.
+
+`linkTick()` now owns it - LINK_IDLE / TRYING / UP / GAVE_UP, five attempts,
+8 s per attempt, called every loop and doing nothing once connected. A drop
+after being up gets a fresh budget rather than inheriting a spent one.
+`linkRetry()` re-syncs the account before trying again.
+
+Verified from a cold boot: `[wifi] OK` then `[link] attempt 1/5` then
+`[link] up`, with no churn afterwards.
+
+**Not done:** the state shows on the slot screen (dot, or a retry button when
+it has given up). The home screen still shows per-printer reachability from the
+probe rather than the link state, and the settings screens show nothing. "Every
+view" is therefore partly true - worth finishing once we agree where it goes,
+since the header is already carrying the account and Wi-Fi at 240 px wide.
+

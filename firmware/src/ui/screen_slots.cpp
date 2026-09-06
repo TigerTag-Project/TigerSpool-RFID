@@ -18,14 +18,16 @@ void onBack()              { s_back = true; }
 // A cheap signature of what is on screen, so the grid is only rebuilt when the
 // printer actually reports something different. Rebuilding every loop would
 // cancel the scroll under the user's finger.
-uint32_t signature(PrinterBackend* b, int n, int selected) {
-    uint32_t h = 2166136261u ^ (uint32_t)selected;
+uint32_t signature(PrinterBackend* b, int n, int selected, int link) {
+    uint32_t h = 2166136261u ^ (uint32_t)selected ^ ((uint32_t)link << 8);
+    if (!b) return h;
     for (int i = 0; i < n; i++) {
         const SlotState& s = b->slot(i);
         uint32_t v = (s.r << 16) | (s.g << 8) | s.b;
         v ^= (uint32_t)s.known << 24;
         v ^= (uint32_t)s.selected << 25;
-        for (const char* p = s.type.c_str(); *p; p++) v = v * 16777619u ^ (uint8_t)*p;
+        for (const char* p = s.type.c_str();  *p; p++) v = v * 16777619u ^ (uint8_t)*p;
+        for (const char* p = s.brand.c_str(); *p; p++) v = v * 16777619u ^ (uint8_t)*p;
         h = h * 16777619u ^ v;
     }
     return h;
@@ -36,17 +38,38 @@ namespace screen_slots {
 
 void invalidate() { s_built = false; s_lastCount = -1; s_lastSig = 0; }
 
+bool s_retry = false;
+void onRetry(lv_event_t*) { s_retry = true; }
+
 void show(const char* printerName, PrinterBackend* backend,
-          int selected, bool readerReady) {
-    if (!backend) return;
-    const int n = backend->slotCount();
-    const uint32_t sig = signature(backend, n, selected);
+          int selected, bool readerReady, int link) {
+    // No backend is a state to DRAW, not a reason to draw nothing. When the
+    // link has given up there is no backend at all, and that is exactly the
+    // moment the user needs a screen with a retry button on it.
+    const int n = backend ? backend->slotCount() : 0;
+    const uint32_t sig = signature(backend, n, selected, link);
     if (s_built && n == s_lastCount && sig == s_lastSig) {
         // The reader dot is gone: it was green on every screen, always, because
     // the reader is always ready - a pixel that says nothing. What it used to
     // claim is now provable under Settings, on a screen that actually reads a
     // tag. Only the printer connection is reported here, where it varies.
-    frame::setDots(-1, backend->connected(), -1);
+    // Idle and connecting are the same thing to a user - it is working on it -
+    // so they share the blue. Given up is not a colour, it is a button.
+    if (link == 3) {
+        lv_obj_t* r = lv_btn_create(frame::header());
+        lv_obj_remove_style_all(r);
+        lv_obj_set_size(r, 52, theme::HEADER_H);
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
+        lv_obj_add_event_cb(r, onRetry, LV_EVENT_CLICKED, nullptr);
+        lv_obj_t* g = lv_label_create(r);
+        lv_label_set_text(g, LV_SYMBOL_REFRESH);
+        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(g, lv_color_hex(theme::WARN), 0);
+        lv_obj_center(g);
+        frame::setDots(-1, -1, -1);
+    } else {
+        frame::setDots(-1, link == 2 ? 1 : 0, -1);
+    }
         return;
     }
     s_built = true; s_lastCount = n; s_lastSig = sig;
@@ -56,7 +79,23 @@ void show(const char* printerName, PrinterBackend* backend,
     // the reader is always ready - a pixel that says nothing. What it used to
     // claim is now provable under Settings, on a screen that actually reads a
     // tag. Only the printer connection is reported here, where it varies.
-    frame::setDots(-1, backend->connected(), -1);
+    // Idle and connecting are the same thing to a user - it is working on it -
+    // so they share the blue. Given up is not a colour, it is a button.
+    if (link == 3) {
+        lv_obj_t* r = lv_btn_create(frame::header());
+        lv_obj_remove_style_all(r);
+        lv_obj_set_size(r, 52, theme::HEADER_H);
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, 0, 0);
+        lv_obj_add_event_cb(r, onRetry, LV_EVENT_CLICKED, nullptr);
+        lv_obj_t* g = lv_label_create(r);
+        lv_label_set_text(g, LV_SYMBOL_REFRESH);
+        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(g, lv_color_hex(theme::WARN), 0);
+        lv_obj_center(g);
+        frame::setDots(-1, -1, -1);
+    } else {
+        frame::setDots(-1, link == 2 ? 1 : 0, -1);
+    }
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
@@ -164,5 +203,6 @@ void show(const char* printerName, PrinterBackend* backend,
 
 int  takeTappedSlot() { int v = s_tapped; s_tapped = -1; return v; }
 bool takeBack()       { bool v = s_back; s_back = false; return v; }
+bool takeRetry()      { bool v = s_retry; s_retry = false; return v; }
 
 }  // namespace screen_slots
