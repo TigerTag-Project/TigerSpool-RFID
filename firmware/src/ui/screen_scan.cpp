@@ -1,4 +1,5 @@
 #include "screen_scan.h"
+#include "fonts.h"
 #include "frame.h"
 #include "theme.h"
 #include "i18n.h"
@@ -56,8 +57,8 @@ void showScan(const char* slotLabel, const char* errorOrNull) {
     lv_obj_set_style_arc_color(sp, lv_color_hex(0x1E2530), LV_PART_MAIN);
     lv_obj_set_style_arc_color(sp, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
 
-    frame::caption(i18n::T(S_BRING_TAG), theme::TEXT, &lv_font_montserrat_14);
-    frame::caption(i18n::T(S_TO_READER), theme::TEXT, &lv_font_montserrat_14);
+    frame::caption(i18n::T(S_BRING_TAG), theme::TEXT, &font_ui_14);
+    frame::caption(i18n::T(S_TO_READER), theme::TEXT, &font_ui_14);
 
     // A failed read names the fix rather than the fault: "move it closer" is
     // actionable, "read error" sends someone to a forum.
@@ -86,7 +87,7 @@ void showReview(const char* slotLabel, const TagInfo& tag) {
 
     swatch(body, tag.r, tag.g, tag.b, 68);
     frame::bigLabel(tag.material.c_str(), theme::TEXT);
-    frame::caption(tag.brand.c_str(), theme::ACCENT, &lv_font_montserrat_14);
+    frame::caption(tag.brand.c_str(), theme::ACCENT, &font_ui_14);
 
     char line[40];
     snprintf(line, sizeof(line), "%s  %u-%u C", i18n::T(S_NOZZLE), tag.nozMin, tag.nozMax);
@@ -119,7 +120,7 @@ void showResult(const char* slotLabel, bool ok, const char* message,
 
     lv_obj_t* icon = lv_label_create(body);
     lv_label_set_text(icon, ok ? LV_SYMBOL_OK : LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_font(icon, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(icon, &font_ui_24, 0);
     lv_obj_set_style_text_color(icon, lv_color_hex(ok ? theme::OK : theme::DANGER), 0);
 
     frame::bigLabel(message, theme::TEXT);

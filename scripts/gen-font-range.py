@@ -3,22 +3,19 @@
 
     python3 scripts/gen-font-range.py
 
-The range is a property of the build: LVGL's generated font source records it on
-the `Opts:` line the font converter writes. Reading it there is correct, but it
-means every guard that needs it also needs firmware/.pio/libdeps to exist - so
-scripts/verify.sh --quick, and therefore the pre-commit hook, could not run in a
-fresh clone until someone ran `pio pkg install`. A hook that does not work out of
-the box is a hook that gets uninstalled.
+The range is a property of the build, recorded on the `Opts:` line the font
+converter writes into each generated face.
 
-So the range is extracted once, committed, and read from here. That is not a
-second copy of the fact going stale: scripts/check-generated.py re-runs this
-generator and fails if the committed file disagrees, exactly as it does for the
-TigerTag reference header. CI has the library on disk and proves the fact on
-every push; the hook reads the proven fact and needs no build tree.
+It used to be read out of LVGL's own font sources under firmware/.pio/libdeps,
+which a fresh clone does not have - so this generator, and every guard that
+needed the range, could not run until somebody ran `pio pkg install`. The faces
+are ours now and they are committed, so the fact is read from the repository
+itself and the build tree is not needed at all. One caveat in CLAUDE.md went
+away with it.
 
-Exits 3, distinctly, when the LVGL source is not present - "I could not check"
-is a different answer from "it does not match", and check-generated.py reports
-them differently.
+Exits 3, distinctly, when no face is found - "I could not check" is a different
+answer from "it does not match", and check-generated.py reports them
+differently.
 """
 
 import json
@@ -33,18 +30,21 @@ SOURCE_UNAVAILABLE = 3
 
 
 def main() -> int:
-    sources = sorted((REPO / "firmware" / ".pio" / "libdeps").glob(
-        "*/lvgl/src/font/lv_font_montserrat_*.c"))
+    sources = sorted((REPO / "firmware" / "src" / "ui").glob("font_ui_*.c"))
     if not sources:
-        print("LVGL font source not present under firmware/.pio/libdeps - "
-              "run 'pio pkg install' in firmware/ to verify the range here",
-              file=sys.stderr)
+        print("no generated UI face under firmware/src/ui - "
+              "run 'bash scripts/make-ui-font.sh'", file=sys.stderr)
         return SOURCE_UNAVAILABLE
 
     specs = {}
     for src in sources:
         # Only the banner: these files are hundreds of kilobytes of glyph data.
-        m = re.search(r"-r\s+([0-9A-Fa-fx,\-]+)", src.read_text(errors="replace")[:4096])
+        # The FIRST -r only. Each face is built from two fonts and therefore
+        # carries two ranges: the text one, and LVGL's symbol list. The symbols
+        # are icons rather than characters and no guard should be checking a
+        # translation against them.
+        banner = src.read_text(errors="replace")[:4096]
+        m = re.search(r"-r\s+([0-9A-Fa-fx,\-]+)", banner)
         if m:
             specs[src.name] = m.group(1)
 
@@ -58,7 +58,7 @@ def main() -> int:
     if len(distinct) > 1:
         # Every enabled size must carry the same glyphs, or a string is
         # drawable at 14 px and a blank box at 20 px.
-        print("the enabled Montserrat sizes do not share one range:",
+        print("the generated UI faces do not share one range:",
               file=sys.stderr)
         for name, spec in sorted(specs.items()):
             print(f"  {name}: {spec}", file=sys.stderr)

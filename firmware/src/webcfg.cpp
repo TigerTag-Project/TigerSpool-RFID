@@ -227,8 +227,8 @@ namespace {
     const int   NPTYPES  = 5;
     // Mirrors enum Lang exactly: the form writes this index straight into NVS,
     // so a shorter list here would silently store the wrong language.
-    const char* LANGS[]  = { "English", "Francais", "Deutsch", "Espanol",
-                             "Italiano", "Polski", "Portugues (BR)", "Portugues (PT)" };
+    const char* LANGS[]  = { "English", "Français", "Deutsch", "Español",
+                             "Italiano", "Polski", "Português (BR)", "Português (PT)" };
 
     String esc(const String& s) {
         String o; o.reserve(s.length() + 8);

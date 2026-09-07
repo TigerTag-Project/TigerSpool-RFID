@@ -1,4 +1,5 @@
 #include "screen_slots.h"
+#include "fonts.h"
 
 // Where a failure sends someone. A wiki rather than text on the panel: four
 // causes do not fit on 240 px, and a page can be corrected the day a new
@@ -110,7 +111,7 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_add_event_cb(r, onRetry, LV_EVENT_CLICKED, nullptr);
         lv_obj_t* g = lv_label_create(r);
         lv_label_set_text(g, LV_SYMBOL_REFRESH);
-        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(g, &font_ui_20, 0);
         lv_obj_set_style_text_color(g, lv_color_hex(theme::WARN), 0);
         lv_obj_center(g);
         frame::setDots(-1, -1, -1);
@@ -173,7 +174,7 @@ void show(const char* printerName, PrinterBackend* backend,
     if (link == 3) {
         lv_obj_t* t = lv_label_create(body);
         lv_label_set_text(t, i18n::T(S_LINK_FAIL));
-        lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(t, &font_ui_16, 0);
         lv_obj_set_style_text_color(t, lv_color_hex(theme::DANGER), 0);
         lv_obj_set_style_pad_bottom(t, 8, 0);
 
@@ -294,7 +295,7 @@ void show(const char* printerName, PrinterBackend* backend,
         // shrinks the circle until the colour stops carrying.
         lv_obj_t* label = lv_label_create(cell);
         lv_label_set_text(label, backend->slotLabel(i));
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(label, &font_ui_12, 0);
         lv_obj_set_style_text_color(label, lv_color_hex(theme::TEXT_DIM), 0);
 
         lv_obj_t* block = lv_obj_create(cell);
@@ -325,7 +326,7 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_label_set_long_mode(mat, LV_LABEL_LONG_DOT);
         lv_obj_set_width(mat, CELL_W - 4);
         lv_obj_set_style_text_align(mat, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_font(mat, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(mat, &font_ui_12, 0);
         lv_obj_set_style_text_color(mat, lv_color_hex(lum > 150 ? 0x101010 : 0xFFFFFF), 0);
         lv_obj_center(mat);
 
@@ -335,7 +336,7 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_width(brand, CELL_W);
         lv_obj_set_style_text_align(brand, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(brand, lv_color_hex(theme::TEXT_DIM), 0);
-        lv_obj_set_style_text_font(brand, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(brand, &font_ui_12, 0);
     }
 
     if (n == 0) frame::caption(i18n::T(S_FIND_PRINTERS), theme::TEXT_DIM);

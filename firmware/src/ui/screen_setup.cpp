@@ -1,4 +1,5 @@
 #include "screen_setup.h"
+#include "fonts.h"
 #include "theme.h"
 #include "i18n.h"
 #include <Arduino.h>
@@ -46,12 +47,12 @@ void addBack() {
 
     lv_obj_t* g = lv_label_create(b);
     lv_label_set_text(g, LV_SYMBOL_LEFT);
-    lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(g, &font_ui_20, 0);
     lv_obj_set_style_text_color(g, lv_color_hex(theme::TEXT_DIM), 0);
 
     lv_obj_t* w = lv_label_create(b);
     lv_label_set_text(w, i18n::T(S_BACK));
-    lv_obj_set_style_text_font(w, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(w, &font_ui_16, 0);
     lv_obj_set_style_text_color(w, lv_color_hex(theme::TEXT_DIM), 0);
 }
 void onChoice(lv_event_t* e) { s_choice = (int)(intptr_t)lv_event_get_user_data(e); }
@@ -126,7 +127,7 @@ lv_obj_t* frame(const char* title, bool withBack = false) {
         lv_obj_add_event_cb(b, onBack, LV_EVENT_PRESSED, nullptr);
         lv_obj_t* g = lv_label_create(b);
         lv_label_set_text(g, LV_SYMBOL_LEFT);
-        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(g, &font_ui_20, 0);
         lv_obj_set_style_text_color(g, lv_color_hex(theme::TEXT_DIM), 0);
         lv_obj_center(g);
         titleX = 56;
@@ -134,7 +135,7 @@ lv_obj_t* frame(const char* title, bool withBack = false) {
 
     lv_obj_t* t = lv_label_create(header);
     lv_label_set_text(t, title);
-    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(t, &font_ui_16, 0);
     lv_obj_align(t, LV_ALIGN_LEFT_MID, titleX, 0);
 
     s_body = lv_obj_create(s_screen);
@@ -175,7 +176,7 @@ lv_obj_t* caption(const char* text, uint32_t colour = theme::TEXT_DIM) {
     lv_obj_set_width(l, theme::SCREEN_W - 2 * theme::PAD - 8);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(colour), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(l, &font_ui_12, 0);
     return l;
 }
 
@@ -272,7 +273,7 @@ void showLanguage(bool force, bool withBack) {
         lv_obj_add_event_cb(r, onRotatePress, LV_EVENT_CLICKED, nullptr);
         lv_obj_t* g = lv_label_create(r);
         lv_label_set_text(g, LV_SYMBOL_LOOP);
-        lv_obj_set_style_text_font(g, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(g, &font_ui_20, 0);
         lv_obj_set_style_text_color(g, lv_color_hex(theme::TEXT_DIM), 0);
         lv_obj_center(g);
     }
@@ -295,7 +296,7 @@ void showLanguage(bool force, bool withBack) {
         // Every language is written in itself. A user looking for Portugues
         // should not have to recognise the English word "Portuguese" first.
         lv_label_set_text(l, i18n::name((Lang)i));
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(l, &font_ui_14, 0);
         lv_obj_center(l);
     }
 }
@@ -316,7 +317,7 @@ void showWifi(const char* apSsid, const char* apPass) {
     lv_label_set_long_mode(scan, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(scan, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(scan, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(scan, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(scan, &font_ui_16, 0);
     lv_obj_set_style_text_color(scan, lv_color_hex(theme::TEXT), 0);
     lv_obj_set_style_pad_bottom(scan, 20, 0);   // air before the square
 
@@ -333,13 +334,13 @@ void showWifi(const char* apSsid, const char* apPass) {
     lv_obj_t* orJoin = lv_label_create(s_body);
     lv_obj_set_style_pad_top(orJoin, 22, 0);    // and after it
     lv_label_set_text(orJoin, i18n::T(S_OR_JOIN));
-    lv_obj_set_style_text_font(orJoin, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(orJoin, &font_ui_14, 0);
     lv_obj_set_style_text_color(orJoin, lv_color_hex(theme::TEXT_DIM), 0);
 
     lv_obj_t* ssid = lv_label_create(s_body);
     lv_obj_set_style_pad_top(ssid, 4, 0);
     lv_label_set_text(ssid, apSsid);
-    lv_obj_set_style_text_font(ssid, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(ssid, &font_ui_16, 0);
     lv_obj_set_style_text_color(ssid, lv_color_hex(theme::ACCENT), 0);
 
     // The key, for the manual route. The QR carries it too, so this is only
@@ -349,7 +350,7 @@ void showWifi(const char* apSsid, const char* apPass) {
     lv_obj_t* pass = lv_label_create(s_body);
     lv_obj_set_style_pad_top(pass, 2, 0);
     lv_label_set_text(pass, apPass);
-    lv_obj_set_style_text_font(pass, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(pass, &font_ui_16, 0);
     lv_obj_set_style_text_color(pass, lv_color_hex(theme::ACCENT), 0);
 
     // No "waiting for a phone", and no count of connected devices. Neither
@@ -388,7 +389,7 @@ void showWifiConnecting(const char* ssid, int secondsLeft) {
 
     lv_obj_t* n = lv_label_create(s_body);
     lv_label_set_text(n, ssid);
-    lv_obj_set_style_text_font(n, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(n, &font_ui_16, 0);
 
     char t[40];
     snprintf(t, sizeof(t), "%s  %ds", i18n::T(S_CONNECTING), secondsLeft);
@@ -399,12 +400,12 @@ void showWifiFailed(const char* ssid) {
     frame("Wi-Fi");
     lv_obj_t* x = lv_label_create(s_body);
     lv_label_set_text(x, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_font(x, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(x, &font_ui_24, 0);
     lv_obj_set_style_text_color(x, lv_color_hex(theme::DANGER), 0);
 
     lv_obj_t* n = lv_label_create(s_body);
     lv_label_set_text(n, ssid);
-    lv_obj_set_style_text_font(n, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(n, &font_ui_16, 0);
 
     // Naming the likely cause is the whole difference between a message a user
     // can act on and one that sends them to a forum.
@@ -425,7 +426,7 @@ void showSignInChoice() {
     lv_label_set_text(t, i18n::T(S_SIGN_IN));
     lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_line_space(t, 4, 0);
-    lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(t, &font_ui_20, 0);
     lv_obj_set_style_text_color(t, lv_color_hex(theme::TEXT), 0);
     // One rhythm for the whole screen: title to first button, and button to
     // button, are the same 28 px.
@@ -460,7 +461,7 @@ void showSignInChoice() {
 
         lv_obj_t* l = lv_label_create(b);
         lv_label_set_text(l, labels[i]);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(l, &font_ui_14, 0);
     }
 }
 
@@ -474,7 +475,7 @@ void showPortalReady(const char* url) {
     lv_label_set_long_mode(scan, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(scan, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(scan, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(scan, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(scan, &font_ui_16, 0);
     lv_obj_set_style_text_color(scan, lv_color_hex(theme::TEXT), 0);
     lv_obj_set_style_pad_bottom(scan, 20, 0);
 
@@ -483,13 +484,13 @@ void showPortalReady(const char* url) {
     lv_obj_t* orOpen = lv_label_create(s_body);
     lv_obj_set_style_pad_top(orOpen, 22, 0);
     lv_label_set_text(orOpen, i18n::T(S_OR_OPEN));
-    lv_obj_set_style_text_font(orOpen, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(orOpen, &font_ui_14, 0);
     lv_obj_set_style_text_color(orOpen, lv_color_hex(theme::TEXT_DIM), 0);
 
     lv_obj_t* a = lv_label_create(s_body);
     lv_obj_set_style_pad_top(a, 4, 0);
     lv_label_set_text(a, url);
-    lv_obj_set_style_text_font(a, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(a, &font_ui_16, 0);
     lv_obj_set_style_text_color(a, lv_color_hex(theme::ACCENT), 0);
 }
 
@@ -504,7 +505,7 @@ void showEmailPairing(const char* deviceUrl) {
 
     lv_obj_t* scan = lv_label_create(s_body);
     lv_label_set_text(scan, i18n::T(S_AP_JOIN));
-    lv_obj_set_style_text_font(scan, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(scan, &font_ui_16, 0);
     lv_obj_set_style_text_color(scan, lv_color_hex(theme::TEXT), 0);
     lv_obj_set_style_pad_bottom(scan, 20, 0);
 
@@ -513,13 +514,13 @@ void showEmailPairing(const char* deviceUrl) {
     lv_obj_t* u = lv_label_create(s_body);
     lv_obj_set_style_pad_top(u, 22, 0);
     lv_label_set_text(u, i18n::T(S_OR_JOIN));
-    lv_obj_set_style_text_font(u, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(u, &font_ui_14, 0);
     lv_obj_set_style_text_color(u, lv_color_hex(theme::TEXT_DIM), 0);
 
     lv_obj_t* a = lv_label_create(s_body);
     lv_obj_set_style_pad_top(a, 4, 0);
     lv_label_set_text(a, deviceUrl);
-    lv_obj_set_style_text_font(a, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(a, &font_ui_16, 0);
     lv_obj_set_style_text_color(a, lv_color_hex(theme::ACCENT), 0);
 }
 
@@ -534,7 +535,7 @@ void showAccountIntro() {
     frame(i18n::T(S_TT_ACCOUNT), false);
     lv_obj_t* icon = lv_label_create(s_body);
     lv_label_set_text(icon, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_font(icon, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(icon, &font_ui_24, 0);
     lv_obj_set_style_text_color(icon, lv_color_hex(theme::ACCENT), 0);
 
     caption(i18n::T(S_ACCOUNT_WHY), theme::TEXT);
@@ -548,7 +549,7 @@ void showAccountIntro() {
     lv_obj_add_event_cb(b, onPair, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* l = lv_label_create(b);
     lv_label_set_text(l, i18n::T(S_LINK_ACCOUNT));
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(l, &font_ui_14, 0);
     lv_obj_center(l);
 }
 
@@ -575,7 +576,7 @@ void showBusy(const char* text, bool withBack) {
     lv_label_set_long_mode(t, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(t, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(t, &font_ui_16, 0);
     lv_obj_set_style_text_color(t, lv_color_hex(theme::TEXT), 0);
 }
 
@@ -609,7 +610,7 @@ void showPreparingOld() {
     // operation is how a user learns not to trust what the screen says.
     lv_obj_t* t = lv_label_create(s_body);
     lv_label_set_text(t, i18n::T(S_WAITING));
-    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(t, &font_ui_16, 0);
     lv_obj_set_style_text_color(t, lv_color_hex(theme::TEXT), 0);
 }
 
@@ -630,7 +631,7 @@ void showPairing(const char* verifyUrl, const char* code, int secondsLeft) {
 
     lv_obj_t* scan = lv_label_create(s_body);
     lv_label_set_text(scan, i18n::T(S_AP_JOIN));
-    lv_obj_set_style_text_font(scan, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(scan, &font_ui_16, 0);
     lv_obj_set_style_text_color(scan, lv_color_hex(theme::TEXT), 0);
     lv_obj_set_style_pad_bottom(scan, 20, 0);
 
@@ -643,13 +644,13 @@ void showPairing(const char* verifyUrl, const char* code, int secondsLeft) {
     lv_label_set_long_mode(url, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(url, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(url, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(url, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(url, &font_ui_14, 0);
     lv_obj_set_style_text_color(url, lv_color_hex(theme::TEXT_DIM), 0);
 
     lv_obj_t* c = lv_label_create(s_body);
     lv_obj_set_style_pad_top(c, 4, 0);
     lv_label_set_text(c, code);
-    lv_obj_set_style_text_font(c, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(c, &font_ui_20, 0);
     lv_obj_set_style_text_color(c, lv_color_hex(theme::ACCENT), 0);
     lv_obj_set_style_text_letter_space(c, 2, 0);
 
@@ -660,7 +661,7 @@ void showPairing(const char* verifyUrl, const char* code, int secondsLeft) {
     lv_obj_t* left = lv_label_create(s_body);
     lv_obj_set_style_pad_top(left, 10, 0);
     lv_label_set_text(left, t);
-    lv_obj_set_style_text_font(left, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(left, &font_ui_12, 0);
     lv_obj_set_style_text_color(left, lv_color_hex(theme::TEXT_DIM), 0);
 }
 
@@ -675,7 +676,7 @@ void showPairFailed(const char* reason) {
     frame(i18n::T(S_TT_ACCOUNT), false);
     lv_obj_t* x = lv_label_create(s_body);
     lv_label_set_text(x, LV_SYMBOL_WARNING);
-    lv_obj_set_style_text_font(x, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(x, &font_ui_24, 0);
     lv_obj_set_style_text_color(x, lv_color_hex(theme::DANGER), 0);
     caption(reason, theme::TEXT);
 
@@ -687,7 +688,7 @@ void showPairFailed(const char* reason) {
     lv_obj_add_event_cb(b, onPair, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* l = lv_label_create(b);
     lv_label_set_text(l, i18n::T(S_LINK_ACCOUNT));
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(l, &font_ui_14, 0);
     lv_obj_center(l);
 }
 

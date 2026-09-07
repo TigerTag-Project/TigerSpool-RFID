@@ -1,4 +1,5 @@
 #include "frame.h"
+#include "fonts.h"
 #include "theme.h"
 
 namespace {
@@ -59,7 +60,7 @@ lv_obj_t* build(const char* title, Callback onBack) {
         lv_obj_add_event_cb(back, backCb, LV_EVENT_CLICKED, nullptr);
         lv_obj_t* g = lv_label_create(back);
         lv_label_set_text(g, LV_SYMBOL_LEFT);
-        lv_obj_set_style_text_font(g, &lv_font_montserrat_24, 0);
+        lv_obj_set_style_text_font(g, &font_ui_24, 0);
         lv_obj_center(g);
         titleX = 56;
     }
@@ -73,7 +74,7 @@ lv_obj_t* build(const char* title, Callback onBack) {
         lv_label_set_text(t, title);
         lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
         lv_obj_set_width(t, theme::SCREEN_W - titleX - 60);
-        lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(t, &font_ui_16, 0);
         lv_obj_align(t, LV_ALIGN_LEFT_MID, titleX, 0);
     }
 
@@ -125,7 +126,7 @@ lv_obj_t* caption(const char* text, uint32_t colour, const lv_font_t* font) {
     lv_obj_set_width(l, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(colour), 0);
-    lv_obj_set_style_text_font(l, font ? font : &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(l, font ? font : &font_ui_12, 0);
     return l;
 }
 
@@ -136,7 +137,7 @@ lv_obj_t* bigLabel(const char* text, uint32_t colour) {
     lv_obj_set_width(l, theme::SCREEN_W - 2 * theme::PAD);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(colour), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(l, &font_ui_20, 0);
     return l;
 }
 
@@ -155,7 +156,7 @@ lv_obj_t* button(lv_obj_t* parent, const char* text, int tone, Callback onClick)
     lv_obj_add_event_cb(b, clickCb, LV_EVENT_CLICKED, (void*)onClick);
     lv_obj_t* l = lv_label_create(b);
     lv_label_set_text(l, text);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(l, &font_ui_14, 0);
     lv_obj_center(l);
     return b;
 }
@@ -185,7 +186,7 @@ lv_obj_t* row(lv_obj_t* parent, const char* label, const char* value,
     lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
     lv_obj_set_flex_grow(l, 1);
     lv_obj_set_style_min_width(l, icon != icons::NONE ? 66 : 84, 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(l, &font_ui_14, 0);
 
     if (value && *value) {
         // The value gets a ceiling and truncates; the label never does. An
@@ -201,7 +202,7 @@ lv_obj_t* row(lv_obj_t* parent, const char* label, const char* value,
         // the row that says it opens something.
         lv_obj_set_style_max_width(v, icon != icons::NONE ? 74 : 100, 0);
         lv_obj_set_style_text_color(v, lv_color_hex(theme::TEXT_DIM), 0);
-        lv_obj_set_style_text_font(v, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(v, &font_ui_12, 0);
     }
     if (chevron) {
         // Half the height of the row, which is what it is on the scale. At 12
@@ -210,7 +211,7 @@ lv_obj_t* row(lv_obj_t* parent, const char* label, const char* value,
         lv_obj_t* c = lv_label_create(r);
         lv_label_set_text(c, LV_SYMBOL_RIGHT);
         lv_obj_set_style_text_color(c, lv_color_hex(theme::TEXT_DIM), 0);
-        lv_obj_set_style_text_font(c, &lv_font_montserrat_24, 0);
+        lv_obj_set_style_text_font(c, &font_ui_24, 0);
     }
     return r;
 }

@@ -1,4 +1,5 @@
 #include "screen_settings.h"
+#include "fonts.h"
 
 // U+00B0. One of the three characters outside ASCII the font carries,
 // spelled as bytes so the source itself stays ASCII.
@@ -224,7 +225,7 @@ void showPrinters(const PrinterCfg* printers, int count) {
         lv_label_set_text(name, printers[i].name.c_str());
         lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
         lv_obj_set_flex_grow(name, 1);
-        lv_obj_set_style_text_font(name, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(name, &font_ui_14, 0);
 
         // The switch is the control, and the whole row is its target: a 40 px
         // switch on a 240 px row is a small thing to aim at when the row it
@@ -304,7 +305,7 @@ void segmented(lv_obj_t* parent, const char* const* labels, const int* values,
         lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, (void*)(intptr_t)values[i]);
         lv_obj_t* l = lv_label_create(b);
         lv_label_set_text(l, labels[i]);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(l, &font_ui_12, 0);
         lv_obj_set_style_text_color(l, lv_color_hex(on ? 0x0B0D10 : theme::TEXT), 0);
         lv_obj_center(l);
     }
@@ -321,13 +322,13 @@ lv_obj_t* kv(lv_obj_t* parent, const char* k, const char* v, uint32_t colour) {
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t* a = lv_label_create(row);
     lv_label_set_text(a, k);
-    lv_obj_set_style_text_font(a, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(a, &font_ui_12, 0);
     lv_obj_set_style_text_color(a, lv_color_hex(theme::TEXT_DIM), 0);
     lv_obj_t* b = lv_label_create(row);
     lv_label_set_text(b, v);
     lv_label_set_long_mode(b, LV_LABEL_LONG_DOT);
     lv_obj_set_style_max_width(b, 132, 0);
-    lv_obj_set_style_text_font(b, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(b, &font_ui_12, 0);
     lv_obj_set_style_text_color(b, lv_color_hex(colour), 0);
     return row;
 }
@@ -365,7 +366,7 @@ void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
     lv_label_set_text(name, connected ? ssid : i18n::T(S_NO_NETWORK));
     lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
     lv_obj_set_width(name, LV_PCT(100));
-    lv_obj_set_style_text_font(name, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(name, &font_ui_20, 0);
     lv_obj_set_style_text_color(name, lv_color_hex(connected ? theme::OK : theme::TEXT_DIM), 0);
     lv_obj_set_style_pad_bottom(name, 16, 0);
 
@@ -407,7 +408,7 @@ void showAccount(const char* email, int printers, bool linked) {
     lv_label_set_long_mode(e, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(e, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(e, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(e, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(e, &font_ui_16, 0);
     lv_obj_set_style_pad_bottom(e, 18, 0);
 
     char n[32];
@@ -498,7 +499,7 @@ static void badge(lv_obj_t* parent, const char* glyph, uint32_t colour) {
 
     lv_obj_t* g = lv_label_create(ring);
     lv_label_set_text(g, glyph);
-    lv_obj_set_style_text_font(g, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(g, &font_ui_24, 0);
     lv_obj_set_style_text_color(g, lv_color_hex(colour), 0);
     lv_obj_center(g);
 
@@ -567,7 +568,7 @@ void showUpdate(const char* version, const char* channel,
         char buf[8];
         snprintf(buf, sizeof(buf), "%d%%", otaState == ota::DONE ? 100 : percent);
         lv_label_set_text(pct, buf);
-        lv_obj_set_style_text_font(pct, &lv_font_montserrat_24, 0);
+        lv_obj_set_style_text_font(pct, &font_ui_24, 0);
         lv_obj_set_style_text_color(pct, lv_color_hex(theme::TEXT), 0);
         lv_obj_center(pct);
 
@@ -685,7 +686,7 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
 
     lv_obj_t* st = lv_label_create(body);
     lv_label_set_text(st, ready ? i18n::T(S_READER_OK) : i18n::T(S_READER_NONE));
-    lv_obj_set_style_text_font(st, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(st, &font_ui_16, 0);
     lv_obj_set_style_text_color(st, lv_color_hex(ready ? theme::OK : theme::DANGER), 0);
     lv_obj_set_style_pad_bottom(st, 12, 0);
 
@@ -819,7 +820,7 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
         lv_label_set_text(raw, tag->pages.c_str());
         lv_label_set_long_mode(raw, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(raw, theme::SCREEN_W - 2 * theme::PAD - 6);
-        lv_obj_set_style_text_font(raw, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(raw, &font_ui_12, 0);
         lv_obj_set_style_text_color(raw, lv_color_hex(theme::TEXT_DIM), 0);
         lv_obj_set_style_pad_top(raw, 10, 0);
     }
@@ -841,7 +842,7 @@ void showRestart() {
     lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(q, theme::SCREEN_W - 2 * theme::PAD - 6);
     lv_obj_set_style_text_align(q, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(q, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(q, &font_ui_16, 0);
     lv_obj_set_style_text_color(q, lv_color_hex(theme::TEXT), 0);
     lv_obj_set_style_pad_bottom(q, 6, 0);
     frame::caption(i18n::T(S_RESTART_NOTE), theme::TEXT_DIM);
@@ -909,7 +910,7 @@ void showFactory(int holdPercent) {
 
     s_holdLabel = lv_label_create(hold);
     lv_label_set_text(s_holdLabel, pct > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
-    lv_obj_set_style_text_font(s_holdLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(s_holdLabel, &font_ui_14, 0);
     lv_obj_center(s_holdLabel);
 }
 

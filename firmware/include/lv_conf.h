@@ -92,15 +92,20 @@
 /* Montserrat carries Latin-1, so accented UI strings finally render - the
    prototype's built-in font was ASCII only and every language lost its
    diacritics. 14 is the body size, 16 the header, 20 the numbers. */
+/* Every built-in Montserrat face is OFF. The UI draws with the generated
+ * font_ui_* faces instead - same source font, same symbols, plus the accents
+ * these languages need. Leaving the built-ins on would link a second copy of
+ * every glyph and let lv_font_montserrat_16 compile by accident.
+ * See firmware/src/ui/fonts.h and scripts/make-ui-font.sh. */
 #define LV_FONT_MONTSERRAT_8  0
 #define LV_FONT_MONTSERRAT_10 0
-#define LV_FONT_MONTSERRAT_12 1
-#define LV_FONT_MONTSERRAT_14 1
-#define LV_FONT_MONTSERRAT_16 1
+#define LV_FONT_MONTSERRAT_12 0
+#define LV_FONT_MONTSERRAT_14 0
+#define LV_FONT_MONTSERRAT_16 0
 #define LV_FONT_MONTSERRAT_18 0
-#define LV_FONT_MONTSERRAT_20 1
+#define LV_FONT_MONTSERRAT_20 0
 #define LV_FONT_MONTSERRAT_22 0
-#define LV_FONT_MONTSERRAT_24 1
+#define LV_FONT_MONTSERRAT_24 0
 #define LV_FONT_MONTSERRAT_26 0
 #define LV_FONT_MONTSERRAT_28 0
 #define LV_FONT_MONTSERRAT_30 0
@@ -119,8 +124,14 @@
 #define LV_FONT_SIMSUN_16_CJK 0
 #define LV_FONT_UNSCII_8 0
 #define LV_FONT_UNSCII_16 0
-#define LV_FONT_CUSTOM_DECLARE
-#define LV_FONT_DEFAULT &lv_font_montserrat_14
+/* The default face is one of ours, and it is declared through THIS hook rather
+ * than with LV_FONT_DECLARE directly. lv_conf.h is read before lv_font_t
+ * exists, so a declaration written here at file scope is parsed with no types
+ * behind it and the build falls over inside LVGL's own headers, tens of errors
+ * away from the line that caused it. LV_FONT_CUSTOM_DECLARE is expanded at the
+ * point where the font API is already defined. */
+#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(font_ui_14)
+#define LV_FONT_DEFAULT &font_ui_14
 #define LV_FONT_FMT_TXT_LARGE 0
 #define LV_USE_FONT_COMPRESSED 0
 #define LV_USE_FONT_SUBPX 0

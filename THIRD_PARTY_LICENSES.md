@@ -22,7 +22,8 @@ components that keep their own licenses.
 | [PN532 / PN532_HSU](https://github.com/Seeed-Studio/PN532) (Seeed / elechouse) | Apache-2.0 | NFC reader driver — **vendored and patched**, see below |
 | [ESP Web Tools](https://github.com/esphome/esp-web-tools) | Apache-2.0 | Browser installer |
 | [mbedTLS](https://github.com/Mbed-TLS/mbedtls) | Apache-2.0 | TLS, bundled with ESP-IDF |
-| [Font Awesome Free](https://fontawesome.com) 6.5.2 | Fonts under SIL OFL 1.1, icon artwork under CC BY 4.0 | One glyph — the sun on the Display row — extracted into `firmware/src/ui/font_icons_16.c`. Fetched at generation time from the pinned tag by `scripts/make-icon-font.sh`; the font file itself is never committed. `lv_font_conv` extracts outlines from the `.ttf`, so it is the OFL that governs what is compiled in. |
+| [Font Awesome Free](https://fontawesome.com) | Fonts under SIL OFL 1.1, icon artwork under CC BY 4.0 | Every `LV_SYMBOL_*` glyph, plus the sun on the Display row, extracted into the `firmware/src/ui/font_ui_*.c` faces by `scripts/make-ui-font.sh`. The outlines come from the copy shipped inside the pinned LVGL package, so the library version pins them; no font file is committed. `lv_font_conv` extracts outlines from the font, so it is the OFL that governs what is compiled in. |
+| [Montserrat](https://github.com/JulietaUla/Montserrat) | SIL OFL 1.1 | The UI typeface. Latin-1 and Latin Extended-A subsets extracted into `firmware/src/ui/font_ui_*.c` by `scripts/make-ui-font.sh`, from the copy shipped inside the pinned LVGL package. No font file is committed. |
 
 ## The vendored PN532 driver
 

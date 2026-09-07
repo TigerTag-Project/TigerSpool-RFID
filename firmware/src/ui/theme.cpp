@@ -1,4 +1,5 @@
 #include "theme.h"
+#include "fonts.h"
 
 namespace {
     lv_style_t s_screen, s_header, s_row, s_rowPressed;
@@ -26,7 +27,7 @@ void init() {
             lv_color_hex(ACCENT),     // primary
             lv_color_hex(OK),         // secondary
             true,                     // dark
-            &lv_font_montserrat_14);
+            &font_ui_14);
         lv_disp_set_theme(disp, th);
     }
 

@@ -7,6 +7,38 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-09-07
+
+### Added
+
+- **French is written in French.** Every accent is back: Réglages, Écran, Mise
+  à jour, Redémarrer le boîtier, Récupération des données, Lecteur prêt. They
+  were left out because the font could not draw them - LVGL's built-in
+  Montserrat carries ASCII, a degree sign and a bullet, and renders anything
+  else as a blank box while logging nothing - so the translation was written
+  around a limitation and looked like nobody had proof-read it.
+
+  The faces are generated now, by `scripts/make-ui-font.sh`, from the same two
+  source fonts LVGL uses and with LVGL's own symbol list, over
+  `0x20-0x7F,0xA1-0x17F,0x2022`. That is Latin-1 and Latin Extended-A: enough
+  for German, Spanish, Italian, Portuguese and Polish too, whose translations
+  are still to be revisited by someone who reads them. `0xA0` is left out
+  deliberately - a no-break space with no glyph is a visible one, which is how
+  two brand names carrying one were found in the first place.
+
+  The Display row's sun came along in the same pass, so the face that existed
+  solely to carry it is gone and `scripts/make-icon-font.sh` with it.
+
+### Changed
+
+- **The font range is read from the repository rather than from the build
+  tree.** It used to be extracted from LVGL's own sources under
+  `firmware/.pio/libdeps`, which a fresh clone does not have - so the guard
+  that validates every drawn string could not run until someone ran
+  `pio pkg install`. The faces are ours and committed, so it needs nothing
+  installed.
+
+
 ## [1.31.0] - 2026-09-07
 
 ### Fixed

@@ -541,4 +541,16 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
 - Runtime reference tables: LittleFS was never mounted before this, and the
   partition is labelled `littlefs` while Arduino's LittleFS.begin() looks for
   one called `spiffs` - it returns false, formats nothing, and says nothing.
+- Accents. The roadmap entry said "generate a Latin subset and attach it as a
+  fallback face"; a fallback chain turned out to be unnecessary. One face per
+  size, built from Montserrat AND FontAwesome in the same lv_font_conv call,
+  replaces the built-in outright - same metrics, same symbols, wider alphabet.
+  The built-ins are switched off in lv_conf.h so lv_font_montserrat_16 does not
+  quietly link a second copy of every glyph.
+- Two traps worth remembering. The generated sources include <lvgl/lvgl.h>
+  unless LV_LVGL_H_INCLUDE_SIMPLE is defined. And a custom LV_FONT_DEFAULT must
+  be declared through LV_FONT_CUSTOM_DECLARE, not with LV_FONT_DECLARE at file
+  scope in lv_conf.h: that file is read before lv_font_t exists, and the error
+  surfaces tens of lines deep inside LVGL's own headers.
+- Cost: flash went from 30% to 45% of a 4 MB slot. Five sizes x ~350 glyphs.
 

@@ -1,4 +1,5 @@
 #include "screen_home.h"
+#include "fonts.h"
 #include "icons.h"
 #include "theme.h"
 #include "../i18n.h"
@@ -50,7 +51,7 @@ void buildScreen() {
 
     lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, i18n::T(S_PRINTER));
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(title, &font_ui_16, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(theme::TEXT), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, 9, 0);
 
@@ -73,7 +74,7 @@ void buildScreen() {
     lv_obj_add_event_cb(gear, onSettings, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* gearIcon = lv_label_create(gear);
     lv_label_set_text(gearIcon, LV_SYMBOL_SETTINGS);
-    lv_obj_set_style_text_font(gearIcon, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(gearIcon, &font_ui_20, 0);
     lv_obj_set_style_text_color(gearIcon, lv_color_hex(theme::TEXT), 0);
     lv_obj_center(gearIcon);
 
@@ -156,7 +157,7 @@ void show(const PrinterCfg* printers, int count,
         lv_label_set_text(name, printers[i].name.c_str());
         lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
         lv_obj_set_flex_grow(name, 1);
-        lv_obj_set_style_text_font(name, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(name, &font_ui_14, 0);
 
         makeDot(row, (online && online[i]) ? theme::OK : theme::DANGER);
     }

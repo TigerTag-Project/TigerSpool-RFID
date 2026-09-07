@@ -1,4 +1,5 @@
 #include "icons.h"
+#include "fonts.h"
 #include "theme.h"
 
 namespace icons {
@@ -48,7 +49,7 @@ void disc(lv_obj_t* p, int x, int y, int d, uint32_t c) {
 }
 
 lv_obj_t* symbol(lv_obj_t* parent, const char* glyph, uint32_t colour,
-                 const lv_font_t* face = &lv_font_montserrat_16) {
+                 const lv_font_t* face = &font_ui_16) {
     lv_obj_t* box = piece(parent, 0, 0, BOX, BOX);
     lv_obj_t* g = lv_label_create(box);
     lv_label_set_text(g, glyph);
@@ -81,7 +82,7 @@ lv_obj_t* wifiWave(lv_obj_t* parent) {
 
     lv_obj_t* dim = lv_label_create(wrap);          // child 0
     lv_label_set_text(dim, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_font(dim, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(dim, &font_ui_16, 0);
     lv_obj_align(dim, LV_ALIGN_BOTTOM_MID, 0, 0);
 
     lv_obj_t* clip = lv_obj_create(wrap);           // child 1
@@ -93,7 +94,7 @@ lv_obj_t* wifiWave(lv_obj_t* parent) {
 
     lv_obj_t* lit = lv_label_create(clip);
     lv_label_set_text(lit, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_font(lit, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(lit, &font_ui_16, 0);
     lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, 0);
     return wrap;
 }
@@ -168,8 +169,9 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c, int scale) {
     case RESTART: return symbol(parent, LV_SYMBOL_REFRESH, c);
     case ERASE:   return symbol(parent, LV_SYMBOL_TRASH, c);
     // Text, so it tints through text_color like any other glyph - unlike the
-    // drawn icons below, which tint through border_color or bg_color.
-    case SCREEN:  return symbol(parent, TT_SYMBOL_SUN, c, &font_icons_16);
+    // drawn icons below, which tint through border_color or bg_color. No face
+    // of its own any more: the sun is in the UI faces alongside the letters.
+    case SCREEN:  return symbol(parent, TT_SYMBOL_SUN, c);
     case NONE:    return nullptr;
     default:      break;
     }
