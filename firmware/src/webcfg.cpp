@@ -291,7 +291,7 @@ namespace {
                                              (int)ota::UP_TO_DATE, "", 0);
         else if (preview == "notice") screen_settings::showUpdateNotice(TIGERSPOOL_FW_VERSION, "1.12.0");
         else if (preview == "setrestart") screen_settings::showRestart();
-        else if (preview == "setfactory") screen_settings::showFactory(-1);
+        else if (preview == "setfactory") screen_settings::showFactory();
         else if (preview == "pick")      screen_settings::showPrinters(nullptr, 0);
 
         // The boot screen cannot be captured the way it is actually shown: it

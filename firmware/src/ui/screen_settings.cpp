@@ -257,7 +257,6 @@ screen_settings::Action s_action = screen_settings::A_NONE;
 int  s_newBright = -1;
 int  s_newSleep  = -1;
 int  s_newRot    = screen_settings::ROT_NONE;
-bool s_holding   = false;
 
 
 // Widgets kept from the last build, so a value that changes can be written
@@ -265,8 +264,6 @@ bool s_holding   = false;
 // position, the focus and any animation in flight; on a screen whose value
 // changes many times a second it also throws away the whole screen many times
 // a second. Valid only while s_viewSig still names the screen that made them.
-lv_obj_t* s_holdFill  = nullptr;   // factory reset progress
-lv_obj_t* s_holdLabel = nullptr;
 lv_obj_t* s_ring      = nullptr;   // OTA progress ring
 lv_obj_t* s_ringPct   = nullptr;
 lv_obj_t* s_signal    = nullptr;   // Wi-Fi strength readout
@@ -277,8 +274,6 @@ void onAction(lv_event_t* e) {
 void onBright(lv_event_t* e) { s_newBright = (int)(intptr_t)lv_event_get_user_data(e); }
 void onSleep(lv_event_t* e)  { s_newSleep  = (int)(intptr_t)lv_event_get_user_data(e); }
 void onRotate(lv_event_t* e) { s_newRot    = (int)(intptr_t)lv_event_get_user_data(e); }
-void onHoldDown(lv_event_t*) { s_holding = true; }
-void onHoldUp(lv_event_t*)   { s_holding = false; }
 
 // A row of exclusive choices. Each option is 44 px tall, which is the floor for
 // something you tap without looking twice.
@@ -340,7 +335,6 @@ Action takeAction()   { Action v = s_action; s_action = A_NONE; return v; }
 int  takeBrightness() { int v = s_newBright; s_newBright = -1; return v; }
 int  takeSleep()      { int v = s_newSleep;  s_newSleep  = -1; return v; }
 int  takeRotation()   { int v = s_newRot; s_newRot = ROT_NONE; return v; }
-bool factoryHolding() { return s_holding; }
 
 void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
               int rssi) {
@@ -834,84 +828,44 @@ void showRestart() {
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Not bigLabel. At 20 px "Redemarrer le boitier ?" wrapped with the question
-    // mark alone on the second line, and it does in German too - the header
-    // above already carries the weight, so the question does not need to.
-    lv_obj_t* q = lv_label_create(body);
-    lv_label_set_text(q, i18n::T(S_RESTART_Q));
-    lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(q, theme::SCREEN_W - 2 * theme::PAD - 6);
-    lv_obj_set_style_text_align(q, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(q, &font_ui_16, 0);
-    lv_obj_set_style_text_color(q, lv_color_hex(theme::TEXT), 0);
-    lv_obj_set_style_pad_bottom(q, 6, 0);
-    frame::caption(i18n::T(S_RESTART_NOTE), theme::TEXT_DIM);
+    // A question and two answers. Nothing else: what the box does while it
+    // restarts, and how long it takes, are not decisions anyone makes here.
+    //
+    // 14 px, not 16. At 16 "Redemarrer la TigerSpool ?" is one character too
+    // wide for 226 px and wraps with the question mark alone on the second
+    // line - the same orphan the old wording produced at 20. A product name in
+    // the sentence is not shortenable, so the type gives way instead.
+    frame::caption(i18n::T(S_RESTART_Q), theme::TEXT, &font_ui_14);
 
     lv_obj_t* spacer = lv_obj_create(body);
     lv_obj_remove_style_all(spacer);
     lv_obj_set_size(spacer, 1, 22);
 
-    frame::button(body, i18n::T(S_RESTART), 3, []() { s_action = A_RESTART; });
+    frame::button(body, i18n::T(S_CONFIRM), 3, []() { s_action = A_RESTART; });
+    frame::button(body, i18n::T(S_CANCEL),  0, onBack);
 }
 
-void showFactory(int holdPercent) {
-    // The hold progress is written into the bar, never rebuilt into it: this
-    // value changes on every frame someone keeps their finger down, and a
-    // screen rebuilt on every frame is a screen that cannot animate at all.
-    const int pct = holdPercent < 0 ? 0 : (holdPercent > 100 ? 100 : holdPercent);
-    if (sameView((const void*)showFactory, 0xE0000000u)) {
-        if (s_holdFill)  lv_obj_set_width(s_holdFill, LV_PCT(pct));
-        if (s_holdLabel) lv_label_set_text(s_holdLabel,
-                             pct > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
-        return;
-    }
+void showFactory() {
+    if (sameView((const void*)showFactory, 0xE0000000u)) return;
     claimView((const void*)showFactory, 0xE0000000u);
-    s_holdFill = s_holdLabel = nullptr;
 
     lv_obj_t* body = frame::build(i18n::T(S_FACTORY), onBack);
-    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    frame::caption(i18n::T(S_FACTORY_WARN),
-                   theme::TEXT);
+    // A question and two answers, the destructive one in the destructive
+    // colour. This was a two-second hold against a filling bar, which was
+    // safer and much less obvious: the bar had to be learned, and a stray
+    // press followed by a stray hold is not that much rarer than a stray
+    // press. Two buttons say what they do without being taught.
+    frame::caption(i18n::T(S_FACTORY_WARN), theme::TEXT, &font_ui_16);
 
     lv_obj_t* spacer = lv_obj_create(body);
     lv_obj_remove_style_all(spacer);
-    lv_obj_set_size(spacer, 1, 10);
+    lv_obj_set_size(spacer, 1, 22);
 
-    // What comes back matters as much as what goes: the printers live in the
-    // account, so linking it again restores them. That line is the difference
-    // between a frightening button and a usable one.
-    frame::caption(i18n::T(S_FACTORY_NOTE), theme::TEXT_DIM);
-
-    lv_obj_t* spacer2 = lv_obj_create(body);
-    lv_obj_remove_style_all(spacer2);
-    lv_obj_set_size(spacer2, 1, 20);
-
-    // Hold, not tap. A destructive action on a touchscreen has to cost more
-    // than a stray finger, and the bar is the only feedback that says so.
-    lv_obj_t* hold = lv_btn_create(body);
-    lv_obj_remove_style_all(hold);
-    lv_obj_set_size(hold, LV_PCT(100), theme::BUTTON_H);
-    lv_obj_set_style_radius(hold, theme::RADIUS, 0);
-    lv_obj_set_style_bg_color(hold, lv_color_hex(0x4A1D1A), 0);
-    lv_obj_set_style_bg_opa(hold, LV_OPA_COVER, 0);
-    lv_obj_add_event_cb(hold, onHoldDown, LV_EVENT_PRESSED, nullptr);
-    lv_obj_add_event_cb(hold, onHoldUp, LV_EVENT_RELEASED, nullptr);
-    lv_obj_add_event_cb(hold, onHoldUp, LV_EVENT_PRESS_LOST, nullptr);
-
-    // Built at zero width and kept: it exists so it can be widened.
-    s_holdFill = lv_obj_create(hold);
-    lv_obj_remove_style_all(s_holdFill);
-    lv_obj_set_size(s_holdFill, LV_PCT(pct), LV_PCT(100));
-    lv_obj_align(s_holdFill, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_set_style_bg_color(s_holdFill, lv_color_hex(theme::DANGER), 0);
-    lv_obj_set_style_bg_opa(s_holdFill, LV_OPA_80, 0);
-
-    s_holdLabel = lv_label_create(hold);
-    lv_label_set_text(s_holdLabel, pct > 0 ? i18n::T(S_KEEP_HOLDING) : i18n::T(S_HOLD_ERASE));
-    lv_obj_set_style_text_font(s_holdLabel, &font_ui_14, 0);
-    lv_obj_center(s_holdLabel);
+    frame::button(body, i18n::T(S_RESTORE), 2, []() { s_action = A_FACTORY; });
+    frame::button(body, i18n::T(S_CANCEL),  0, onBack);
 }
 
 }  // namespace screen_settings

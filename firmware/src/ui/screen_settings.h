@@ -90,7 +90,6 @@ void showUpdateNotice(const char* current, const char* latest);
 void showReader(bool ready, const char* err, const TagInfo* tag);
 
 void showRestart();
-void showFactory(int holdPercent);   // -1 = not holding
-bool factoryHolding();               // true while the finger is down
+void showFactory();
 
 }  // namespace screen_settings

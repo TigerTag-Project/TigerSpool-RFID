@@ -1412,27 +1412,17 @@ void loop() {
     }
 
     case ST_SET_FACTORY: {
-        // Two seconds of continuous contact. A destructive action has to cost
-        // more than a stray finger, and letting go at any point cancels it.
-        static uint32_t holdStart = 0;
-        if (screen_settings::factoryHolding()) {
-            if (!holdStart) holdStart = millis();
-            uint32_t held = millis() - holdStart;
-            screen_settings::showFactory((int)(held * 100 / 2000));
-            if (held >= 2000) {
-                Serial.println("[config] factory reset from settings");
-                const char* names[] = { "tigerspool", "tsaccount", "k2cfg", "ttcfg" };
-                for (const char* ns : names) {
-                    Preferences w;
-                    if (w.begin(ns, false)) { w.clear(); w.end(); }
-                }
-                delay(200); ESP.restart();
-            }
-        } else {
-            holdStart = 0;
-            screen_settings::showFactory(-1);
-        }
+        screen_settings::showFactory();
         lvgl_port::loop();
+        if (screen_settings::takeAction() == screen_settings::A_FACTORY) {
+            Serial.println("[config] factory reset from settings");
+            const char* names[] = { "tigerspool", "tsaccount", "k2cfg", "ttcfg" };
+            for (const char* ns : names) {
+                Preferences w;
+                if (w.begin(ns, false)) { w.clear(); w.end(); }
+            }
+            delay(200); ESP.restart();
+        }
         BACK_TO_SETTINGS();
         break;
     }

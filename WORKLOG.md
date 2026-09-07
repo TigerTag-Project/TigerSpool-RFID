@@ -553,4 +553,11 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   scope in lv_conf.h: that file is read before lv_font_t exists, and the error
   surfaces tens of lines deep inside LVGL's own headers.
 - Cost: flash went from 30% to 45% of a 4 MB slot. Five sizes x ~350 glyphs.
+- Benoit on both confirm screens: as bare as possible. The wording is his -
+  "Etes-vous sur de vouloir restaurer les parametres d'usine ?" and "Redemarrer
+  la TigerSpool ?".
+- The restart question orphaned its question mark AGAIN at 16 px, exactly as
+  the old wording did at 20. A product name in a sentence cannot be shortened,
+  so the type gives way: 14 px. Worth remembering that this panel is 226 px of
+  usable width and a centred question is one of the easiest things to overrun.
 

@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-09-07
+
+### Changed
+
+- **Restart and Factory reset are a question and two buttons.** Restart said
+  "Restart" in its header, asked "Restart the box?" underneath, and offered a
+  button marked "Restart" - the screen saying one word three times, with a note
+  about how long it takes and a promise that nothing is lost. Factory reset
+  listed what it erased and then reassured you about what came back: two
+  paragraphs arguing over how frightening the button should be. Each is now one
+  question and two answers.
+- **Factory reset is a red button, not a two-second hold.** The hold against a
+  filling bar was safer on paper and much less obvious in the hand: the bar had
+  to be learned, and a stray press followed by a stray hold is not that much
+  rarer than a stray press. A button that says "Restore" in the destructive
+  colour, beside one that says "Cancel", needs no teaching.
+
+
 ## [1.32.0] - 2026-09-07
 
 ### Added
