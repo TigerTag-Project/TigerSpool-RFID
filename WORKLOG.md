@@ -589,4 +589,12 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   Studio, so this is an account-data gap rather than a firmware one - and it is
   why the TLS question the protocol notes call the biggest unknown is STILL
   unanswered. Nothing has handshaked yet.
+- The missing credentials were never missing. Benoit pasted the Firestore doc
+  and mqttPassword was right there; the client-side ArduinoJson filter simply
+  did not name it. Two lists that had to agree, forty lines apart, with a
+  CODEMAP landmine explaining that they do DIFFERENT jobs - which is true and
+  is exactly what stopped anyone noticing they must still agree on names.
+- Anycubic over mbedTLS: works. That was the biggest open question in the
+  protocol notes and the answer is plain - connected + subscribed, TLS 1.2,
+  self-signed, no client certificate.
 

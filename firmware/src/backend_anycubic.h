@@ -25,6 +25,7 @@ public:
     void loop() override;
     void stop() override;
     bool connected() override;
+    bool firstIsExternal() override { return false; }
     int  slotCount() override;
     const char* slotLabel(int i) override;
     const SlotState& slot(int i) override;

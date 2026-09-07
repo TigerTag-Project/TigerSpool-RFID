@@ -7,6 +7,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.36.0] - 2026-09-08
+
+### Fixed
+
+- **Elegoo and Anycubic now connect. The credentials had been there all along.**
+  The import kept two lists of field names forty lines apart - a server-side
+  mask deciding what Firestore sent, and a client-side filter deciding what the
+  parser kept - and nothing made them agree. Three fields were added to the
+  first and not the second, so Firestore sent `mqttPassword`, `username` and
+  `acuModelId` and the parser threw all three away before anything read them.
+  On the bench that looked exactly like an account with no Elegoo access code
+  and an Anycubic with no username. It is one list now, asked twice.
+- **An Anycubic's slots are all on one row.** The grid drew the first slot
+  alone above the rest, which is right for every brand that has a single
+  external spool and wrong for Anycubic: its box -1 is a four-slot unit and
+  none of them is external. A backend says which it is rather than the screen
+  assuming.
+
+### Verified on hardware
+
+- **A Centauri Carbon 2 reads through the device**: `Ext.` empty, `S1` PLA
+  Sunlu, `S2` PLA Silk Generic, `S3` PLA Sunlu, `S4` ASA Landu - the same four
+  the printer reports to Tiger Studio.
+- **A Kobra X reads through the device**, and its TLS handshake was the single
+  biggest unknown in the protocol notes: mbedTLS completes it against the
+  self-signed broker. `A1` PLA, `A2` PET, `A3` PLA, `A4` PC.
+
+
 ## [1.35.0] - 2026-09-08
 
 ### Changed

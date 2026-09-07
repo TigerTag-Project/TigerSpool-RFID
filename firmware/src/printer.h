@@ -95,6 +95,12 @@ public:
     virtual const SlotState& slot(int i) = 0;
     virtual bool assign(int i, const TagInfo& t) = 0;
 
+    // Is slot 0 the printer's single external spool, drawn on a row of its
+    // own? True for every brand that has one - and false for Anycubic, whose
+    // box -1 is a four-slot unit rather than one spool, so splitting its first
+    // slot off leaves one cell alone above three.
+    virtual bool firstIsExternal() { return true; }
+
     virtual String status() = 0;
     // Ask the printer for its slot state again. Worth calling after assign():
     // at least one of these protocols acknowledges a command it ignored, so

@@ -261,8 +261,11 @@ void show(const char* printerName, PrinterBackend* backend,
     for (int i = 0; i < n; i++) {
         const SlotState& st = backend->slot(i);
 
-        // A row break after the first, so the four land together underneath.
-        if (i == 1 && n > 1) {
+        // A row break after the first, so the four land together underneath -
+        // but only where the first slot really is the one external spool. An
+        // Anycubic box is four slots and none of them is external, so breaking
+        // after A1 would leave it alone above A2, A3 and A4.
+        if (i == 1 && n > 1 && backend->firstIsExternal()) {
             lv_obj_t* brk = lv_obj_create(s_grid);
             lv_obj_remove_style_all(brk);
             lv_obj_set_size(brk, LV_PCT(100), 1);

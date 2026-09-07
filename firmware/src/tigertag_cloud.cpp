@@ -384,8 +384,20 @@ bool ttcloud::syncNow(String& summary) {
                              "snapmaker", "elegoo", "anycubic" };
     String base = String("https://firestore.googleapis.com/v1/projects/") + PROJECT +
                   "/databases/(default)/documents";
-    // Fields asked of the server. 'discovery' is taken whole (it is small)
-    // but NOT 'discovery.raw'; 'units' is never requested.
+    // The fields this import reads, in ONE list.
+    //
+    // It used to be two, forty lines apart: a server-side mask that decided
+    // what Firestore sent, and a client-side ArduinoJson filter that decided
+    // what the parser kept. Nothing made them agree, and they stopped agreeing
+    // the moment three fields were added to the first and not the second -
+    // mqttPassword, username and acuModelId. Firestore sent all three; the
+    // filter dropped them before anything could read them. On the bench that
+    // looked like an account with no Elegoo access code and an Anycubic with
+    // no username, when the account had every one of them.
+    //
+    // The two do different jobs - the mask cuts bytes on the wire, the filter
+    // cuts nesting depth in the parser - but they answer to the same question:
+    // which fields does this import care about. One list, asked twice.
     static const char* MASK_FIELDS[] = {
         "printerName", "name", "ip", "broker", "ipAddress", "lanIp", "host",
         "mode", "connectionType", "connection", "network", "netMode",
@@ -423,14 +435,11 @@ bool ttcloud::syncNow(String& summary) {
         JsonObject fd = filter["documents"].add<JsonObject>();
         fd["name"] = true;
         JsonObject ff = fd["fields"].to<JsonObject>();
-        for (const char* k : { "printerName", "name", "ip", "broker", "ipAddress", "lanIp", "host",
-                               "mode", "connectionType", "connection", "network", "netMode",
-                               "link", "transport", "printerConnectionType",
-                               "cloud", "isCloud", "local", "isLocal", "lan", "isLan",
-                               "printerModelId", "modelId", "model",
-                               "serial", "serialNumber", "sn", "deviceId",
-                               "password", "dev_access_code", "accessCode", "access_code", "checkCode" })
-            ff[k] = true;
+        // The same list the mask was built from. A field the server sends and
+        // the filter does not name is discarded here, silently, and reads back
+        // as an empty credential later.
+        for (auto k : MASK_FIELDS)
+            if (!strchr(k, '.')) ff[k] = true;      // dotted paths are the sub-object below
         // discovery sub-object: only the useful fields, never discovery.raw - that
         // one carries a full system dump the firmware will never read
         JsonObject dff = ff["discovery"]["mapValue"]["fields"].to<JsonObject>();
