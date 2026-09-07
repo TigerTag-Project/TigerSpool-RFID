@@ -566,4 +566,17 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   them in those two columns, dimensions unchanged. Worth doing that check
   whenever an image is rewritten programmatically; "I only meant to touch the
   edges" is not evidence.
+- Elegoo and Anycubic LAN backends, ported from Tiger Studio's PROTOCOL.md for
+  each brand rather than reverse-engineered. Both verified only as far as the
+  bench allows: they compile, and the account import now maps the two brands to
+  them (seen in the log as `-> type 5` and `-> type 6` where it used to say
+  "has no backend").
+- The Anycubic on this LAN has 9883 open, so the backend CAN be tested here -
+  but the account holds twelve printers and MAX_PRINTERS is eight, and the
+  import walks brands in a fixed order, so the two new brands are the ones that
+  get dropped. Worth fixing before anyone tries to test them.
+- Anycubic's three extra credentials had been anticipated in printer.h with a
+  note that the sn/cc pair would not stretch. It did not. They are named fields
+  now, with three more NVS keys and the same "local value wins" rule the others
+  follow.
 

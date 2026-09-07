@@ -32,7 +32,7 @@ someone has to do work before it does.
 | **Bambu Lab** | A1, A1 mini, A2L | ⚙️ | MQTT/TLS `:8883` | 🟢 proven on hardware | **LAN mode on**, plus the serial and the 8-character access code from the printer screen. Imported automatically from your account. |
 | **Snapmaker** | Artisan, J1, J1s, U1 | ⚙️ | Moonraker WebSocket `:7125` | 🟢 proven on hardware | Nothing — Moonraker needs no authentication on the LAN. The printer's IP is all it takes. |
 | **Bambu Lab (cloud)** | X1, P1, and any printer not on your LAN | 🧪 | MQTT/TLS to Bambu's broker | 🟡 partly implemented | Depends on a Bambu session token that **Tiger Studio** obtains and stores in your account; the device never signs in to Bambu itself. The token expires roughly every three months and has to be renewed in Studio. Not a finished experience. |
-| **Elegoo** | Centauri Carbon 2 and others | 🧪 | MQTT `:1883` (plain TCP) | 🔵 protocol documented, firmware not written | Serial number and the MQTT password (an "Access Code" on the printer). Imported automatically from your account. |
+| **Elegoo** | Centauri Carbon 2 and others | 🧪 | MQTT `:1883` (plain TCP) | 🟡 backend written, **never run against a printer** | Serial number and the MQTT password (an "Access Code" on the printer). Imported automatically from your account. |
 | **Anycubic (cloud)** | any Anycubic not in LAN mode | 🧪 | signed REST + MQTT to Anycubic's cloud | 🔵 protocol documented, firmware not written | Nothing on the printer — but it is a **second, heavier code path** than LAN, and whether it belongs in v1 is undecided. |
 
 > **Anycubic TLS — the supposed blocker does not exist.** Tiger Studio's protocol
@@ -48,7 +48,7 @@ someone has to do work before it does.
 > This may vary by model or firmware, so it is recorded as an observation rather
 > than a rule. But on this hardware the ESP32 will handshake, and the largest
 > stated risk for the Anycubic backend is not present.
-| **Anycubic** | Kobra 3 V2, Kobra X, ACE units | 🧪 | MQTT/TLS `:9883` | 🔵 protocol documented, firmware not written | **The printer must be paired in AnycubicSlicerNext at least once** — its broker credentials exist nowhere else. Tiger Studio reads them from there into your account. |
+| **Anycubic** | Kobra 3 V2, Kobra X, ACE units | 🧪 | MQTT/TLS `:9883` | 🟡 backend written, **never run against a printer** | **The printer must be paired in AnycubicSlicerNext at least once** — its broker credentials exist nowhere else. Tiger Studio reads them from there into your account. |
 
 **Legend for implementation status:** 🟢 implemented in the firmware prototype
 and verified against a physical printer · 🟡 implemented, not fully verified ·
@@ -107,16 +107,21 @@ imports the result. But it means **an Anycubic printer must have been paired in
 AnycubicSlicerNext at least once**, and the documentation has to say so plainly
 rather than letting a user discover it as a failure.
 
-### LAN or cloud — an open scope question
+### LAN is written. Cloud is not, and it is not the same job.
 
 An Anycubic printer is reachable **either** over the LAN **or** through Anycubic's
-cloud, and the account says which. A cloud-mode printer keeps no open local ports
-at all: there is nothing on the network to connect to, and the only route is
-Anycubic's own service, with signed REST requests and a second MQTT broker.
+cloud, and the account says which. The LAN backend exists now. A cloud-mode
+printer keeps no open local ports at all: there is nothing on the network to
+connect to, and the only route is Anycubic's own service — signed REST requests
+against a second broker, with signing secrets that live inside the closed slicer
+and app binaries.
 
-The two are separate implementations, not one with a flag. **Whether v1 supports
-both, or LAN only, is not decided.** Until it is, this page lists them as separate
-rows rather than implying a cloud printer works because a LAN one does.
+That is not a variant of the LAN backend with a flag set. It is a second client
+against a different service, and the device cannot obtain its own credentials for
+it any more than it can for the LAN one. The realistic shape is the Bambu cloud
+pattern already in this firmware: **Tiger Studio holds the session and the
+account carries a token the device presents.** Nothing in the firmware can be
+built until that is decided, because it determines what the account has to store.
 
 The same question already exists for Bambu Lab, whose cloud path is partly
 implemented in the prototype.

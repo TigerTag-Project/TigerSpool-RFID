@@ -27,6 +27,8 @@
 #include "backend_ff.h"
 #include "backend_bambu.h"
 #include "backend_snapmaker.h"
+#include "backend_elegoo.h"
+#include "backend_anycubic.h"
 #include "webcfg.h"
 #include "net/ota.h"
 #include "imu.h"
@@ -91,6 +93,8 @@ CrealityBackend            crealityBackend;
 FlashForgeC5Backend  flashForgeBackend;
 BambuBackend         bambuBackend;
 SnapmakerBackend     snapmakerBackend;
+ElegooBackend        elegooBackend;
+AnycubicBackend      anycubicBackend;
 bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
@@ -393,6 +397,11 @@ static void migrateLegacyConfig() {
         snprintf(k, sizeof(k), "p%dh", i); dst.putString(k, src.getString(k, ""));
         snprintf(k, sizeof(k), "p%ds", i); dst.putString(k, src.getString(k, ""));
         snprintf(k, sizeof(k), "p%dc", i); dst.putString(k, src.getString(k, ""));
+        // The three Anycubic fields did not exist in the prototype's namespace,
+        // so they copy across as empty and the next account sync fills them.
+        snprintf(k, sizeof(k), "p%dd", i); dst.putString(k, src.getString(k, ""));
+        snprintf(k, sizeof(k), "p%du", i); dst.putString(k, src.getString(k, ""));
+        snprintf(k, sizeof(k), "p%dm", i); dst.putString(k, src.getString(k, ""));
     }
     dst.putBool("migrated", true);
     dst.end();
@@ -426,6 +435,9 @@ static void loadCfg() {
         snprintf(k, sizeof(k), "p%dh", i); printers[i].host = nvs.getString(k, "");
         snprintf(k, sizeof(k), "p%ds", i); printers[i].sn   = nvs.getString(k, "");
         snprintf(k, sizeof(k), "p%dc", i); printers[i].cc   = nvs.getString(k, "");
+        snprintf(k, sizeof(k), "p%dd", i); printers[i].devId = nvs.getString(k, "");
+        snprintf(k, sizeof(k), "p%du", i); printers[i].user  = nvs.getString(k, "");
+        snprintf(k, sizeof(k), "p%dm", i); printers[i].model = nvs.getString(k, "");
         snprintf(k, sizeof(k), "p%dv", i); printers[i].visible = nvs.getBool(k, true);
     }
     String oldK2 = nvs.getString("k2ip", "");
@@ -668,6 +680,8 @@ static void linkTick() {
         case PT_FF_C5:     backend = &flashForgeBackend; break;
         case PT_BAMBU:     backend = &bambuBackend;      break;
         case PT_SNAPMAKER: backend = &snapmakerBackend;  break;
+        case PT_ELEGOO:    backend = &elegooBackend;     break;
+        case PT_ANYCUBIC:  backend = &anycubicBackend;   break;
         default:           backend = &crealityBackend;   break;
     }
     backend->begin(printers[selectedPrinter]);
