@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.1] - 2026-09-07
+
+### Changed
+
+- **The two buttons on a confirm screen have room around them.** They ran edge
+  to edge, which reads as a bar rather than as something you press, and they
+  touched each other - "Restore" and "Cancel" a couple of pixels apart on a
+  capacitive screen, one of which is not undoable. 78% of the width, and a gap
+  between them.
+
+
 ## [1.33.0] - 2026-09-07
 
 ### Changed

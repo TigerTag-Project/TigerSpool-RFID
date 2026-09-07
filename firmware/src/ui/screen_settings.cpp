@@ -820,6 +820,27 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
     }
 }
 
+// Two answers to one question, laid out so neither is pressed by accident.
+//
+// Not full width: a button that runs edge to edge on a 240 px panel reads as a
+// bar rather than as a thing you press, and there is nothing to rest the eye
+// against. Not touching each other either - "Restore" and "Cancel" a couple of
+// pixels apart on a capacitive screen is a mis-tap waiting to happen, and one
+// of the two is not undoable.
+void confirmPair(lv_obj_t* body, const char* actionText, int tone,
+                 frame::Callback onAction) {
+    lv_obj_set_style_pad_row(body, 0, 0);
+    lv_obj_t* a = frame::button(body, actionText, tone, onAction);
+    lv_obj_set_width(a, LV_PCT(78));
+
+    lv_obj_t* gap = lv_obj_create(body);
+    lv_obj_remove_style_all(gap);
+    lv_obj_set_size(gap, 1, 16);
+
+    lv_obj_t* c = frame::button(body, i18n::T(S_CANCEL), 0, onBack);
+    lv_obj_set_width(c, LV_PCT(78));
+}
+
 void showRestart() {
     if (sameView((const void*)showRestart, 0xD0000000u)) return;
     claimView((const void*)showRestart, 0xD0000000u);
@@ -841,8 +862,7 @@ void showRestart() {
     lv_obj_remove_style_all(spacer);
     lv_obj_set_size(spacer, 1, 22);
 
-    frame::button(body, i18n::T(S_CONFIRM), 3, []() { s_action = A_RESTART; });
-    frame::button(body, i18n::T(S_CANCEL),  0, onBack);
+    confirmPair(body, i18n::T(S_CONFIRM), 3, []() { s_action = A_RESTART; });
 }
 
 void showFactory() {
@@ -864,8 +884,7 @@ void showFactory() {
     lv_obj_remove_style_all(spacer);
     lv_obj_set_size(spacer, 1, 22);
 
-    frame::button(body, i18n::T(S_RESTORE), 2, []() { s_action = A_FACTORY; });
-    frame::button(body, i18n::T(S_CANCEL),  0, onBack);
+    confirmPair(body, i18n::T(S_RESTORE), 2, []() { s_action = A_FACTORY; });
 }
 
 }  // namespace screen_settings
