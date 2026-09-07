@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.36.1] - 2026-09-08
+
+### Fixed
+
+- **An Elegoo with its Canvas hub connected no longer shows an empty `Ext.`.**
+  On a Centauri Carbon 2 the hub and the single spool are the same feed path:
+  plug the Canvas in and the external holder stops existing, unplug it and the
+  four trays do. It is one or the other, never both, and drawing an empty
+  external cell beside four full trays invented a fifth place a spool can be.
+  Four trays with the hub, one external spool without it.
+
+
 ## [1.36.0] - 2026-09-08
 
 ### Fixed

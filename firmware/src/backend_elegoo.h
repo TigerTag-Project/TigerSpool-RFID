@@ -24,6 +24,10 @@ public:
     void loop() override;
     void stop() override;
     bool connected() override;
+    // Only when the hub is unplugged is slot 0 the external spool. With the
+    // Canvas connected the list is four trays and there is no external slot at
+    // all, so nothing should be split onto a row of its own.
+    bool firstIsExternal() override;
     int  slotCount() override;
     const char* slotLabel(int i) override;
     const SlotState& slot(int i) override;

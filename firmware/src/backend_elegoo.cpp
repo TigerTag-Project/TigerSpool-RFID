@@ -6,9 +6,15 @@
 
 namespace {
 
-// Index 0 is the mono extruder, 1..4 the Canvas trays. The external slot has
-// no name here for the same reason it has none in the other backends: it is a
-// word rather than a position, and it is translated at draw time.
+// Internally: 0 is the mono extruder, 1..4 are the Canvas trays.
+//
+// What the UI SEES is one or the other, never both. On a Centauri Carbon 2 the
+// hub and the single spool are the same feed path - plug the Canvas in and the
+// external holder stops existing, unplug it and the four trays do. Showing an
+// empty Ext. beside four full trays invents a fifth place a spool can be.
+//
+// So the exposed list is four trays when the hub is connected, and one external
+// spool when it is not; mapUi() is the whole of the difference.
 const int ESLOTS = 5;
 const char* const NAMES[ESLOTS] = { "", "S1", "S2", "S3", "S4" };
 
@@ -204,23 +210,24 @@ void ElegooBackend::stop() {
 }
 
 bool ElegooBackend::connected() { return g_connected; }
+bool ElegooBackend::firstIsExternal() { return !g_canvas; }
 String ElegooBackend::status()  { return g_status; }
 
-int ElegooBackend::slotCount() {
-    // Five with the hub, one without. The count is what the grid draws, so a
-    // printer with no Canvas shows one spool rather than one spool and four
-    // permanently empty cells.
-    return g_canvas ? ESLOTS : 1;
+// UI index -> internal index. With the hub: 0..3 are trays 1..4. Without it,
+// the only slot is the mono spool at 0.
+static int mapUi(int i) {
+    if (!g_canvas) return 0;
+    return (i >= 0 && i < 4) ? i + 1 : 1;
 }
 
+int ElegooBackend::slotCount() { return g_canvas ? 4 : 1; }
+
 const char* ElegooBackend::slotLabel(int i) {
-    const char* n = NAMES[(i >= 0 && i < ESLOTS) ? i : 0];
+    const char* n = NAMES[mapUi(i)];
     return *n ? n : i18n::T(S_HOLDER);
 }
 
-const SlotState& ElegooBackend::slot(int i) {
-    return g_slots[(i >= 0 && i < ESLOTS) ? i : 0];
-}
+const SlotState& ElegooBackend::slot(int i) { return g_slots[mapUi(i)]; }
 
 void ElegooBackend::refresh() {
     // Both, every time. Which one answers with content is how the hub is
@@ -231,17 +238,16 @@ void ElegooBackend::refresh() {
 }
 
 bool ElegooBackend::assign(int idx, const TagInfo& t) {
-    if (idx < 0 || idx >= ESLOTS) return false;
+    if (idx < 0 || idx >= slotCount()) return false;
     if (!mqtt.connected()) return false;
 
-    if (idx == 0) {
+    if (!g_canvas) {
+        // 2003 without the hub answers error_code 1003 and changes nothing, so
+        // the mono spool goes through 1055 - the method the official slicer
+        // uses in exactly this situation.
         publish(1055, writeParams(0, 0, t));
     } else {
-        // 2003 without the hub answers error_code 1003 and changes nothing, so
-        // refusing here is more honest than sending a command that will be
-        // rejected and reporting it as sent.
-        if (!g_canvas) { g_status = "Elegoo: no canvas"; return false; }
-        publish(2003, writeParams(0, idx - 1, t));
+        publish(2003, writeParams(0, mapUi(idx) - 1, t));
     }
     g_status = String("Elegoo: sent -> ") + slotLabel(idx);
     // The printer sends no acknowledgement for the write itself, so the only
