@@ -80,7 +80,18 @@ leaving it out: a missing accent reads as a device that could not draw one, a
 wrong one reads as a device that does not know the language. Polish in
 particular is not a job for a search and replace.
 
-## Elegoo and Anycubic
+## Anycubic in cloud mode
 
-Both protocols are documented and working in Tiger Studio; the firmware side is
-not written. See [PRINTER-COMPATIBILITY.md](PRINTER-COMPATIBILITY.md).
+The LAN backends for Elegoo and Anycubic are written. Cloud mode is not, and it
+is a different job: a cloud-mode Anycubic opens no local port, so the only route
+is Anycubic's own service with signed REST requests and a second broker, and the
+signing secrets live inside the closed slicer binaries.
+
+**It is blocked on a decision, not on work.** The device cannot sign those
+requests and cannot obtain its own credentials, so the realistic shape is the
+one Bambu's cloud path already uses here: Tiger Studio holds the session and the
+account carries a token the device presents. What that token is, who refreshes
+it and what happens when it expires all have to be settled before any firmware
+is worth writing - the answer decides what the account stores.
+
+See [PRINTER-COMPATIBILITY.md](PRINTER-COMPATIBILITY.md).

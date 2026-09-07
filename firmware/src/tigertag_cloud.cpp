@@ -185,6 +185,13 @@ namespace {
         if (brand == "flashforge") return (m == 5 || m == 6) ? PT_FF_C5 : PT_NONE;
         if (brand == "bambulab")   return PT_BAMBU;                                // protocolo LAN comum
         if (brand == "snapmaker")  return PT_SNAPMAKER;                             // Moonraker ws :7125
+        // Elegoo speaks one protocol across the range - the Centauri Carbon
+        // family and everything after it - so there is no model to check.
+        if (brand == "elegoo")     return PT_ELEGOO;                                // MQTT :1883
+        // Anycubic in LAN mode. A cloud-mode printer is filtered out before
+        // this by looksCloud(): it has no open local port to connect to, and
+        // reaching it needs Anycubic's own service rather than this backend.
+        if (brand == "anycubic")   return PT_ANYCUBIC;                              // MQTT/TLS :9883
         return PT_NONE;
     }
 }
@@ -454,6 +461,8 @@ bool ttcloud::syncNow(String& summary) {
                 if (transport.startsWith("ws-9999"))   t = PT_CREALITY;
                 else if (transport.startsWith("http-8898")) t = PT_FF_C5;
                 else if (transport.startsWith("mqtt-8883")) t = PT_BAMBU;
+                else if (transport.startsWith("mqtt-1883")) t = PT_ELEGOO;
+                else if (transport.startsWith("mqtts-9883")) t = PT_ANYCUBIC;
             }
             Serial.printf("[account]   dev=%s ip='%s' transport='%s' cloud=%d modelId='%s' -> type %d\n",
                           dev.c_str(), ip.c_str(), transport.c_str(), cloud, mid.c_str(), t);
@@ -486,6 +495,15 @@ bool ttcloud::syncNow(String& summary) {
                     p.cc = fsAny(f, { "password", "dev_access_code", "accessCode", "access_code", "checkCode",
                                   "mqttPassword" });
                 }
+                if (t == PT_ANYCUBIC) {
+                    // acuModelId, not modelId: the first is Anycubic's own
+                    // numeric model and half of every topic, the second is the
+                    // TigerTag catalogue id that chose this backend. Confusing
+                    // them connects to a broker that answers nothing.
+                    p.devId = fsStr(f, "deviceId");
+                    p.user  = fsStr(f, "username");
+                    p.model = fsAny(f, { "acuModelId" });
+                }
             }
             // The same printer can appear twice in an account - two FlashForge
             // documents for one IP and serial, for instance. Do not import both.
@@ -508,17 +526,23 @@ bool ttcloud::syncNow(String& summary) {
     bool diff = false;
     for (int i = 0; i < MAX_PRINTERS; i++) {
         char key[6];
-        int    ct; String cn, ch, cs, cc;
+        int    ct; String cn, ch, cs, cc, cd, cu, cm;
         snprintf(key, sizeof(key), "p%dt", i); ct = k.getInt(key, 0);
         snprintf(key, sizeof(key), "p%dn", i); cn = k.getString(key, "");
         snprintf(key, sizeof(key), "p%dh", i); ch = k.getString(key, "");
         snprintf(key, sizeof(key), "p%ds", i); cs = k.getString(key, "");
         snprintf(key, sizeof(key), "p%dc", i); cc = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dd", i); cd = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%du", i); cu = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dm", i); cm = k.getString(key, "");
         int    nt = (i < n) ? (int)got[i].type : 0;
         String nn = (i < n) ? got[i].name : String();
         String nh = (i < n) ? got[i].host : String();
         String ns = (i < n) ? got[i].sn   : String();
         String nc = (i < n) ? got[i].cc   : String();
+        String nd = (i < n) ? got[i].devId : String();
+        String nu = (i < n) ? got[i].user  : String();
+        String nm2 = (i < n) ? got[i].model : String();
         // The import fills gaps, it does not overwrite. A value the user typed by
         // hand survives a sync that does not know it - which also means a stale
         // one is not corrected automatically. Clearing the field is how you
@@ -531,14 +555,23 @@ bool ttcloud::syncNow(String& summary) {
             // only fills in when the local field is empty
             if (ch.length()) nh = ch;
             if (cc.length()) nc = cc; else if (nc.isEmpty()) nc = cc;
+            // Same rule for the three Anycubic fields: a value already on the
+            // device wins, because it may have been typed in by hand.
+            if (cd.length()) nd = cd;
+            if (cu.length()) nu = cu;
+            if (cm.length()) nm2 = cm;
         }
-        if (nt != ct || nn != cn || nh != ch || ns != cs || nc != cc) {
+        if (nt != ct || nn != cn || nh != ch || ns != cs || nc != cc ||
+            nd != cd || nu != cu || nm2 != cm) {
             diff = true;
             snprintf(key, sizeof(key), "p%dt", i); k.putInt(key, nt);
             snprintf(key, sizeof(key), "p%dn", i); k.putString(key, nn);
             snprintf(key, sizeof(key), "p%dh", i); k.putString(key, nh);
             snprintf(key, sizeof(key), "p%ds", i); k.putString(key, ns);
             snprintf(key, sizeof(key), "p%dc", i); k.putString(key, nc);
+            snprintf(key, sizeof(key), "p%dd", i); k.putString(key, nd);
+            snprintf(key, sizeof(key), "p%du", i); k.putString(key, nu);
+            snprintf(key, sizeof(key), "p%dm", i); k.putString(key, nm2);
         }
     }
     k.end();

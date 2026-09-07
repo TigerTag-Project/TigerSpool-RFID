@@ -7,6 +7,44 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.34.0] - 2026-09-08
+
+### Added
+
+- **Elegoo, over the LAN.** MQTT on port 1883 with no TLS at all - the simplest
+  transport of the six brands. Two protocols in one printer, and a cable
+  decides which: with the Canvas hub plugged in, four trays are read with
+  method 2005 and written with 2003; without it, the printer reports a single
+  spool through 1061 and is written through 1055, and 2003 answers an error.
+  The backend follows whichever is live. Slots are `Ext.` and `S1`-`S4`.
+- **Anycubic, over the LAN.** MQTT on port 9883 with TLS against a self-signed
+  certificate. The layout is read from the printer rather than assumed: box -1
+  is the external unit and is **not** one spool - an ACE Pro 2 reports it with
+  four slots - so it is drawn as a unit like any other, and a Kobra X with four
+  ACE units reports twenty slots. Labels are `A1`-`A4`, `B1`-`B4`, one letter
+  per unit.
+- **The printer record carries named credentials.** Anycubic's broker needs a
+  device id and a username beside the password, and its topics carry the
+  printer's numeric model id. Three named fields rather than another overloaded
+  pair: the sixth brand proved the pair does not generalise.
+
+### Known limits
+
+- **Neither backend has ever talked to a printer.** Both are written from
+  protocol captures that Tiger Studio proved on real hardware, and both compile
+  and are recognised by the account import - but a protocol read off a document
+  and a protocol that answers are two different claims.
+- **An account with more than eight printers drops the last brands first.** The
+  import walks brands in a fixed order and stops at eight, and Elegoo and
+  Anycubic are last in that order - so on a large account they are exactly the
+  ones that do not arrive.
+- **Anycubic in cloud mode is not supported and is not a variant of this.** A
+  cloud-mode printer opens no local port at all; reaching it means Anycubic's
+  own service, with signing secrets that live inside closed binaries. See
+  docs/ROADMAP.md - it is blocked on a decision about what the account stores,
+  not on firmware work.
+
+
 ## [1.33.2] - 2026-09-07
 
 ### Fixed

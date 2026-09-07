@@ -10,22 +10,33 @@ enum PrinterType : uint8_t {
     PT_CREALITY  = 1,   // WebSocket :9999
     PT_FF_C5     = 2,   // HTTP :8898
     PT_BAMBU     = 3,   // MQTT/TLS :8883
-    PT_SNAPMAKER = 4    // Moonraker WebSocket :7125
+    PT_SNAPMAKER = 4,   // Moonraker WebSocket :7125
+    PT_ELEGOO    = 5,   // MQTT :1883, no TLS
+    PT_ANYCUBIC  = 6    // MQTT/TLS :9883, self-signed
 };
 
 // One printer, as imported from the user's TigerTag account.
 //
-// The fixed sn/cc pair covers five of the six brands. It does NOT stretch to
-// Anycubic, which needs a broker deviceId, a username, a password and a numeric
-// model id that forms part of its MQTT topic. Before that backend is written
-// this becomes a named credential bag the account layer fills and each backend
-// reads by name - see docs/ACCOUNT-DATA.md.
+// The sn/cc pair covers five brands. Anycubic needed three more: its broker
+// wants a device id and a username alongside the password, and its MQTT topics
+// carry the printer's numeric model id. They are named fields rather than
+// another overloaded pair, because the sixth brand proved the pair does not
+// generalise - and a seventh will want something else again.
+//
+// Every one of these comes from the TigerTag account. None of them can be read
+// off an Anycubic printer: /info exposes neither, and they cannot be derived
+// from what it does expose. They exist only in AnycubicSlicerNext's config,
+// which Tiger Studio decodes on the desktop. A printer never paired there has
+// no credentials anywhere, and no amount of work on this device changes that.
 struct PrinterCfg {
     PrinterType type = PT_NONE;
     String name;        // shown on the home screen
     String host;        // IP address on the LAN
     String sn;          // serial number (FlashForge, Bambu Lab)
-    String cc;          // check code / access code (FlashForge, Bambu Lab, Elegoo)
+    String cc;          // check code / access code / broker password
+    String devId;       // Anycubic: 32-hex broker device id, part of its topics
+    String user;        // Anycubic: broker username
+    String model;       // Anycubic: numeric model id, also part of its topics
 
     // Shown on the home screen. An account can hold ten printers while the
     // machine next to this box is one of them; hiding the rest is the
