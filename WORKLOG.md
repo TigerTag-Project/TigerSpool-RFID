@@ -560,4 +560,10 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   the old wording did at 20. A product name in a sentence cannot be shortened,
   so the type gives way: 14 px. Worth remembering that this panel is 226 px of
   usable width and a centred question is one of the easiest things to overrun.
+- The boot screen's white edges were in the PNG, not the code: columns 0 and
+  239 held RGB(14,14,14) for 212 rows. Fixed in the asset and verified by
+  decoding the old and new files and diffing every pixel - 424 differ, all of
+  them in those two columns, dimensions unchanged. Worth doing that check
+  whenever an image is rewritten programmatically; "I only meant to touch the
+  edges" is not evidence.
 

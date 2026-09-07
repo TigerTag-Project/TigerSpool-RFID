@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.33.2] - 2026-09-07
+
+### Fixed
+
+- **The boot screen had a line down each side.** The source artwork carried
+  RGB(14,14,14) in its first and last pixel column, over 212 of the 320 rows -
+  invisible in an image editor on a white desktop, and a bright line on a panel
+  that inverts. 424 pixels, blacked out in the asset rather than papered over
+  in the generator: the columns beside them are pure black, so nothing of the
+  artwork was in them.
+
+
 ## [1.33.1] - 2026-09-07
 
 ### Changed
