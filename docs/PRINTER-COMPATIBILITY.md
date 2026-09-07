@@ -73,6 +73,30 @@ That turns v1 support from open-ended research into a porting job. What remains 
 real work — a JavaScript desktop client and an ESP32 firmware backend are not the
 same thing — but the unknowns are now specific rather than total.
 
+### Proven from this repository, on Benoit's own printers
+
+Both protocols were re-checked live on 2026-09-08, against a Centauri Carbon 2
+at 192.168.40.102 and a Kobra X at 192.168.20.200, using exactly the topics and
+payloads the firmware backends send:
+
+| | Elegoo | Anycubic |
+|---|---|---|
+| Connect | `CONNACK rc=0` with user `elegoo` + access code | `CONNACK rc=0` over TLS 1.2, self-signed |
+| Register | `{"error":"ok"}` | n/a |
+| Read | `2005` → Canvas `connected:1`, four trays with brand, type, `#RRGGBB` | `getInfo` → `state:success code:200`, box **-1** with **four** slots |
+| Shape | matches the backend's parser | matches the backend's parser |
+
+So the transports, the credentials, the topics and the payload shapes are all
+correct. **What blocks the device is account data, not firmware:** the TigerTag
+account carries no access code for the Elegoo, and neither `username` nor
+`acuModelId` for the Anycubic. All three exist - the first in Tiger Studio's
+own form, the other two in `AnycubicSlicerNext.conf` - they simply never
+reached the account.
+
+One thing is still unproven and can only be proven on the device: whether
+**mbedTLS on the ESP32** completes the Anycubic handshake. Python's TLS does.
+Until the two missing fields reach the account, the firmware cannot try.
+
 ### What is already known
 
 | | Elegoo | Anycubic |
