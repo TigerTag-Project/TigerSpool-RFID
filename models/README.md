@@ -10,7 +10,7 @@
 **Only the shell changes. The electronics, the wiring and the connectors are
 strictly identical across every model.**
 
-Same Waveshare ESP32-S3-Touch-LCD-2. Same PN532. Same six wires on the same pins.
+Same Waveshare ESP32-S3-Touch-LCD-2. Same PN532. Same four wires on the same pins.
 Same USB-C entry. A TigerSpool built for a Bambu Lab and one built for a Creality
 are the same device in a different jacket, and either firmware image runs on
 either one.

@@ -1,7 +1,7 @@
 # Wiring
 
-Six wires. Getting two of them wrong is the single most common way to end up with
-a board that boots, shows a screen, and never reads a tag.
+Four wires. Getting two of them the wrong way round is the single most common way
+to end up with a board that boots, shows a screen, and never reads a tag.
 
 Everything on this page was verified on a bench prototype against real hardware.
 Where something is *not* verified it says so.

@@ -70,7 +70,7 @@ module rather than trusting a table found online — including the one in
 ## Assembly
 
 1. Wire the PN532 to the board exactly as in [../docs/WIRING.md](../docs/WIRING.md).
-   **Six wires, two of them crossed.**
+   **Four wires, two of them crossed.**
 2. Set both DIP switches on the PN532 to `0` / OFF.
 3. Flash the firmware from the browser — [../installer/](../installer/).
 4. Verify the reader responds *before* closing the case: bring-up checklist in
