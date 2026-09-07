@@ -579,4 +579,14 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   note that the sn/cc pair would not stretch. It did not. They are named fields
   now, with three more NVS keys and the same "local value wins" rule the others
   follow.
+- Elegoo, live against a Centauri Carbon 2: TCP connects, the broker answers,
+  and it returns rc=5 - unauthorized. Transport, port, client id and topics are
+  therefore all correct and the only missing piece is the access code, which is
+  empty in the account while Tiger Studio's form shows Q2CQoJ. Far more than
+  "it compiles": the backend is proven up to authentication.
+- Anycubic, live against a Kobra X on the same LAN: the account holds deviceId
+  and password but NOT username and NOT acuModelId. Both are written by Tiger
+  Studio, so this is an account-data gap rather than a firmware one - and it is
+  why the TLS question the protocol notes call the biggest unknown is STILL
+  unanswered. Nothing has handshaked yet.
 

@@ -2,8 +2,20 @@
 #include <Arduino.h>
 #include "reader.h"
 
-// Up to eight printers, which is what the account import can carry.
-#define MAX_PRINTERS 8
+// How many printers the device carries from the account.
+//
+// It was eight, and eight was wrong for a reason that only shows up on a real
+// account: the import walks the six brands in a fixed order and stops when it
+// is full, so an account with more printers than this does not lose a random
+// eight - it loses the LAST BRANDS ALPHABETICALLY IN THAT LIST, every time.
+// Elegoo and Anycubic are last. A user who owned one of each would have found
+// the two newest backends supporting printers that never appeared.
+//
+// Twenty-four covers every account anyone has, and the cost is bounded: an
+// unused entry is seven empty Strings and an enum, and the NVS keys for it are
+// never written. What is NOT free is the settings list, which draws them all -
+// it scrolls, and that is the whole reason it scrolls.
+#define MAX_PRINTERS 24
 
 enum PrinterType : uint8_t {
     PT_NONE = 0,

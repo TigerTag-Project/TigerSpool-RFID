@@ -16,6 +16,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Preferences.h>
+#include <nvs.h>
 #include <LovyanGFX.hpp>
 #include "LGFX_ESP32_S3_Touch_LCD_2.h"
 #include "config.h"
@@ -136,12 +137,23 @@ static uint32_t pProbeAt = 0;
 static int      pProbeIdx = 0;
 static const uint32_t ONLINE_TTL_MS = 25000;   // stays "online" for 25 s without an answer
 
+// The port the reachability probe knocks on, per brand.
+//
+// EVERY new backend must be added here, and the failure when it is not is
+// silent and total: the probe knocks on the default - Creality's 9999 - gets
+// nothing, marks the printer unreachable, and the link then refuses to dial a
+// printer that is sitting there answering perfectly on its own port. Elegoo and
+// Anycubic shipped in that state for exactly one release; a Centauri Carbon 2
+// on the bench reported "probe says unreachable, not dialling" while Tiger
+// Studio was talking to it.
 static uint16_t ctrlPort(PrinterType t) {
     switch (t) {
-        case PT_FF_C5: return 8898;
-        case PT_BAMBU: return 8883;
+        case PT_FF_C5:     return 8898;
+        case PT_BAMBU:     return 8883;
         case PT_SNAPMAKER: return 7125;
-        default:       return 9999;       // K2
+        case PT_ELEGOO:    return 1883;
+        case PT_ANYCUBIC:  return 9883;
+        default:           return 9999;   // K2
     }
 }
 static bool probeOne(const PrinterCfg& p) {
@@ -442,6 +454,18 @@ static void loadCfg() {
     }
     String oldK2 = nvs.getString("k2ip", "");
     nvs.end();
+
+    // Printer records are nine NVS entries each, and the partition is fixed at
+    // 20 KB and frozen - it cannot grow over the air. With MAX_PRINTERS raised
+    // this is the number that decides whether the limit is really gone, so it
+    // is printed rather than assumed.
+    {
+        nvs_stats_t st;
+        if (nvs_get_stats(nullptr, &st) == ESP_OK)
+            Serial.printf("[config] NVS %u/%u entries used (%u free)\n",
+                          (unsigned)st.used_entries, (unsigned)st.total_entries,
+                          (unsigned)st.free_entries);
+    }
 
     // Legacy single-printer format: one "k2ip" key becomes printer 0, and the
     // conversion is persisted so this is read at most once more.

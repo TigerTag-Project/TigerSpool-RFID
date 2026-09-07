@@ -496,6 +496,9 @@ bool ttcloud::syncNow(String& summary) {
                                   "mqttPassword" });
                 }
                 if (t == PT_ANYCUBIC) {
+                    // Logged in full because all three come from the account and
+                    // none can be read off the printer: when one is missing, the
+                    // only place the answer exists is this line.
                     // acuModelId, not modelId: the first is Anycubic's own
                     // numeric model and half of every topic, the second is the
                     // TigerTag catalogue id that chose this backend. Confusing
@@ -503,6 +506,8 @@ bool ttcloud::syncNow(String& summary) {
                     p.devId = fsStr(f, "deviceId");
                     p.user  = fsStr(f, "username");
                     p.model = fsAny(f, { "acuModelId" });
+                    Serial.printf("[account]     anycubic devId='%s' user='%s' acuModel='%s'\n",
+                                  p.devId.c_str(), p.user.c_str(), p.model.c_str());
                 }
             }
             // The same printer can appear twice in an account - two FlashForge

@@ -25,6 +25,11 @@ String   g_topCmd, g_topReport;
 bool     g_connected = false;
 String   g_status = "Anycubic: connecting...";
 uint32_t g_lastTry = 0, g_lastPoll = 0, g_msg = 0;
+// Set only when all four credentials are present and the client is configured.
+// The guard used to test the device id alone, so a record carrying that but no
+// username kept dialling a broker whose address had never been set - printing
+// "connecting..." for ever beside the line explaining why it could not.
+bool g_ready = false;
 
 // Box -1 first, then 0, 1, 2... and a letter per box in that order. The
 // external unit is a unit here, not a single spool: an ACE Pro 2 reports box
@@ -115,14 +120,18 @@ void AnycubicBackend::begin(const PrinterCfg& cfg) {
     for (int i = 0; i < AMAX; i++) g_slots[i] = SlotState{};
     g_nSlots = 0;
     g_connected = false;
+    g_ready = false;
 
     if (g_devId.isEmpty() || g_user.isEmpty() || g_model.isEmpty()) {
         // Said once, plainly, rather than discovered as a connection that never
         // succeeds: these three cannot be read off the printer, so an empty one
         // means the printer was never paired in AnycubicSlicerNext.
         g_status = "Anycubic: not paired in the slicer";
-        Serial.println("[anycubic] missing deviceId/username/modelId - "
-                       "pair the printer in AnycubicSlicerNext once, then sync");
+        Serial.printf("[anycubic] cannot connect - missing%s%s%s from the account. "
+                      "Pair the printer in AnycubicSlicerNext once, then sync.\n",
+                      g_devId.isEmpty() ? " deviceId" : "",
+                      g_user.isEmpty()  ? " username" : "",
+                      g_model.isEmpty() ? " acuModelId" : "");
         return;
     }
 
@@ -135,6 +144,7 @@ void AnycubicBackend::begin(const PrinterCfg& cfg) {
     // vouch for it. Trust comes from credentials the desktop obtained, exactly
     // as it does for a Bambu printer in LAN mode. Calls that leave the network
     // are verified - see net/tls.h.
+    g_ready = true;
     net.setInsecure();
     mqtt.setServer(g_host.c_str(), 9883);
     // A twenty-slot layout report is a few kilobytes.
@@ -146,7 +156,7 @@ void AnycubicBackend::begin(const PrinterCfg& cfg) {
 }
 
 void AnycubicBackend::loop() {
-    if (g_devId.isEmpty()) return;              // nothing to connect to
+    if (!g_ready) return;                       // nothing to connect to
     if (!mqtt.connected()) {
         g_connected = false;
         if (millis() - g_lastTry < 4000) return;

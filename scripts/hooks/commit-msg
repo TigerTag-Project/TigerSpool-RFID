@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Refuse a commit message that credits an AI as an author.
+#
+# THE INCIDENT. CLAUDE.md and AGENTS.md have said "no AI attribution anywhere"
+# since the repository was bootstrapped, and 43 commits on main carry
+# "Co-Authored-By: Claude" regardless - because the rule lived in a document
+# that a tool could be told to override mid-session, and nothing checked. Rules
+# that are only written get followed until something says otherwise; this is the
+# something.
+#
+# It runs on the message, at the moment it is written, which is the only point
+# where the fix is free. Once the commit exists the choice is between living
+# with it and rewriting published history.
+set -euo pipefail
+
+MSG_FILE="$1"
+
+if grep -qiE '^[[:space:]]*(co-authored-by|signed-off-by|assisted-by)[[:space:]]*:.*(claude|anthropic|copilot|chatgpt|gpt-[0-9]|gemini|cursor|codex)' "$MSG_FILE"; then
+    echo "error: this commit message credits an AI as an author." >&2
+    echo >&2
+    grep -inE '^[[:space:]]*(co-authored-by|signed-off-by|assisted-by)[[:space:]]*:.*(claude|anthropic|copilot|chatgpt|gpt-[0-9]|gemini|cursor|codex)' "$MSG_FILE" >&2
+    echo >&2
+    echo "No AI attribution anywhere - not in commit messages, not in pull" >&2
+    echo "request bodies, not in comments, not in contributor lists. It is a" >&2
+    echo "repository rule and tooling does not get a vote on it; see the hard" >&2
+    echo "rules in CLAUDE.md. Remove the line and commit again." >&2
+    exit 1
+fi

@@ -7,6 +7,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.35.0] - 2026-09-08
+
+### Changed
+
+- **Every printer in the account reaches the device.** The limit was eight, and
+  eight was worse than it sounds: the import walks the six brands in a fixed
+  order and stops when full, so an account with more printers did not lose a
+  random eight - it lost the LAST BRANDS, every time, which is Elegoo and
+  Anycubic. The two newest backends supported printers that could never appear.
+  Twenty-four now; a bench account of twelve imports whole, and NVS reports
+  278 of 630 entries used.
+
+### Fixed
+
+- **The reachability probe knocked on the wrong port for the two new brands.**
+  It has a port per brand and falls back to Creality's 9999, so Elegoo and
+  Anycubic were probed on a port they do not open, marked unreachable, and then
+  never dialled - a Centauri Carbon 2 reported "probe says unreachable" on the
+  bench while Tiger Studio was talking to it. Every backend must be added to
+  that table, and the failure when it is not is silent and total.
+- **Anycubic kept dialling a broker it had no address for.** Its readiness
+  guard tested the device id alone, so a record carrying that but missing the
+  username connected to a server that had never been configured, printing
+  "connecting..." for ever beside the line explaining why it could not.
+- **A missing Anycubic credential now names itself.** All four come from the
+  account and none can be read off the printer, so "one of them is missing" was
+  not an answer anyone could act on.
+
+
 ## [1.34.0] - 2026-09-08
 
 ### Added

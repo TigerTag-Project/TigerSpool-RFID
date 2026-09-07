@@ -20,10 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The whole history: the attribution check below reads commit
+          # messages, and a shallow clone has none to read.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      # The hook catches this at the moment a message is written, which is the
+      # only point where the fix is free. This catches what reaches the remote
+      # from a clone that never ran install-hooks.sh, or from a tool that was
+      # told to override the rule. Both are how 43 commits carrying an AI
+      # co-author line ended up on main under a document that forbade them.
+      - name: No AI attribution in the new commits
+        run: bash scripts/check-commit-attribution.sh
 
       # The guards read the font range from a committed fact, so they no
       # longer need this to run. CI installs the library anyway, because this
