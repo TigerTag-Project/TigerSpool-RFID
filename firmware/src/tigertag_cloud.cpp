@@ -337,6 +337,10 @@ bool ttcloud::signInWithCustomToken(const String& customToken, const String& ema
 
 static bool g_syncedOk = false;
 
+// Bambu Lab's cloud credentials, cached from NVS on first use. Not a printer
+// and not per printer: one session per account, written by Tiger Studio.
+static String g_bblUser, g_bblToken, g_bblRegion;
+
 // True from the first line of syncNow to its last, whichever way it leaves.
 //
 // Without it the account icon turned orange every five minutes for as long as a
@@ -606,6 +610,38 @@ bool ttcloud::syncNow(String& summary) {
     }
     k.end();
 
+    // One more document: Bambu Lab's cloud session. It is not a printer, it is
+    // the credential that lets the device READ printers it cannot reach on the
+    // LAN, and it lives under the brand rather than under a machine because it
+    // is per account.
+    {
+        String resp;
+        const String url = base + "/users/" + g_uid +
+                           "/printers/bambulab/secrets/cloud_session";
+        const int code = httpsGET(url, resp, g_idToken.c_str());
+        if (code == 200) {
+            JsonDocument d;
+            if (!deserializeJson(d, resp)) {
+                JsonObjectConst f = d["fields"];
+                const String u = fsAny(f, { "mqttUsername" });
+                const String t = fsAny(f, { "accessToken" });
+                const String r = fsAny(f, { "region" });
+                Preferences k; k.begin("tsaccount", false);
+                k.putString("bblUser", u);
+                k.putString("bblToken", t);
+                k.putString("bblRegion", r.length() ? r : String("us"));
+                k.end();
+                g_bblUser = u; g_bblToken = t; g_bblRegion = r;
+                Serial.printf("[account] bambu cloud session: user='%s' region='%s' token=%s\n",
+                              u.c_str(), r.c_str(), t.length() ? "yes" : "MISSING");
+            }
+        } else if (code == 404) {
+            Serial.println("[account] no bambu cloud session - sign in to Bambu in Tiger Studio");
+        } else {
+            Serial.printf("[account] bambu cloud session: http=%d\n", code);
+        }
+    }
+
     g_syncedOk = (okBrands > 0);
     if (g_syncedOk) g_lastOkMs = millis();   // green is a claim about this
     if (diff) g_changed = true;
@@ -619,6 +655,19 @@ bool ttcloud::syncNow(String& summary) {
     g_lastResult = summary;
     Serial.printf("[account] sync: %s\n", summary.c_str());
     return true;
+}
+
+bool ttcloud::bambuCloud(String& mqttUser, String& token, String& region) {
+    if (g_bblUser.isEmpty() || g_bblToken.isEmpty()) {
+        Preferences k; k.begin("tsaccount", true);
+        g_bblUser   = k.getString("bblUser", "");
+        g_bblToken  = k.getString("bblToken", "");
+        g_bblRegion = k.getString("bblRegion", "us");
+        k.end();
+    }
+    mqttUser = g_bblUser; token = g_bblToken;
+    region = g_bblRegion.length() ? g_bblRegion : String("us");
+    return mqttUser.length() && token.length();
 }
 
 bool ttcloud::consumeChanged() { bool v = g_changed; g_changed = false; return v; }

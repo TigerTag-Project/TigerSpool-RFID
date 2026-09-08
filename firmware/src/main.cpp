@@ -101,7 +101,7 @@ bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
-             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING };
+             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING, ST_CLOUD_SLOT };
 State   state = ST_LANG;
 // Whether the language screen was opened from Settings rather than reached on
 // first boot. It decides two things: that the screen offers a way back, and
@@ -682,8 +682,6 @@ static Link* linkFor(int printerIdx) {
 // Settings used to decide only what the home screen listed; it decides what the
 // box talks to now, which is what someone ticking it expects.
 static void assignLinks() {
-    // A cloud printer gets no link at all - see tickLink's first line. It is
-    // still listed, still selectable, and its slot screen explains itself.
     bool brandTaken[MAX_LINKS] = { false };
     for (int i = 0; i < MAX_LINKS; i++) {
         Link& l = links[i];
@@ -697,7 +695,31 @@ static void assignLinks() {
         }
         brandTaken[(int)p.type % MAX_LINKS] = true;
     }
+    // The SELECTED printer gets its brand's backend, evicting a sibling if one
+    // has it. Without this the first visible printer of a brand kept the link
+    // for ever, so selecting a second Bambu - a cloud one, say - showed a
+    // screen that never connected while the log cheerfully reported the other
+    // one's address. Whoever the user is looking at wins.
+    if (selectedPrinter >= 0 && printers[selectedPrinter].type != PT_NONE
+        && !linkFor(selectedPrinter)) {
+        const int want = (int)printers[selectedPrinter].type % MAX_LINKS;
+        for (int i = 0; i < MAX_LINKS; i++) {
+            if (links[i].printer < 0) continue;
+            if ((int)printers[links[i].printer].type % MAX_LINKS != want) continue;
+            Serial.printf("[link] %s takes the %s backend from %s\n",
+                          printers[selectedPrinter].name.c_str(),
+                          "brand", printers[links[i].printer].name.c_str());
+            if (links[i].be) links[i].be->stop();
+            links[i] = Link{};
+            brandTaken[want] = false;
+        }
+    }
+
+    for (int pass = 0; pass < 2; pass++)
     for (int pi = 0; pi < MAX_PRINTERS; pi++) {
+        // The selected printer is placed first, so a brand it needs is never
+        // already spoken for by a sibling further up the list.
+        if ((pass == 0) != (pi == selectedPrinter)) continue;
         const PrinterCfg& p = printers[pi];
         if (p.type == PT_NONE) continue;
         if (!p.visible && pi != selectedPrinter) continue;
@@ -718,7 +740,10 @@ static void assignLinks() {
 // One link's state machine - the same one that used to be the only one.
 static void tickLink(Link& l) {
     const PrinterCfg& p = printers[l.printer];
-    if (p.cloud) { l.state = LINK_IDLE; return; }   // nothing here to dial
+    // A cloud printer IS dialled - just not on this network. Its backend
+    // connects to the maker's broker instead, so the only thing that does not
+    // apply is the reachability probe below, which knocks on a LAN address
+    // that was never going to answer.
 
     if (l.be && l.be->connected()) {
         if (l.state != LINK_UP) {
@@ -746,7 +771,7 @@ static void tickLink(Link& l) {
     // free. A printer never probed is still dialled - at boot the absence of a
     // timestamp means "not looked at yet", not "not there". The attempt is
     // still spent, so the user reaches the failure screen just as fast.
-    if (pProbed[l.printer] && !isOnline(l.printer)) {
+    if (!p.cloud && pProbed[l.printer] && !isOnline(l.printer)) {
         if (l.be) l.be->stop();
         l.tries++; l.startAt = millis(); l.state = LINK_TRYING;
         Serial.printf("[link] attempt %u/%u to %s - probe says unreachable,"
@@ -1577,13 +1602,41 @@ void loop() {
                            printers[selectedPrinter].cloud);
         lvgl_port::loop();
 
+        if (screen_slots::takeCancelLink()) {
+            Link* l = linkFor(selectedPrinter);
+            if (l) {
+                if (l->be) l->be->stop();
+                l->state = LINK_GAVE_UP;      // the retry button starts it again
+                Serial.printf("[link] cancelled by the user: %s\n",
+                              printers[selectedPrinter].name.c_str());
+            }
+        }
         if (screen_slots::takeRetry()) { linkRetry(); screen_slots::invalidate(); break; }
         if (screen_slots::takeBack()) { backToPrinters(); break; }
         int slot = screen_slots::takeTappedSlot();
         if (slot >= 0) {
             selSlot = slot; resultMsg = "";
-            screen_scan::invalidate();
-            state = ST_SCAN; stateSince = millis();
+            // A cloud printer is read here and written nowhere. The tap is
+            // answered with why, instead of opening a scan whose Send could
+            // never land.
+            if (printers[selectedPrinter].cloud) {
+                screen_slots::invalidate();
+                state = ST_CLOUD_SLOT; stateSince = millis();
+            } else {
+                screen_scan::invalidate();
+                state = ST_SCAN; stateSince = millis();
+            }
+        }
+        break;
+    }
+
+    case ST_CLOUD_SLOT: {
+        screen_slots::showCloudNotice(backend ? backend->slotLabel(selSlot) : "?");
+        lvgl_port::loop();
+        if (screen_slots::takeBack()) {
+            selSlot = -1;
+            screen_slots::invalidate();
+            state = ST_GRID; stateSince = millis();
         }
         break;
     }

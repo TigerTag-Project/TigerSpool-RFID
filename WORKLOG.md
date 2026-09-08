@@ -630,4 +630,14 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   The report format is IDENTICAL to LAN, so the existing Bambu parser is
   reused unchanged. What is missing is the account fetch and a cloud flag on
   the backend.
+- Bambu cloud, working: `[bambu] connecting to us.mqtt.bambulab.com:8883
+  (cloud)` and the X1C's slots on the panel. Credentials come from
+  users/{uid}/printers/bambulab/secrets/cloud_session, read during the account
+  sync. The report is identical to the LAN one, so nothing in the parser moved.
+- The eviction rule that made it possible is worth remembering: one backend per
+  brand means the SELECTED printer has to be able to take it from a sibling,
+  or a second printer of the same brand can never connect however long you
+  wait. It cost an hour of watching the wrong IP in a log.
+- check-text-english.py learned that a bare hostname is not prose. It read
+  "us.mqtt.bambulab.com" as Portuguese, because ".com" is a word in it.
 

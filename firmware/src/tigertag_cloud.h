@@ -68,6 +68,15 @@ namespace ttcloud {
     bool   asyncBusy();
     bool   asyncTake(String& summary);    // true once, when it finishes
 
+    // Bambu Lab's own cloud session, as Tiger Studio stores it in the account.
+    //
+    // The device never signs in to Bambu: the desktop does that and writes the
+    // result to users/{uid}/printers/bambulab/secrets/cloud_session, which is
+    // where these come from. The token lasts about three months, so an empty
+    // answer means "renew it in Studio" rather than "something broke".
+    // Returns false when the account carries no session.
+    bool   bambuCloud(String& mqttUser, String& token, String& region);
+
     // pairStart on its own task. It is a blocking HTTPS round trip of a second
     // or two, and it happens while the screen is showing a spinner - a spinner
     // that freezes for the whole wait is worse than no spinner, because it

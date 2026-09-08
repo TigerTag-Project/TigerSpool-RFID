@@ -90,7 +90,7 @@ void buildScreen() {
     lv_obj_set_style_pad_all(s_list, theme::PAD, 0);
     lv_obj_set_style_pad_row(s_list, theme::GAP, 0);
     lv_obj_set_scroll_dir(s_list, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(s_list, LV_SCROLLBAR_MODE_AUTO);
+    theme::scrollbar(s_list);
     lv_obj_set_style_bg_opa(s_list, LV_OPA_TRANSP, 0);
 }
 

@@ -7,6 +7,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.41.0] - 2026-09-08
+
+### Added
+
+- **A Bambu Lab printer in cloud mode shows its spools.** The device connects
+  to Bambu's own regional broker with the session Tiger Studio put in your
+  account - it never signs in to Bambu itself - and reads the same report the
+  LAN path reads, so the existing parser handles it unchanged. An X1C reachable
+  only through the cloud now lists `Ext.` and `B1`-`B4` on the panel.
+- **Tapping one of those slots says why it cannot be written**, on a screen of
+  its own, with a QR code to the page about switching the printer to LAN mode.
+  The slot is tappable on purpose: a cell that ignores a finger teaches nothing.
+- **A Cancel button on the connecting screen.** It stops the attempt as well as
+  leaving it - connections are held open across screens now, so walking away
+  would have left a printer that is not answering retrying unseen.
+- **The printer lists have a visible scrollbar.** Both call
+  `lv_obj_remove_style_all`, which takes the theme's scrollbar with it, so the
+  mode was set on lists that drew nothing - and eleven printers gave no sign
+  there were six more below the fifth.
+
+### Fixed
+
+- **The selected printer now gets its brand's connection.** One backend exists
+  per brand, and the first visible printer of a brand held it - so selecting a
+  second Bambu showed a screen that never connected while the log reported the
+  other one's address. Whoever the user is looking at takes it.
+
+
 ## [1.40.0] - 2026-09-08
 
 ### Changed

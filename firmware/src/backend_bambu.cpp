@@ -1,5 +1,6 @@
 #include "backend_bambu.h"
 #include "i18n.h"
+#include "tigertag_cloud.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -20,7 +21,11 @@ namespace {
 
     WiFiClientSecure net;
     PubSubClient     mqtt(net);
-    String           g_host, g_sn, g_cc;
+    const char* BAMBU_CLOUD_HOST = ".mqtt.bambulab.com";
+
+    String           g_host, g_sn, g_cc, g_user;
+    bool             g_cloud = false;
+    uint16_t         g_port = 8883;
     String           g_topReport, g_topRequest;
     bool             g_connected = false;
     String           g_status = "Bambu: connecting...";
@@ -158,6 +163,29 @@ namespace {
 
 void BambuBackend::begin(const PrinterCfg& cfg) {
     g_host = cfg.host; g_sn = cfg.sn; g_cc = cfg.cc;   // user "bblp", pass = access code (Modo LAN)
+    g_cloud = cfg.cloud;
+    g_user = "bblp";
+    g_port = 8883;
+
+    // A cloud printer is the same protocol against a different broker. The
+    // report is byte-for-byte the one the LAN path already parses - same
+    // pushall, same print.ams - so everything below this line is unchanged.
+    // What differs is where it connects and who it says it is: Bambu's own
+    // regional broker, with a session the DESKTOP obtained and wrote into the
+    // account. This device never signs in to Bambu.
+    if (g_cloud) {
+        String user, token, region;
+        if (!ttcloud::bambuCloud(user, token, region)) {
+            g_status = "Bambu: no cloud session";
+            Serial.println("[bambu] no cloud session in the account - "
+                           "sign in to Bambu in Tiger Studio");
+            g_host = "";
+            return;
+        }
+        g_host = region + BAMBU_CLOUD_HOST;
+        g_user = user;
+        g_cc   = token;
+    }
     setDefaultMap();                     // assumed until the first pushall
     for (int i = 0; i < BMAX; i++) g_slots[i] = SlotState{};
     g_connected = false;
@@ -171,7 +199,7 @@ void BambuBackend::begin(const PrinterCfg& cfg) {
     // from the access code, which the user read off the printer's own screen.
     // Calls that leave the network are verified - see net/tls.h.
     net.setInsecure();
-    mqtt.setServer(g_host.c_str(), 8883);
+    mqtt.setServer(g_host.c_str(), g_port);
     // A pushall from an X1 with four AMS units reaches about 50 KB. If the
     // buffer cannot hold it the topology
     // (the unit count) is never detected. A generous buffer: the heap has room,
@@ -187,9 +215,14 @@ void BambuBackend::loop() {
         g_connected = false;
         if (millis() - g_lastTry < 4000) return;
         g_lastTry = millis();
-        Serial.printf("[bambu] connecting to %s:8883...\n", g_host.c_str());
-        String cid = "tigertag-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-        if (mqtt.connect(cid.c_str(), "bblp", g_cc.c_str())) {
+        if (g_host.isEmpty()) return;          // cloud printer with no session
+        Serial.printf("[bambu] connecting to %s:%u%s...\n", g_host.c_str(),
+                      (unsigned)g_port, g_cloud ? " (cloud)" : "");
+        // Unique per device on purpose: the same Bambu account may be open on a
+        // phone and a desktop, and a shared client id makes the broker kick
+        // whichever connected first.
+        String cid = "tigerspool-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+        if (mqtt.connect(cid.c_str(), g_user.c_str(), g_cc.c_str())) {
             mqtt.subscribe(g_topReport.c_str());
             g_connected = true;
             g_status = "Bambu: ligado";
@@ -233,6 +266,10 @@ void BambuBackend::refresh() {
 }
 
 bool BambuBackend::assign(int idx, const TagInfo& t) {
+    // Bambu's cloud broker takes a report subscription and refuses the command
+    // that sets a tray. Saying so here rather than sending it means the screen
+    // never claims a write that the service was always going to drop.
+    if (g_cloud) { g_status = "Bambu: cloud is read only"; return false; }
     if (idx < 0 || idx >= g_nSlots || !g_connected) return false;
     BMat m = bambuMat(t.material);
     char col[9]; snprintf(col, sizeof(col), "%02X%02X%02XFF", t.r, t.g, t.b);   // RRGGBBAA

@@ -146,7 +146,7 @@ void showMenu(const MenuState& st) {
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
+    theme::scrollbar(body);
 
     // The icon carries the state, the label stays white.
     //
@@ -262,7 +262,7 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
+    theme::scrollbar(body);
 
     int shown = 0;
     for (int i = 0; i < count; i++) {
@@ -657,7 +657,7 @@ void showUpdate(const char* version, const char* channel,
     // control the screen exists for.
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
+    theme::scrollbar(body);
 
     frame::row(body, i18n::T(S_INSTALLED), vbuf, false, nullptr, nullptr);
 

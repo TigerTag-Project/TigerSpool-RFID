@@ -57,6 +57,16 @@ constexpr lv_coord_t CELL_H     = 92;   // slot cell, 11.7 mm tall
 
 void init();                 // build the shared styles; call once after lv_init
 lv_style_t* rowStyle();
+
+// Make a scrollable container's scrollbar visible.
+//
+// Every list here calls lv_obj_remove_style_all, which removes the theme's
+// scrollbar style along with everything else - so LV_SCROLLBAR_MODE_AUTO was
+// set on lists that then drew nothing at all, and a list of eleven printers
+// gave no sign that it went past the fifth. This paints one and leaves it on:
+// with a touch screen and no wheel, "there is more below" has to be visible
+// before the finger moves, not after.
+void scrollbar(lv_obj_t* obj);
 lv_style_t* rowPressedStyle();
 lv_style_t* headerStyle();
 lv_style_t* screenStyle();

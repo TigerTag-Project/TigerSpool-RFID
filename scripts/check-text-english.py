@@ -81,7 +81,15 @@ WORD = re.compile(r"[A-Za-zÀ-ÿ]+")
 # URLs and e-mail addresses are identifiers, not prose, and every ".com" in one
 # reads as the Portuguese word. Removed before the text is tokenised: a guard
 # that cries wolf on a Google API endpoint is a guard people learn to bypass.
-NOT_PROSE = re.compile(r"https?://\S+|\b[\w.+-]+@[\w.-]+\.\w+")
+#
+# Bare hostnames and dotted filenames count too. "us.mqtt.bambulab.com" has no
+# scheme to spot it by, and its last label reads as the Portuguese "com" - so a
+# broker address in a string looked like Portuguese prose. Two or more
+# dot-joined labels with no spaces is never a sentence.
+NOT_PROSE = re.compile(
+    r"https?://\S+"
+    r"|\b[\w.+-]+@[\w.-]+\.\w+"
+    r"|\.?(?:[A-Za-z0-9_-]+\.){2,}[A-Za-z]{2,6}\b")
 
 # Regions that are supposed to hold other languages. Excised before scanning
 # rather than excluding the whole file, so the rest of the file is still covered.

@@ -23,9 +23,18 @@ namespace screen_slots {
 void show(const char* printerName, PrinterBackend* backend,
           int selected, bool readerReady, int link,
           int tries, int budget, bool fetching, bool cloud);
+// The answer to a tap on a cloud printer's slot: what it is, and the one thing
+// that would change it. Its own screen rather than a line on the grid - a
+// warning that is always on display stops being read.
+void showCloudNotice(const char* slotLabel);
+
 void invalidate();                 // force a rebuild on the next show()
 int  takeTappedSlot();             // slot index, or -1
 bool takeBack();
 bool takeRetry();          // the user asked to reconnect
+// The Cancel button on the connecting screen. It navigates back AND stops the
+// attempt: connections are held open across screens, so leaving on its own
+// would let a printer that is not answering keep retrying unseen.
+bool takeCancelLink();
 
 }  // namespace screen_slots
