@@ -57,6 +57,17 @@ namespace {
         h.addHeader("Authorization", String("Bearer ") + bearer);
         int code = h.GET();
         resp = (code > 0) ? h.getString() : String();
+        if (code <= 0) {
+            // A TLS session needs one large contiguous block, so the number
+            // that matters when this fails is the LARGEST FREE BLOCK, not the
+            // total. Printing both is what tells a fragmented heap apart from
+            // an exhausted one - and both apart from a network fault.
+            char err[96] = { 0 };
+            c.lastError(err, sizeof(err));
+            Serial.printf("[account]   https fail %d  heap=%u maxblk=%u  err='%s'\n",
+                          code, (unsigned)ESP.getFreeHeap(),
+                          (unsigned)ESP.getMaxAllocHeap(), err);
+        }
         h.end();
         return code;
     }
@@ -386,6 +397,11 @@ bool ttcloud::syncNow(String& summary) {
     // leaving the user to guess. See docs/PRINTER-COMPATIBILITY.md.
     const char* BRANDS[] = { "creality", "flashforge", "bambulab",
                              "snapmaker", "elegoo", "anycubic" };
+    // Each brand maps to exactly one backend type, which is what makes it
+    // possible to say "these stored printers came from that brand" when its
+    // request fails. Kept beside the list above so the two cannot drift.
+    const PrinterType BRAND_TYPE[] = { PT_CREALITY, PT_FF_C5, PT_BAMBU,
+                                       PT_SNAPMAKER, PT_ELEGOO, PT_ANYCUBIC };
     String base = String("https://firestore.googleapis.com/v1/projects/") + PROJECT +
                   "/databases/(default)/documents";
     // The fields this import reads, in ONE list.
@@ -404,6 +420,7 @@ bool ttcloud::syncNow(String& summary) {
     // which fields does this import care about. One list, asked twice.
     static const char* MASK_FIELDS[] = {
         "printerName", "name", "ip", "broker", "ipAddress", "lanIp", "host",
+        "updatedAt",
         "mode", "connectionType", "connection", "network", "netMode",
         "link", "transport", "printerConnectionType",
         "cloud", "isCloud", "local", "isLocal", "lan", "isLan",
@@ -417,10 +434,27 @@ bool ttcloud::syncNow(String& summary) {
     String MASK;
     for (auto f : MASK_FIELDS) { MASK += MASK.isEmpty() ? "?" : "&"; MASK += "mask.fieldPaths="; MASK += f; }
     PrinterCfg got[MAX_PRINTERS];
-    int n = 0, ignored = 0, noip = 0, okBrands = 0, cloudN = 0;
+    // Each imported printer's updatedAt, kept beside the array rather than in
+    // PrinterCfg: it decides which of two documents for one machine wins, and
+    // it is of no use to anything once the import is over.
+    int64_t gotUpd[MAX_PRINTERS] = { 0 };
+    int n = 0, ignored = 0, noip = 0, okBrands = 0, cloudN = 0, kept = 0;
+
+    // What the device already knows, kept open for the whole import.
+    //
+    // WHY. A sync that reached one brand out of six used to be written as if it
+    // were the whole account: five requests failed on a bench with six links
+    // open, and a list of thirteen printers became a list of three - the user's
+    // Bambu, FlashForge, Snapmaker, Elegoo and Anycubic machines all gone from
+    // a device that had simply been unable to ask about them. The failure was
+    // real and worth fixing on its own, but no failure should ever be able to
+    // delete an account's printers. A brand that did not answer contributes
+    // what was stored for it last time, in its own place in the list.
+    Preferences kp; kp.begin("tigerspool", true);
 
     Serial.printf("[account] uid=%s  heap=%u\n", g_uid.c_str(), (unsigned)ESP.getFreeHeap());
-    for (auto brand : BRANDS) {
+    for (int bi = 0; bi < (int)(sizeof(BRANDS) / sizeof(BRANDS[0])); bi++) {
+        const char* brand = BRANDS[bi];
         String resp;
         // A SERVER-side mask: Firestore sends only these fields. Without it the
         // answer carries discovery.raw (a full Moonraker system dump) and units
@@ -430,7 +464,32 @@ bool ttcloud::syncNow(String& summary) {
         int code = httpsGET(url, resp, g_idToken.c_str());
         Serial.printf("[account] GET %s/devices -> http=%d, %d bytes, %lu ms\n",
                       brand, code, resp.length(), (unsigned long)(millis() - tGet));
-        if (code != 200) { Serial.printf("[account]   resp: %.300s\n", resp.c_str()); continue; }
+        if (code != 200) {
+            Serial.printf("[account]   resp: %.300s\n", resp.c_str());
+            // Not an empty brand - an unanswered question. Re-read what this
+            // brand contributed to the stored list and carry it through.
+            for (int i = 0; i < MAX_PRINTERS && n < MAX_PRINTERS; i++) {
+                char key[6];
+                snprintf(key, sizeof(key), "p%dt", i);
+                if (kp.getInt(key, 0) != (int)BRAND_TYPE[bi]) continue;
+                PrinterCfg& q = got[n];
+                q = PrinterCfg{};
+                q.type = BRAND_TYPE[bi];
+                snprintf(key, sizeof(key), "p%dn", i); q.name  = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%dh", i); q.host  = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%ds", i); q.sn    = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%dc", i); q.cc    = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%dd", i); q.devId = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%du", i); q.user  = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%dm", i); q.model = kp.getString(key, "");
+                snprintf(key, sizeof(key), "p%dk", i); q.cloud = kp.getBool(key, false);
+                Serial.printf("[account]   kept '%s' (no answer for %s)\n",
+                              q.name.c_str(), brand);
+                gotUpd[n] = 0;
+                n++; kept++;
+            }
+            continue;
+        }
         okBrands++;
 
         // Parse filter: only the fields that matter. A Firestore response is very
@@ -477,8 +536,10 @@ bool ttcloud::syncNow(String& summary) {
                 else if (transport.startsWith("mqtt-1883")) t = PT_ELEGOO;
                 else if (transport.startsWith("mqtts-9883")) t = PT_ANYCUBIC;
             }
-            Serial.printf("[account]   dev=%s ip='%s' transport='%s' cloud=%d modelId='%s' -> type %d\n",
-                          dev.c_str(), ip.c_str(), transport.c_str(), cloud, mid.c_str(), t);
+            const String upd = fsStr(f, "updatedAt");
+            Serial.printf("[account]   dev=%s ip='%s' transport='%s' cloud=%d modelId='%s' upd=%s -> type %d\n",
+                          dev.c_str(), ip.c_str(), transport.c_str(), cloud, mid.c_str(),
+                          upd.length() ? upd.c_str() : "-", t);
             // Cloud printers used to be dropped here. They are imported now -
             // a printer the user owns should appear on the device even when
             // the device cannot write to it, and being told why is better than
@@ -496,7 +557,7 @@ bool ttcloud::syncNow(String& summary) {
                 Serial.printf("[account]     skipped: %s has no backend / unsupported model\n", brand);
                 ignored++; continue;
             }
-            if (n >= MAX_PRINTERS) { Serial.println("[account]     ignorado: limite MAX_PRINTERS"); ignored++; continue; }
+            if (n >= MAX_PRINTERS) { Serial.println("[account]     ignored: MAX_PRINTERS reached"); ignored++; continue; }
             if (ip.isEmpty()) { noip++; Serial.println("[account]     no IP - imported anyway (fill it in on the form)"); }
 
             PrinterCfg& p = got[n];
@@ -537,12 +598,35 @@ bool ttcloud::syncNow(String& summary) {
                 }
             }
             // The same printer can appear twice in an account - two FlashForge
-            // documents for one IP and serial, for instance. Do not import both.
-            bool dup = false;
+            // documents for one IP and serial, or an old LAN document beside
+            // the cloud one Tiger Studio writes when the printer is switched
+            // over. The second pair looks identical to the first here, because
+            // a cloud document's broker field holds the printer's own address.
+            //
+            // Keeping the FIRST of the two kept the stale one. An A1 switched
+            // to cloud mode stayed "LAN" on this device, with the access code
+            // the printer had rotated on the way - so it answered rc=5 for
+            // ever, and its slots could not be read at all. updatedAt is the
+            // one field that says which document describes the printer as it
+            // is now, so the newer one replaces the older, in place: the list
+            // keeps its order and nothing else moves.
+            const int64_t mine = strtoll(upd.c_str(), nullptr, 10);
+            int dup = -1;
             for (int j = 0; j < n; j++)
                 if (got[j].type == p.type && got[j].host == p.host &&
-                    got[j].sn == p.sn && p.host.length()) dup = true;
-            if (dup) { Serial.println("[account]     ignorado: duplicada (mesmo IP/serial)"); ignored++; continue; }
+                    got[j].sn == p.sn && p.host.length()) { dup = j; break; }
+            if (dup >= 0) {
+                if (mine > gotUpd[dup]) {
+                    Serial.printf("[account]     newer document for this printer - replaces '%s'\n",
+                                  got[dup].name.c_str());
+                    got[dup] = p;
+                    gotUpd[dup] = mine;
+                } else {
+                    Serial.println("[account]     ignored: duplicate (same IP/serial), older");
+                }
+                ignored++; continue;
+            }
+            gotUpd[n] = mine;
 
             String ccShow = p.cc.length() > 20 ? (String("[") + p.cc.length() + "b]") : p.cc;
             Serial.printf("[account] + %s '%s' @ %s  sn='%s' cc='%s' (type %d)\n",
@@ -550,6 +634,8 @@ bool ttcloud::syncNow(String& summary) {
             n++;
         }
     }
+
+    kp.end();
 
     // Write to NVS only if something actually changed: flash has a finite
     // number of erase cycles and this runs every few minutes.
@@ -647,7 +733,8 @@ bool ttcloud::syncNow(String& summary) {
     if (diff) g_changed = true;
     Serial.printf("[account] sync total %lu ms\n", (unsigned long)(millis() - tSync));
     if (!g_syncedOk) { summary = g_lastResult = "TigerTag: no answer (TLS/network)"; return false; }
-    summary = String("TigerTag: ") + n + " LAN" +
+    summary = String("TigerTag: ") + (n - kept) + " LAN" +
+              (kept    ? (String(", ") + kept + " kept")      : "") +
               (cloudN  ? (String(", ") + cloudN + " cloud")   : "") +
               (noip    ? (String(", ") + noip + " without IP")    : "") +
               (ignored ? (String(", ") + ignored + " ignored") : "") +
