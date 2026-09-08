@@ -7,6 +7,47 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.0] - 2026-09-08
+
+### Changed
+
+- **Every printer gets its own connection.** Until now there was one backend
+  object per brand, shared by every printer of that brand: two Bambus, or two
+  FlashForges, could not both be connected, and the second inherited the
+  first's answers. Each printer now has its own object, its own socket and its
+  own slots. Two Bambu Lab printers show their own spools side by side.
+- **Connections are opened while there is memory for them.** A TLS session
+  costs about 40 KB of internal RAM, so a device with nine printers switched on
+  holds roughly six links at once. The printer on screen is always served
+  first; the others are opened in list order, closed if free memory runs low,
+  and retried after a wait that grows. A printer without a link reads as
+  disconnected, because it is.
+- **The cloud slot notice is one message.** "Working only with LAN Mode + Dev
+  Mode" in orange, the QR code, and "Scan for tutorial" beneath it.
+
+### Fixed
+
+- **A printer that is switched off no longer shows as connected.** A link
+  asked its backend whether it was connected before ever dialling, and with a
+  shared backend the answer belonged to the other printer. A Creator 5 Pro that
+  was not on the network at all showed a green dot and another machine's four
+  spools. A link must now dial for itself before it can report a connection.
+- **Reloading the printer list could delete most of it.** With several
+  connections open there was not always enough contiguous memory for a TLS
+  request, and a sync that reached one brand out of six wrote its result as if
+  it were the whole account: thirteen printers became three. A brand that does
+  not answer now keeps what the device already knew about it.
+- **A printer switched to cloud mode is recognised.** When an account holds
+  both an old LAN document and the newer cloud one for the same machine, the
+  newer wins. An A1 in cloud mode was still being dialled on the LAN, with an
+  access code the printer had since changed.
+- **Two Bambu printers no longer disconnect each other.** They shared one MQTT
+  client identifier, so the broker dropped whichever had connected first. The
+  identifier now carries the printer's serial number.
+- **The QR code on the cloud notice is centred**, with an even white margin on
+  all four sides instead of running into the edge a scanner needs.
+
+
 ## [1.41.0] - 2026-09-08
 
 ### Added

@@ -642,7 +642,7 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   "us.mqtt.bambulab.com" as Portuguese, because ".com" is a word in it.
 
 
-## 2026-09-08 - one connection per printer, and two things that hid behind that
+## 2026-09-08 - one connection per printer, and two things that hid behind that (released in 1.42.0)
 
 ### Changed
 
