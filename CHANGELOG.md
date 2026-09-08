@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.38.1] - 2026-09-08
+
+### Changed
+
+- **The refresh button moved to Settings > Printers**, where it belongs: that
+  is the screen where a missing printer is noticed. It has a header of its own
+  with room for it, so the home screen goes back exactly as it was - full-size
+  title, three controls.
+
+
 ## [1.38.0] - 2026-09-08
 
 ### Added

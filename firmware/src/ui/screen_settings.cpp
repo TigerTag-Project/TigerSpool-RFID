@@ -51,6 +51,9 @@ void onEntry(lv_event_t* e) {
     s_entry = (screen_settings::Entry)(intptr_t)lv_event_get_user_data(e);
 }
 void onBack()  { s_back = true; }
+bool s_reload = false;
+lv_obj_t* s_reloadIcon = nullptr;
+void onReload(lv_event_t*) { s_reload = true; }
 void onCheck()   { ota::checkAsync(); }
 void onInstall() { ota::applyAsync(); }
 // Flips the switch on the spot, then reports the tap.
@@ -183,8 +186,9 @@ void showMenu(const MenuState& st) {
 
 Entry takeEntry() { Entry v = s_entry; s_entry = E_NONE; return v; }
 bool  takeBack()  { bool v = s_back; s_back = false; return v; }
+bool  takeReload(){ bool v = s_reload; s_reload = false; return v; }
 
-void showPrinters(const PrinterCfg* printers, int count) {
+void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
     // Deliberately NOT hashing `visible`. It changes on every toggle, and a
     // changed signature means a rebuilt screen, and a rebuilt list has lost
     // its scroll position - which is how pressing a switch sent the view back
@@ -196,10 +200,37 @@ void showPrinters(const PrinterCfg* printers, int count) {
         if (printers[i].type == PT_NONE) continue;
         sig = hashOf(printers[i].name.c_str(), sig);
     }
-    if (sig == s_pickSig) return;
+    if (sig == s_pickSig) {
+        // The one thing that changes without a rebuild. The button is its own
+        // progress indicator: a control that does something invisible for
+        // fifteen seconds gets pressed again, and again.
+        if (s_reloadIcon)
+            lv_obj_set_style_text_color(
+                s_reloadIcon, lv_color_hex(syncing ? theme::ACCENT : theme::TEXT), 0);
+        return;
+    }
     s_pickSig = sig;
+    s_reloadIcon = nullptr;
 
     lv_obj_t* body = frame::build(i18n::T(S_PRINTER), onBack);
+
+    // Ask the account again, now. This list refreshes itself every five
+    // minutes, which suits a box on a shelf and is no use to somebody who has
+    // just added a printer in Tiger Studio and is standing in front of the
+    // device. This is also the screen where a missing printer is noticed, so
+    // it is where the button belongs.
+    lv_obj_t* reload = lv_btn_create(frame::header());
+    lv_obj_remove_style_all(reload);
+    lv_obj_set_size(reload, theme::ICON_HIT_W, theme::HEADER_H);
+    lv_obj_align(reload, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_event_cb(reload, onReload, LV_EVENT_CLICKED, nullptr);
+    s_reloadIcon = lv_label_create(reload);
+    lv_label_set_text(s_reloadIcon, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_font(s_reloadIcon, &font_ui_20, 0);
+    lv_obj_set_style_text_color(
+        s_reloadIcon, lv_color_hex(syncing ? theme::ACCENT : theme::TEXT), 0);
+    lv_obj_center(s_reloadIcon);
+
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);

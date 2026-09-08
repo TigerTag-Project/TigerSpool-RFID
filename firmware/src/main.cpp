@@ -1237,12 +1237,6 @@ void loop() {
         lvgl_port::loop();
 
         {
-            if (screen_home::takeReloadTap()) {
-                // consumeChanged() below applies whatever comes back, exactly
-                // as it does for the timed sync - this only skips the wait.
-                if (ttcloud::startAsyncSync())
-                    Serial.println("[account] manual refresh from the header");
-            }
             int tapped = screen_home::takeTappedPrinter();
             if (tapped >= 0) { screen_home::leave(); selectPrinter(tapped); }
             else if (screen_home::takeSettingsTap()) {
@@ -1337,8 +1331,15 @@ void loop() {
     }
 
     case ST_PICK: {
-        screen_settings::showPrinters(printers, MAX_PRINTERS);
+        screen_settings::showPrinters(printers, MAX_PRINTERS, ttcloud::asyncBusy());
         lvgl_port::loop();
+
+        if (screen_settings::takeReload()) {
+            // The reload below applies whatever comes back, exactly as it does
+            // for the timed sync - this only skips the wait.
+            if (ttcloud::startAsyncSync())
+                Serial.println("[account] manual refresh from the printer list");
+        }
 
         int t = screen_settings::takeToggled();
         if (t >= 0) savePrinterVisible(t, !printers[t].visible);

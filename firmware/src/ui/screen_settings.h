@@ -48,7 +48,11 @@ void  invalidate();
 // Hiding is not deleting. A hidden printer stays in the account and stays
 // synced; it simply does not crowd a 2.0" screen belonging to someone who owns
 // three machines and cares about one of them today.
-void showPrinters(const PrinterCfg* printers, int count);
+// `syncing` colours the header's refresh button while an account sync runs.
+void showPrinters(const PrinterCfg* printers, int count, bool syncing);
+// That button: ask the account for the printer list now, rather than waiting
+// out the five-minute cycle.
+bool takeReload();
 int  takeToggled();          // index whose switch was flipped, or -1
 
 // ---- the rest of the settings views ---------------------------------------

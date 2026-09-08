@@ -292,7 +292,7 @@ namespace {
         else if (preview == "notice") screen_settings::showUpdateNotice(TIGERSPOOL_FW_VERSION, "1.12.0");
         else if (preview == "setrestart") screen_settings::showRestart();
         else if (preview == "setfactory") screen_settings::showFactory();
-        else if (preview == "pick")      screen_settings::showPrinters(nullptr, 0);
+        else if (preview == "pick")      screen_settings::showPrinters(nullptr, 0, false);
 
         // The boot screen cannot be captured the way it is actually shown: it
         // is drawn before the web server exists. This redraws it on demand so
