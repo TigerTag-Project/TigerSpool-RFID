@@ -32,5 +32,8 @@ void leave();
 // Set by the screen when the user taps something. -1 means nothing pending.
 int  takeTappedPrinter();   // index into printers[], or -1
 bool takeSettingsTap();
+// The refresh button in the header: ask the account for the printer list now,
+// rather than waiting out the five-minute cycle.
+bool takeReloadTap();
 
 }  // namespace screen_home

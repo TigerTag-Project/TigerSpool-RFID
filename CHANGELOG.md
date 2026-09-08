@@ -7,6 +7,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.38.0] - 2026-09-08
+
+### Added
+
+- **A refresh button in the printer list's header.** The list already reloads
+  itself every five minutes, which is right for a box on a shelf and useless to
+  somebody who has just added a printer in Tiger Studio and is standing in
+  front of the device. The button asks the account now. It is the progress
+  indicator too - it turns amber while the sync runs, because a control that
+  does something invisible for fifteen seconds gets pressed again, and again.
+
+### Changed
+
+- **The printer list's title is a size smaller.** Four controls and a title
+  share 240 px: at the old size "Imprimantes" ended at x=114 and the refresh
+  glyph began at 117, which reads as one run of ink. Only this screen changes -
+  every other has at most a chevron beside its title.
+
+
 ## [1.37.0] - 2026-09-08
 
 ### Added
