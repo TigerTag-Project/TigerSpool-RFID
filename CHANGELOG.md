@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.38.2] - 2026-09-08
+
+### Added
+
+- **The refresh button is on the main printer list too**, not only in Settings.
+  Both ask the account now rather than waiting out the five-minute cycle, and
+  both turn amber while the sync runs.
+
+  Fitting it on the main screen costs its title a size: four controls and a
+  word share 240 px, and the offsets there are measured off a capture rather
+  than chosen - at the old size "Imprimantes" ended at x=114 and the refresh
+  glyph began at 117.
+
+
 ## [1.38.1] - 2026-09-08
 
 ### Changed

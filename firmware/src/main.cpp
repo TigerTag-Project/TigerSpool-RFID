@@ -1237,6 +1237,10 @@ void loop() {
         lvgl_port::loop();
 
         {
+            if (screen_home::takeReloadTap()) {
+                if (ttcloud::startAsyncSync())
+                    Serial.println("[account] manual refresh from the home header");
+            }
             int tapped = screen_home::takeTappedPrinter();
             if (tapped >= 0) { screen_home::leave(); selectPrinter(tapped); }
             else if (screen_home::takeSettingsTap()) {
