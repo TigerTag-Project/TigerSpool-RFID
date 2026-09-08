@@ -289,7 +289,10 @@ namespace {
                                              (int)ota::AVAILABLE, "9.9.9", 0);
         else if (preview == "updone")    screen_settings::showUpdate(TIGERSPOOL_FW_VERSION, "stable",
                                              (int)ota::UP_TO_DATE, "", 0);
-        else if (preview == "notice") screen_settings::showUpdateNotice(TIGERSPOOL_FW_VERSION, "1.12.0");
+        // Older on the left, newer on the right: the screen is about
+        // moving forward, and a preview that shows it backwards is a
+        // preview of a screen that cannot happen.
+        else if (preview == "notice") screen_settings::showUpdateNotice("1.41.0", TIGERSPOOL_FW_VERSION);
         else if (preview == "setrestart") screen_settings::showRestart();
         else if (preview == "setfactory") screen_settings::showFactory();
         else if (preview == "pick")      screen_settings::showPrinters(nullptr, 0, false);

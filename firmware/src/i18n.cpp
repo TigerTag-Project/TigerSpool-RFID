@@ -90,7 +90,6 @@ static const Row STR[S_COUNT] = {
 /* S_CHECK_UPDATE   */ {{ "Check for updates", "Rechercher une mise à jour", "Nach Updates suchen", "Buscar actualizaciones", "Cerca aggiornamenti", "Sprawdz aktualizacje", "Procurar atualizacoes", "Procurar atualizacoes" }},
 /* S_CHECKING       */ {{ "Checking...", "Recherche...", "Suche...", "Buscando...", "Ricerca...", "Sprawdzanie...", "Procurando...", "A procurar..." }},
 /* S_UP_TO_DATE     */ {{ "Your TigerSpool is up to date", "Votre TigerSpool est à jour", "Ihr TigerSpool ist aktuell", "Tu TigerSpool esta actualizado", "Il tuo TigerSpool e aggiornato", "Twoj TigerSpool jest aktualny", "Seu TigerSpool esta atualizado", "O seu TigerSpool esta atualizado" }},
-/* S_AVAILABLE      */ {{ "Version available", "Version disponible", "Version verfugbar", "Version disponible", "Versione disponibile", "Dostepna wersja", "Versao disponivel", "Versao disponivel" }},
 /* S_INSTALL        */ {{ "Install", "Installer", "Installieren", "Instalar", "Installa", "Zainstaluj", "Instalar", "Instalar" }},
 /* S_DOWNLOADING    */ {{ "Downloading", "Téléchargement", "Wird geladen", "Descargando", "Download", "Pobieranie", "Baixando", "A transferir" }},
 /* S_DONT_UNPLUG    */ {{ "Do not unplug the box.", "Ne débranchez pas le boîtier.", "Gerat nicht trennen.", "No desconectes la caja.", "Non scollegare la scatola.", "Nie odlaczaj urzadzenia.", "Nao desconecte a caixa.", "Nao desligue a caixa." }},

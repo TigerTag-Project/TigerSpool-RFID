@@ -683,3 +683,16 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
 Verified on hardware throughout: A1 Home and X1C Home connected at the same
 time showing their own slots, AD5X green beside a red Creator 5 Pro, and a
 forced two-brand sync failure keeping all thirteen printers.
+
+## 2026-09-08 - the update screen says what it is moving from
+
+### Changed
+
+- The update notice and the update page show "1.41.0 > 1.42.0" - the version
+  being left in dim, the one being offered in the accent - instead of the
+  caption "Version available" over a single number. One label with LVGL's
+  recolour markup, so the two cannot wrap or drift apart.
+- The update page drops its "Installed" row while an update is offered: the
+  step line already carries that version.
+- `S_AVAILABLE` removed; nothing draws it any more.
+- `?preview=notice` shows an upgrade rather than a downgrade.

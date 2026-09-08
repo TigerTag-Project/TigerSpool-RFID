@@ -539,6 +539,31 @@ void showScreen(uint8_t brightness, int sleepSeconds, int rotation, bool autoRot
 // report and has to be allowed to change.
 // A glyph in a ring, in one colour. It is what the eye lands on first on this
 // screen: the state is legible from arm's length before a word is read.
+// "1.41.0 > 1.42.0" - where the device is, and where it would be.
+//
+// A version on its own answers the wrong question. Someone reading an update
+// prompt already knows the number under it is a version, so the caption saying
+// so ("Version available") spent a line to repeat the obvious - while the one
+// thing they actually needed, what they are moving FROM, was not on the screen
+// at all. Both versions on one line, and the caption is not missed.
+//
+// One label rather than three, using LVGL's recolour markup, so the two
+// versions cannot drift apart vertically or wrap independently: the version
+// being left behind is dim, the one being offered is the accent, and the
+// chevron between them belongs to the first.
+static void versionStep(lv_obj_t* parent, const char* current, const char* latest) {
+    char buf[96];
+    snprintf(buf, sizeof(buf), "#%06X %s " LV_SYMBOL_RIGHT " ##%06X %s#",
+             (unsigned)theme::TEXT_DIM, current, (unsigned)theme::WARN, latest);
+
+    lv_obj_t* l = lv_label_create(parent);
+    lv_label_set_recolor(l, true);
+    lv_label_set_text(l, buf);
+    lv_obj_set_width(l, theme::SCREEN_W - 2 * theme::PAD);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(l, &font_ui_20, 0);
+}
+
 static void badge(lv_obj_t* parent, const char* glyph, uint32_t colour) {
     lv_obj_t* ring = lv_obj_create(parent);
     lv_obj_remove_style_all(ring);
@@ -659,7 +684,11 @@ void showUpdate(const char* version, const char* channel,
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
     theme::scrollbar(body);
 
-    frame::row(body, i18n::T(S_INSTALLED), vbuf, false, nullptr, nullptr);
+    // Not when there is an update to offer: the step line below carries the
+    // installed version already, and printing it twice on one screen reads as
+    // two different facts.
+    if (otaState != ota::AVAILABLE)
+        frame::row(body, i18n::T(S_INSTALLED), vbuf, false, nullptr, nullptr);
 
     lv_obj_t* spacer = lv_obj_create(body);
     lv_obj_remove_style_all(spacer);
@@ -677,8 +706,7 @@ void showUpdate(const char* version, const char* channel,
 
     case ota::AVAILABLE:
         badge(body, LV_SYMBOL_DOWNLOAD, theme::WARN);
-        frame::caption(i18n::T(S_AVAILABLE), theme::TEXT_DIM);
-        frame::bigLabel(latest, theme::WARN);
+        versionStep(body, version, latest);
         frame::button(body, i18n::T(S_INSTALL), 1, onInstall);
         break;
 
@@ -711,8 +739,7 @@ void showUpdateNotice(const char* current, const char* latest) {
     // kept across an update belongs on the update page, where the question is
     // being considered rather than answered.
     badge(body, LV_SYMBOL_DOWNLOAD, theme::WARN);
-    frame::caption(i18n::T(S_AVAILABLE), theme::TEXT_DIM);
-    frame::bigLabel(latest, theme::WARN);
+    versionStep(body, current, latest);
 
     lv_obj_t* gap = lv_obj_create(body);
     lv_obj_remove_style_all(gap);

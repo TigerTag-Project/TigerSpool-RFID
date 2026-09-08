@@ -99,7 +99,6 @@ enum StrId : uint8_t {
     S_CHECK_UPDATE,
     S_CHECKING,
     S_UP_TO_DATE,
-    S_AVAILABLE,
     S_INSTALL,
     S_DOWNLOADING,
     S_DONT_UNPLUG,
