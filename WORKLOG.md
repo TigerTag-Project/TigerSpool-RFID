@@ -641,3 +641,45 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
 - check-text-english.py learned that a bare hostname is not prose. It read
   "us.mqtt.bambulab.com" as Portuguese, because ".com" is a word in it.
 
+
+## 2026-09-08 - one connection per printer, and two things that hid behind that
+
+### Changed
+
+- The cloud slot notice is one message, not two: "Working only with LAN Mode +
+  Dev Mode" in orange, the QR, and "Scan for tutorial" under it.
+- Every backend is instantiable. All six kept their host, socket, slots and
+  connected flag in file statics, so exactly one printer per brand could exist;
+  state now lives in the object, and `main.cpp` builds one backend per link and
+  destroys it with the link. The brand-eviction rule is gone with the reason
+  for it.
+- The Bambu MQTT receive buffer is 50 KB for the printer on screen and 8 KB for
+  the others. A background link is asked one question - connected or not - and
+  that comes from the session, not the report.
+- MQTT client ids carry the printer's serial (Bambu) or device id (Anycubic).
+
+### Fixed
+
+- A link no longer claims a connection it did not make. `tickLink` asked the
+  backend `connected()` before ever dialling; with a shared backend the answer
+  belonged to the sibling that had it, so a Creator 5 Pro that was not on the
+  network showed a green dot and the AD5X's four spools.
+- The FlashForge backend had no `stop()` at all - it inherited the empty one -
+  so it stayed authenticated after losing its link.
+- A sync that reached one brand out of six no longer writes itself as the whole
+  account. Five requests failed with six links open and a list of thirteen
+  printers became three. A brand that did not answer now contributes what was
+  stored for it, in its own place.
+- Two documents for one printer: the newer one wins. An A1 switched to cloud
+  mode kept its stale LAN document - and the access code the printer had since
+  rotated - because dedup kept whichever came first.
+- Links are opened while the heap allows and closed below 55 KB free, with a
+  back-off that grows to eight minutes. Measured: nine printers switched on,
+  six links live, 65 KB free, four minutes without a restart.
+- The QR quiet zone on the cloud notice: the card carried a `pad_top`, and
+  `lv_obj_align` measures from the content area, so the code sat off-centre and
+  ran into the white edge a scanner needs.
+
+Verified on hardware throughout: A1 Home and X1C Home connected at the same
+time showing their own slots, AD5X green beside a red Creator 5 Pro, and a
+forced two-brand sync failure keeping all thirteen printers.

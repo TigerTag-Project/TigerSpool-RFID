@@ -1,5 +1,8 @@
 #pragma once
 #include "printer.h"
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // Anycubic Kobra 3 V2 / Kobra X and their ACE units, over the LAN.
 //
@@ -32,4 +35,34 @@ public:
     bool assign(int i, const TagInfo& t) override;
     String status() override;
     void refresh() override;
+
+    // Five boxes of four is what a Kobra X with four ACE units plus the
+    // external unit reports - the largest layout the protocol notes describe.
+    static const int AMAX = 20;
+private:
+    struct ASlot { char name[4]; int box; int index; };
+
+    void rebuild(JsonArrayConst boxes);
+    int  findSlot(int box, int index) const;
+    void applyLayout(JsonArrayConst boxes);
+    void onMqtt(uint8_t* payload, unsigned int len);
+    String envelope(const char* action, const String& data);
+
+    WiFiClientSecure net_;          // one TLS session per printer
+    PubSubClient     mqtt_{net_};
+
+    ASlot     map_[AMAX];
+    int       nSlots_ = 0;
+    SlotState slots_[AMAX];
+    String    host_, devId_, user_, pass_, model_;
+    String    topCmd_, topReport_;
+    bool      connected_ = false;
+    String    status_ = "Anycubic: connecting...";
+    uint32_t  lastTry_ = 0, lastPoll_ = 0, msg_ = 0;
+    // Set only when all four credentials are present and the client is
+    // configured. The guard used to test the device id alone, so a record
+    // carrying that but no username kept dialling a broker whose address had
+    // never been set - printing "connecting..." for ever beside the line
+    // explaining why it could not.
+    bool      ready_ = false;
 };

@@ -1,5 +1,7 @@
 #pragma once
 #include "printer.h"
+#include <WebSocketsClient.h>
+#include <ArduinoJson.h>
 
 // Snapmaker (Artisan / J1 / J1s / U1) - Moonraker (Klipper) over WebSocket:
 //   ws://<ip>:7125/websocket , JSON-RPC 2.0 , no authentication.
@@ -24,4 +26,15 @@ public:
     bool assign(int i, const TagInfo& t) override;
     String status() override;
     void refresh() override;
+private:
+    void applyConfig(JsonObjectConst c);
+    void onMsg(uint8_t* payload, size_t len);
+    void onEvent(WStype_t type, uint8_t* payload, size_t len);
+    bool sendRaw(String s);
+
+    WebSocketsClient ws_;                 // one socket per printer
+    bool      connected_ = false;
+    String    status_ = "Snap: connecting...";
+    SlotState slots_[4];
+    uint32_t  lastReq_ = 0;
 };

@@ -1,5 +1,8 @@
 #pragma once
 #include "printer.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // Elegoo Centauri Carbon and family over the LAN.
 //
@@ -34,4 +37,25 @@ public:
     bool assign(int i, const TagInfo& t) override;
     String status() override;
     void refresh() override;
+
+    static const int ESLOTS = 5;    // 0 = mono extruder, 1..4 = Canvas trays
+private:
+
+    void publish(int method, const String& params);
+    void onResult(JsonObjectConst res, int method);
+    void onMqtt(uint8_t* payload, unsigned int len);
+    int  mapUi(int i) const;
+
+    WiFiClient   net_;              // one socket per printer, not one per brand
+    PubSubClient mqtt_{net_};
+
+    String    host_, sn_, pass_;
+    String    cid_, rid_;
+    String    topRequest_, topStatus_, topResponse_, topRegister_, topRegResp_;
+    bool      connected_ = false;
+    bool      canvas_ = false;      // the hub is plugged in and reporting
+    String    status_ = "Elegoo: connecting...";
+    SlotState slots_[ESLOTS];
+    uint32_t  lastTry_ = 0, lastPoll_ = 0;
+    uint32_t  msgId_ = 0;
 };

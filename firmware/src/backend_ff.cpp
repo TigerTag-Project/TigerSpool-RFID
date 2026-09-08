@@ -4,12 +4,10 @@
 #include <ArduinoJson.h>
 
 namespace {
-    String    g_host, g_sn, g_cc;
-    bool      g_auth = false;
-    String    g_status = "FF: connecting...";
-    SlotState g_slots[4];
-    uint32_t  g_lastReq = 0;
-    uint32_t  g_lastAuth = 0;
+    // What is left here is stateless: tables and pure functions, shared by
+    // every instance because they describe the PRINTER MODEL, not a printer.
+    // Everything that describes one machine now lives in the object.
+    //
     // The material station's four slots. Named as the printer names them:
     // station number then position, so a second station would be 2A..2D.
     const char* LABELS[4] = { "1A", "1B", "1C", "1D" };
@@ -71,30 +69,6 @@ namespace {
         return FF_PALETTE[best];
     }
 
-    // POST JSON to http://host:8898<path>. Returns the body, or "" on failure.
-    // Fills 'httpCode'. The printer's firmware sends Content-Type
-    // "appliation/json" - their typo, not ours.
-    String post(const String& path, const String& body, int& httpCode) {
-        if (WiFi.status() != WL_CONNECTED) { httpCode = -1; return ""; }
-        WiFiClient client;
-        HTTPClient http;
-        String url = "http://" + g_host + ":8898" + path;
-        if (!http.begin(client, url)) { httpCode = -2; return ""; }
-        http.setTimeout(4000);
-        http.addHeader("Content-Type", "application/json");
-        httpCode = http.POST((uint8_t*)body.c_str(), body.length());
-        String resp = (httpCode > 0) ? http.getString() : String();
-        http.end();
-        return resp;
-    }
-
-    String authBody() {
-        JsonDocument d;
-        d["serialNumber"] = g_sn;
-        d["checkCode"]    = g_cc;
-        String s; serializeJson(d, s); return s;
-    }
-
     void parseHex(const char* s, uint8_t& r, uint8_t& g, uint8_t& b) {
         if (!s || !*s) return;
         if (*s == '#') s++;
@@ -103,16 +77,45 @@ namespace {
     }
 }
 
+// http://host:8898<path>, JSON in and JSON out. The printer's firmware sends
+// Content-Type "appliation/json" - their typo, not ours.
+String FlashForgeC5Backend::post(const String& path, const String& body, int& httpCode) {
+    if (WiFi.status() != WL_CONNECTED) { httpCode = -1; return ""; }
+    WiFiClient client;
+    HTTPClient http;
+    String url = "http://" + host_ + ":8898" + path;
+    if (!http.begin(client, url)) { httpCode = -2; return ""; }
+    http.setTimeout(4000);
+    http.addHeader("Content-Type", "application/json");
+    httpCode = http.POST((uint8_t*)body.c_str(), body.length());
+    String resp = (httpCode > 0) ? http.getString() : String();
+    http.end();
+    return resp;
+}
+
+String FlashForgeC5Backend::authBody() {
+    JsonDocument d;
+    d["serialNumber"] = sn_;
+    d["checkCode"]    = cc_;
+    String s; serializeJson(d, s); return s;
+}
+
 void FlashForgeC5Backend::begin(const PrinterCfg& cfg) {
-    g_host = cfg.host; g_sn = cfg.sn; g_cc = cfg.cc;
+    host_ = cfg.host; sn_ = cfg.sn; cc_ = cfg.cc;
     // FlashForge's API wants the serial prefixed with "SN"; the TigerTag import
     // hands it over without one
-    if (g_sn.length() && !g_sn.startsWith("SN")) g_sn = "SN" + g_sn;
-    for (int i = 0; i < 4; i++) g_slots[i] = SlotState{};
-    g_auth = false;
-    g_status = "FF: a validar...";
+    if (sn_.length() && !sn_.startsWith("SN")) sn_ = "SN" + sn_;
+    for (int i = 0; i < 4; i++) slots_[i] = SlotState{};
+    auth_ = false;
+    status_ = "FF: a validar...";
 
     tryAuth();
+}
+
+void FlashForgeC5Backend::stop() {
+    auth_ = false;
+    for (int i = 0; i < 4; i++) slots_[i] = SlotState{};
+    status_ = "FF: stopped";
 }
 
 void FlashForgeC5Backend::tryAuth() {
@@ -122,49 +125,49 @@ void FlashForgeC5Backend::tryAuth() {
     JsonDocument d;
     if (code == 200 && !deserializeJson(d, resp)) {
         int c = d["code"] | -99;
-        if (c == 0)       { g_auth = true;  g_status = "FF: autenticado"; }
-        else if (c == -2) g_status = "FF: Modo LAN desligado";
-        else if (c == 1)  g_status = "FF: access code errado";
-        else if (c == 3)  g_status = "FF: not authorised";
-        else if (c == 5)  g_status = "FF: serial errado";
-        else              g_status = String("FF: checkCode code ") + c;
+        if (c == 0)       { auth_ = true;  status_ = "FF: autenticado"; }
+        else if (c == -2) status_ = "FF: Modo LAN desligado";
+        else if (c == 1)  status_ = "FF: access code errado";
+        else if (c == 3)  status_ = "FF: not authorised";
+        else if (c == 5)  status_ = "FF: serial errado";
+        else              status_ = String("FF: checkCode code ") + c;
     } else {
-        g_status = String("FF: no answer (") + code + ")";
+        status_ = String("FF: no answer (") + code + ")";
     }
-    g_lastAuth = millis();
-    if (g_auth) refresh();
+    lastAuth_ = millis();
+    if (auth_) refresh();
 }
 
 void FlashForgeC5Backend::loop() {
-    if (g_auth) {
-        if (millis() - g_lastReq > 6000) { g_lastReq = millis(); refresh(); }
-    } else if (millis() - g_lastAuth > 20000) {   // re-authenticate every 20 s
+    if (auth_) {
+        if (millis() - lastReq_ > 6000) { lastReq_ = millis(); refresh(); }
+    } else if (millis() - lastAuth_ > 20000) {   // re-authenticate every 20 s
         tryAuth();
     }
 }
 
-bool FlashForgeC5Backend::connected() { return g_auth; }
-String FlashForgeC5Backend::status()  { return g_status; }
+bool FlashForgeC5Backend::connected() { return auth_; }
+String FlashForgeC5Backend::status()  { return status_; }
 const char* FlashForgeC5Backend::slotLabel(int i) { return LABELS[i & 3]; }
-const SlotState& FlashForgeC5Backend::slot(int i) { return g_slots[i & 3]; }
+const SlotState& FlashForgeC5Backend::slot(int i) { return slots_[i & 3]; }
 
 void FlashForgeC5Backend::refresh() {
     int code;
     String resp = post("/detail", authBody(), code);
-    if (code != 200) { g_status = String("FF: /detail http ") + code; return; }
+    if (code != 200) { status_ = String("FF: /detail http ") + code; return; }
     JsonDocument d;
-    if (deserializeJson(d, resp)) { g_status = "FF: /detail json?"; return; }
+    if (deserializeJson(d, resp)) { status_ = "FF: /detail json?"; return; }
 
     // Dump the material station (for debugging colour/material)
     { String ms; serializeJson(d["detail"]["matlStationInfo"], ms);
       Serial.printf("[flashforge] matlStationInfo: %.*s\n", (int)(ms.length() > 320 ? 320 : ms.length()), ms.c_str()); }
 
     JsonArrayConst si = d["detail"]["matlStationInfo"]["slotInfos"].as<JsonArrayConst>();
-    if (si.isNull()) { g_status = "FF: no material station"; return; }
+    if (si.isNull()) { status_ = "FF: no material station"; return; }
     for (JsonObjectConst s : si) {
         int id = s["slotId"] | 0;             // 1-based
         if (id < 1 || id > 4) continue;
-        SlotState& st = g_slots[id - 1];
+        SlotState& st = slots_[id - 1];
         const char* mn = s["materialName"] | "";
         const char* mc = s["materialColor"] | "";
         st.type = mn;
@@ -175,8 +178,8 @@ void FlashForgeC5Backend::refresh() {
         Serial.printf("[flashforge] slot %d: '%s' color '%s'\n", id, mn, mc);
     }
     int cur = d["detail"]["matlStationInfo"]["currentSlot"] | 0;
-    for (int i = 0; i < 4; i++) g_slots[i].selected = (cur == i + 1);
-    g_status = "FF: slots atualizados";
+    for (int i = 0; i < 4; i++) slots_[i].selected = (cur == i + 1);
+    status_ = "FF: slots atualizados";
 }
 
 bool FlashForgeC5Backend::assign(int idx, const TagInfo& t) {
@@ -192,8 +195,8 @@ bool FlashForgeC5Backend::assign(int idx, const TagInfo& t) {
     Serial.printf("[flashforge] cor tag #%02X%02X%02X -> paleta %s %s\n", t.r, t.g, t.b, pc.name, rgb);
 
     JsonDocument d;
-    d["serialNumber"] = g_sn;
-    d["checkCode"]    = g_cc;
+    d["serialNumber"] = sn_;
+    d["checkCode"]    = cc_;
     JsonObject pl = d["payload"].to<JsonObject>();
     pl["cmd"] = "msConfig_cmd";
     JsonObject a = pl["args"].to<JsonObject>();
@@ -208,7 +211,7 @@ bool FlashForgeC5Backend::assign(int idx, const TagInfo& t) {
     Serial.printf("[flashforge] <- http=%d %s\n", code, resp.c_str());
     JsonDocument r;
     bool ok = (code == 200) && !deserializeJson(r, resp) && ((r["code"] | -1) == 0);
-    g_status = ok ? (String("sent -> ") + LABELS[idx] + " " + mt) : "FF: send failed";
+    status_ = ok ? (String("sent -> ") + LABELS[idx] + " " + mt) : "FF: send failed";
     if (ok) { delay(150); refresh(); }        // confirma relendo (cmd desconhecido e ACKed na mesma)
     return ok;
 }

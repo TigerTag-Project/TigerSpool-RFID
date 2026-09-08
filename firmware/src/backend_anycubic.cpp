@@ -5,36 +5,8 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-namespace {
 
-// Five boxes of four is what a Kobra X with four ACE units plus the external
-// unit reports - twenty slots, and the largest layout the protocol notes
-// describe.
-const int AMAX = 20;
-
-struct ASlot { char name[4]; int box; int index; };
-ASlot     g_map[AMAX];
-int       g_nSlots = 0;
-SlotState g_slots[AMAX];
-
-WiFiClientSecure net;
-PubSubClient     mqtt(net);
-
-String   g_host, g_devId, g_user, g_pass, g_model;
-String   g_topCmd, g_topReport;
-bool     g_connected = false;
-String   g_status = "Anycubic: connecting...";
-uint32_t g_lastTry = 0, g_lastPoll = 0, g_msg = 0;
-// Set only when all four credentials are present and the client is configured.
-// The guard used to test the device id alone, so a record carrying that but no
-// username kept dialling a broker whose address had never been set - printing
-// "connecting..." for ever beside the line explaining why it could not.
-bool g_ready = false;
-
-// Box -1 first, then 0, 1, 2... and a letter per box in that order. The
-// external unit is a unit here, not a single spool: an ACE Pro 2 reports box
-// -1 with four slots, and collapsing it to one cell would lose three of them.
-void rebuild(JsonArrayConst boxes) {
+void AnycubicBackend::rebuild(JsonArrayConst boxes) {
     int n = 0;
     int letter = 0;
     for (JsonObjectConst b : boxes) {
@@ -45,23 +17,23 @@ void rebuild(JsonArrayConst boxes) {
         for (JsonObjectConst sl : slots) {
             if (n >= AMAX) break;
             const int ix = sl["index"] | 0;
-            snprintf(g_map[n].name, sizeof(g_map[n].name), "%c%d", 'A' + letter, ix + 1);
-            g_map[n].box = id;
-            g_map[n].index = ix;
+            snprintf(map_[n].name, sizeof(map_[n].name), "%c%d", 'A' + letter, ix + 1);
+            map_[n].box = id;
+            map_[n].index = ix;
             n++;
         }
         letter++;
     }
-    if (n) g_nSlots = n;
+    if (n) nSlots_ = n;
 }
 
-int findSlot(int box, int index) {
-    for (int i = 0; i < g_nSlots; i++)
-        if (g_map[i].box == box && g_map[i].index == index) return i;
+int AnycubicBackend::findSlot(int box, int index) const {
+    for (int i = 0; i < nSlots_; i++)
+        if (map_[i].box == box && map_[i].index == index) return i;
     return -1;
 }
 
-void applyLayout(JsonArrayConst boxes) {
+void AnycubicBackend::applyLayout(JsonArrayConst boxes) {
     rebuild(boxes);
     for (JsonObjectConst b : boxes) {
         if (!b["id"].is<int>()) continue;
@@ -71,7 +43,7 @@ void applyLayout(JsonArrayConst boxes) {
         for (JsonObjectConst sl : slots) {
             const int i = findSlot(id, sl["index"] | 0);
             if (i < 0) continue;
-            SlotState& s = g_slots[i];
+            SlotState& s = slots_[i];
             const char* type = sl["type"] | "";
             s.type  = type;
             s.brand = (const char*)(sl["sku"] | "");
@@ -84,7 +56,7 @@ void applyLayout(JsonArrayConst boxes) {
     }
 }
 
-void onMqtt(char* topic, uint8_t* payload, unsigned int len) {
+void AnycubicBackend::onMqtt(uint8_t* payload, unsigned int len) {
     JsonDocument doc;
     if (deserializeJson(doc, payload, len)) return;
     // Only a full layout carries slots. The partial actions - drying, feeding,
@@ -93,128 +65,128 @@ void onMqtt(char* topic, uint8_t* payload, unsigned int len) {
     JsonArrayConst boxes = doc["data"]["multi_color_box"];
     if (boxes.isNull()) return;
     applyLayout(boxes);
-    g_status = String("Anycubic: ") + g_nSlots + " slots";
-    (void)topic; (void)len;
+    status_ = String("Anycubic: ") + nSlots_ + " slots";
+    (void)len;
 }
 
-String envelope(const char* action, const String& data) {
+String AnycubicBackend::envelope(const char* action, const String& data) {
     // msgid is a plain counter rather than a uuid. The printer echoes it and
     // nothing here matches on it; a uuid would cost entropy for decoration.
     String out = String("{\"type\":\"multiColorBox\",\"action\":\"") + action +
                  "\",\"timestamp\":" + String((uint32_t)(millis())) +
-                 ",\"msgid\":\"ts-" + String(++g_msg) + "\"";
+                 ",\"msgid\":\"ts-" + String(++msg_) + "\"";
     if (data.length()) out += ",\"data\":" + data;
     out += "}";
     return out;
 }
 
-}  // namespace
-
 void AnycubicBackend::begin(const PrinterCfg& cfg) {
-    g_host  = cfg.host;
-    g_devId = cfg.devId;
-    g_user  = cfg.user;
-    g_pass  = cfg.cc;
-    g_model = cfg.model;
+    host_  = cfg.host;
+    devId_ = cfg.devId;
+    user_  = cfg.user;
+    pass_  = cfg.cc;
+    model_ = cfg.model;
 
-    for (int i = 0; i < AMAX; i++) g_slots[i] = SlotState{};
-    g_nSlots = 0;
-    g_connected = false;
-    g_ready = false;
+    for (int i = 0; i < AMAX; i++) slots_[i] = SlotState{};
+    nSlots_ = 0;
+    connected_ = false;
+    ready_ = false;
 
-    if (g_devId.isEmpty() || g_user.isEmpty() || g_model.isEmpty()) {
+    if (devId_.isEmpty() || user_.isEmpty() || model_.isEmpty()) {
         // Said once, plainly, rather than discovered as a connection that never
         // succeeds: these three cannot be read off the printer, so an empty one
         // means the printer was never paired in AnycubicSlicerNext.
-        g_status = "Anycubic: not paired in the slicer";
+        status_ = "Anycubic: not paired in the slicer";
         Serial.printf("[anycubic] cannot connect - missing%s%s%s from the account. "
                       "Pair the printer in AnycubicSlicerNext once, then sync.\n",
-                      g_devId.isEmpty() ? " deviceId" : "",
-                      g_user.isEmpty()  ? " username" : "",
-                      g_model.isEmpty() ? " acuModelId" : "");
+                      devId_.isEmpty() ? " deviceId" : "",
+                      user_.isEmpty()  ? " username" : "",
+                      model_.isEmpty() ? " acuModelId" : "");
         return;
     }
 
-    g_topCmd    = String("anycubic/anycubicCloud/v1/web/printer/") + g_model + "/" +
-                  g_devId + "/multiColorBox";
-    g_topReport = String("anycubic/anycubicCloud/v1/printer/public/") + g_model + "/" +
-                  g_devId + "/multiColorBox/report";
+    topCmd_    = String("anycubic/anycubicCloud/v1/web/printer/") + model_ + "/" +
+                  devId_ + "/multiColorBox";
+    topReport_ = String("anycubic/anycubicCloud/v1/printer/public/") + model_ + "/" +
+                  devId_ + "/multiColorBox/report";
 
     // Self-signed, on the local network, and there is no authority that could
     // vouch for it. Trust comes from credentials the desktop obtained, exactly
     // as it does for a Bambu printer in LAN mode. Calls that leave the network
     // are verified - see net/tls.h.
-    g_ready = true;
-    net.setInsecure();
-    mqtt.setServer(g_host.c_str(), 9883);
+    ready_ = true;
+    net_.setInsecure();
+    mqtt_.setServer(host_.c_str(), 9883);
     // A twenty-slot layout report is a few kilobytes.
-    mqtt.setBufferSize(16384);
-    mqtt.setKeepAlive(30);
-    mqtt.setCallback(onMqtt);
-    g_status = "Anycubic: connecting...";
-    g_lastTry = 0;
+    mqtt_.setBufferSize(16384);
+    mqtt_.setKeepAlive(30);
+    mqtt_.setCallback([this](char*, uint8_t* p, unsigned int l) { onMqtt(p, l); });
+    status_ = "Anycubic: connecting...";
+    lastTry_ = 0;
 }
 
 void AnycubicBackend::loop() {
-    if (!g_ready) return;                       // nothing to connect to
-    if (!mqtt.connected()) {
-        g_connected = false;
-        if (millis() - g_lastTry < 4000) return;
-        g_lastTry = millis();
-        Serial.printf("[anycubic] connecting to %s:9883...\n", g_host.c_str());
-        String cid = "tigerspool-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-        if (mqtt.connect(cid.c_str(), g_user.c_str(), g_pass.c_str())) {
-            mqtt.subscribe(g_topReport.c_str());
-            g_connected = true;
-            g_status = "Anycubic: connected";
+    if (!ready_) return;                       // nothing to connect to
+    if (!mqtt_.connected()) {
+        connected_ = false;
+        if (millis() - lastTry_ < 4000) return;
+        lastTry_ = millis();
+        Serial.printf("[anycubic] connecting to %s:9883...\n", host_.c_str());
+        // One id per printer: two ACE-equipped machines on one account would
+        // otherwise kick each other off the broker in turn.
+        String cid = "tigerspool-" + String((uint32_t)ESP.getEfuseMac(), HEX) + "-" + devId_;
+        if (mqtt_.connect(cid.c_str(), user_.c_str(), pass_.c_str())) {
+            mqtt_.subscribe(topReport_.c_str());
+            connected_ = true;
+            status_ = "Anycubic: connected";
             Serial.println("[anycubic] connected + subscribed");
             refresh();
         } else {
-            g_status = String("Anycubic: MQTT rc=") + mqtt.state();
-            Serial.println(g_status);
+            status_ = String("Anycubic: MQTT rc=") + mqtt_.state();
+            Serial.println(status_);
         }
         return;
     }
-    mqtt.loop();
-    if (millis() - g_lastPoll > 8000) { g_lastPoll = millis(); refresh(); }
+    mqtt_.loop();
+    if (millis() - lastPoll_ > 8000) { lastPoll_ = millis(); refresh(); }
 }
 
 void AnycubicBackend::stop() {
-    mqtt.disconnect();
-    g_connected = false;
-    g_status = "Anycubic: stopped";
+    mqtt_.disconnect();
+    connected_ = false;
+    status_ = "Anycubic: stopped";
 }
 
-bool AnycubicBackend::connected() { return g_connected; }
-String AnycubicBackend::status()  { return g_status; }
+bool AnycubicBackend::connected() { return connected_; }
+String AnycubicBackend::status()  { return status_; }
 
-int AnycubicBackend::slotCount() { return g_nSlots; }
+int AnycubicBackend::slotCount() { return nSlots_; }
 
 const char* AnycubicBackend::slotLabel(int i) {
-    if (i < 0 || i >= g_nSlots) return "?";
-    return g_map[i].name;
+    if (i < 0 || i >= nSlots_) return "?";
+    return map_[i].name;
 }
 
 const SlotState& AnycubicBackend::slot(int i) {
-    return g_slots[(i >= 0 && i < AMAX) ? i : 0];
+    return slots_[(i >= 0 && i < AMAX) ? i : 0];
 }
 
 void AnycubicBackend::refresh() {
-    if (!mqtt.connected()) return;
-    mqtt.publish(g_topCmd.c_str(), envelope("getInfo", "").c_str());
+    if (!mqtt_.connected()) return;
+    mqtt_.publish(topCmd_.c_str(), envelope("getInfo", "").c_str());
 }
 
 bool AnycubicBackend::assign(int idx, const TagInfo& t) {
-    if (idx < 0 || idx >= g_nSlots || !mqtt.connected()) return false;
+    if (idx < 0 || idx >= nSlots_ || !mqtt_.connected()) return false;
 
     // The printer honours only index, type and colour. Richer fields are
     // accepted with code 200 and silently dropped, so sending them would make
     // the log claim more than the machine did.
     JsonDocument d;
     JsonObject box = d["multi_color_box"].add<JsonObject>();
-    box["id"] = g_map[idx].box;
+    box["id"] = map_[idx].box;
     JsonObject sl = box["slots"].add<JsonObject>();
-    sl["index"] = g_map[idx].index;
+    sl["index"] = map_[idx].index;
     sl["type"] = t.material;
     JsonArray col = sl["color"].to<JsonArray>();
     // Pure black renders as empty on the ACE display, so a black spool would
@@ -227,9 +199,9 @@ bool AnycubicBackend::assign(int idx, const TagInfo& t) {
     String data; serializeJson(d, data);
     const String out = envelope("setInfo", data);
     Serial.printf("[anycubic] -> %s\n", out.c_str());
-    if (!mqtt.publish(g_topCmd.c_str(), out.c_str())) return false;
+    if (!mqtt_.publish(topCmd_.c_str(), out.c_str())) return false;
 
-    g_status = String("Anycubic: sent -> ") + slotLabel(idx);
+    status_ = String("Anycubic: sent -> ") + slotLabel(idx);
     // There is no per-command acknowledgement. A getInfo round-trip is the only
     // thing that says what actually landed.
     refresh();

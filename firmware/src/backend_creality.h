@@ -1,5 +1,7 @@
 #pragma once
 #include "printer.h"
+#include <WebSocketsClient.h>
+#include <ArduinoJson.h>
 
 class CrealityBackend : public PrinterBackend {
 public:
@@ -13,4 +15,18 @@ public:
     bool assign(int i, const TagInfo& t) override;
     String status() override;
     void refresh() override;
+private:
+    void applyBoxsInfo(JsonObjectConst bi);
+    void onMsg(uint8_t* payload, size_t len);
+    void onEvent(WStype_t type, uint8_t* payload, size_t len);
+    bool sendDoc(JsonDocument& d);
+
+    // One socket per printer. It used to be a file static, which is exactly
+    // what made a second K2 impossible: two printers shared one connection and
+    // whichever was selected last owned it.
+    WebSocketsClient ws_;
+    bool      connected_ = false;
+    String    status_ = "K2: connecting...";
+    SlotState slots_[5];
+    uint32_t  lastReq_ = 0;
 };

@@ -1,5 +1,8 @@
 #pragma once
 #include "printer.h"
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // Bambu Lab A1 / A1 mini / A2L / P1 / X1 / H2D over the LAN.
 //
@@ -20,6 +23,7 @@ public:
     void begin(const PrinterCfg& cfg) override;
     void loop() override;
     void stop() override;
+    void setForeground(bool on) override;
     bool connected() override;
     int  slotCount() override;                      // dynamic, 5..17
     const char* slotLabel(int i) override;
@@ -27,4 +31,34 @@ public:
     bool assign(int i, const TagInfo& t) override;
     String status() override;
     void refresh() override;
+
+    // external spool + 4 AMS units x 4 trays
+    static const int BMAX = 17;
+private:
+    struct BSlot { char name[4]; int ams; int tray; };
+
+    void setDefaultMap();
+    void rebuildMap(JsonArrayConst amsArr);
+    void applyTray(int ams, int trayId, JsonObjectConst t);
+    void onMqtt(uint8_t* payload, unsigned int len);
+    void pubRequest(const String& body);
+
+    // One TLS session and one MQTT client per printer. Both were file statics,
+    // which is what limited the device to a single Bambu at a time.
+    WiFiClientSecure net_;
+    PubSubClient     mqtt_{net_};
+
+    BSlot     map_[BMAX] = { { "", 255, 254 },
+                             { "A1", 0, 0 }, { "A2", 0, 1 }, { "A3", 0, 2 }, { "A4", 0, 3 } };
+    int       nSlots_ = 5;                  // until the first report
+    String    host_, sn_, cc_, user_;
+    bool      cloud_ = false;
+    uint16_t  port_ = 8883;
+    String    topReport_, topRequest_;
+    bool      connected_ = false;
+    String    status_ = "Bambu: connecting...";
+    SlotState slots_[BMAX];
+    uint32_t  seq_ = 0;
+    uint32_t  lastTry_ = 0, lastPush_ = 0;
+    bool      foreground_ = false;
 };

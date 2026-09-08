@@ -91,12 +91,6 @@ static const uint8_t  LINK_MAX_TRIES = 5;
 // short enough to wait through.
 static const uint8_t  LINK_RETRY_TRIES = 3;
 static const uint32_t LINK_ATTEMPT_MS = 8000;
-CrealityBackend            crealityBackend;
-FlashForgeC5Backend  flashForgeBackend;
-BambuBackend         bambuBackend;
-SnapmakerBackend     snapmakerBackend;
-ElegooBackend        elegooBackend;
-AnycubicBackend      anycubicBackend;
 bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
@@ -657,20 +651,83 @@ struct Link {
     uint8_t         tries   = 0;
     uint8_t         budget  = LINK_MAX_TRIES;
     uint32_t        startAt = 0;
+    // Has THIS link ever called begin() on the backend it points at?
+    //
+    // It has to be asked, because the backend is shared by every printer of a
+    // brand. A link that had just taken the backend from a sibling found it
+    // still reporting connected() - to the sibling - and declared itself up
+    // without ever dialling: a Creator 5 Pro that is not on the network at all
+    // showed a green dot and four slots, which were the AD5X's slots read from
+    // the AD5X's session. The device was not wrong about the connection; it was
+    // wrong about whose it was.
+    bool            dialled = false;
 };
-static const int MAX_LINKS = 6;          // one per PrinterType
+// No longer one per brand: one per PRINTER, up to what the heap allows.
+static const int MAX_LINKS = 10;
 static Link links[MAX_LINKS];
 
-static PrinterBackend* backendFor(PrinterType t) {
+// One backend OBJECT per printer, built when the link opens and destroyed with
+// it. They used to be six globals, one per brand, and that single fact was the
+// cause of everything that follows: two printers of one brand shared a socket,
+// a set of slots and a connected flag, so the second could not be reached at
+// all and - worse - inherited the first's answers. A Creator 5 Pro that was not
+// even on the network showed a green dot and the AD5X's four spools.
+static PrinterBackend* newBackend(PrinterType t) {
     switch (t) {
-        case PT_FF_C5:     return &flashForgeBackend;
-        case PT_BAMBU:     return &bambuBackend;
-        case PT_SNAPMAKER: return &snapmakerBackend;
-        case PT_ELEGOO:    return &elegooBackend;
-        case PT_ANYCUBIC:  return &anycubicBackend;
-        default:           return &crealityBackend;
+        case PT_FF_C5:     return new FlashForgeC5Backend();
+        case PT_BAMBU:     return new BambuBackend();
+        case PT_SNAPMAKER: return new SnapmakerBackend();
+        case PT_ELEGOO:    return new ElegooBackend();
+        case PT_ANYCUBIC:  return new AnycubicBackend();
+        default:           return new CrealityBackend();
     }
 }
+
+static void dropLink(Link& l) {
+    if (l.be) { l.be->stop(); delete l.be; }
+    l = Link{};
+}
+
+// What one more open connection costs, and why there is a floor at all.
+//
+// A link is not free: a Bambu holds a TLS session and a 50 KB MQTT receive
+// buffer, because a fully loaded X1 answers pushall with about that much in one
+// message. Several of those at once is how an ESP32 runs out of internal RAM -
+// and the first thing to fail is not a printer link but the next HTTPS request,
+// which is the account sync. That failure was watched happening on the bench.
+//
+// So links are opened while there is room and not after. A printer left without
+// one reads as disconnected, which is the truth: the device is not talking to
+// it. The alternative - opening it anyway - is a reset.
+static const uint32_t LINK_HEAP_FLOOR = 80000;
+// Below this, one open link is closed on the spot - the device staying up
+// matters more than a background printer's dot being green.
+static const uint32_t LINK_HEAP_HARD = 55000;
+// A printer closed for want of memory is not retried straight away.
+//
+// Without this the two floors fight each other: a link opens because the heap
+// is above the opening floor, connecting drops the heap below the hard floor,
+// the link is closed, the heap recovers, and the same printer is opened again -
+// several times a minute, for ever. A minute of quiet is enough for the set of
+// live links to settle.
+// The wait grows each time the same printer is turned away, up to eight
+// minutes. With more printers switched on than there is memory for, a fixed
+// wait means the same two or three keep being opened and closed for ever and
+// their dots blink once a minute. Backing off lets the set of live links settle
+// on the ones that fit, and a printer that becomes reachable again is still
+// picked up - just not immediately.
+static const uint32_t LINK_DEFER_MS = 60000;
+static uint32_t linkDeferUntil[MAX_PRINTERS] = { 0 };
+static uint8_t  linkDeferCount[MAX_PRINTERS] = { 0 };
+static bool deferred(int pi) {
+    return linkDeferUntil[pi] && (int32_t)(linkDeferUntil[pi] - millis()) > 0;
+}
+static void defer(int pi) {
+    if (linkDeferCount[pi] < 8) linkDeferCount[pi]++;
+    linkDeferUntil[pi] = millis() + LINK_DEFER_MS * linkDeferCount[pi];
+}
+static bool  roomForOneMore() { return ESP.getFreeHeap() > LINK_HEAP_FLOOR; }
+static bool  s_heapWarned = false;
 
 static Link* linkFor(int printerIdx) {
     for (int i = 0; i < MAX_LINKS; i++)
@@ -682,56 +739,58 @@ static Link* linkFor(int printerIdx) {
 // Settings used to decide only what the home screen listed; it decides what the
 // box talks to now, which is what someone ticking it expects.
 static void assignLinks() {
-    bool brandTaken[MAX_LINKS] = { false };
+    // Drop the links of printers the user has switched off.
     for (int i = 0; i < MAX_LINKS; i++) {
         Link& l = links[i];
         if (l.printer < 0) continue;
         const PrinterCfg& p = printers[l.printer];
-        const bool keep = p.type != PT_NONE && (p.visible || l.printer == selectedPrinter);
-        if (!keep) {
-            if (l.be) l.be->stop();
-            l = Link{};
-            continue;
-        }
-        brandTaken[(int)p.type % MAX_LINKS] = true;
-    }
-    // The SELECTED printer gets its brand's backend, evicting a sibling if one
-    // has it. Without this the first visible printer of a brand kept the link
-    // for ever, so selecting a second Bambu - a cloud one, say - showed a
-    // screen that never connected while the log cheerfully reported the other
-    // one's address. Whoever the user is looking at wins.
-    if (selectedPrinter >= 0 && printers[selectedPrinter].type != PT_NONE
-        && !linkFor(selectedPrinter)) {
-        const int want = (int)printers[selectedPrinter].type % MAX_LINKS;
-        for (int i = 0; i < MAX_LINKS; i++) {
-            if (links[i].printer < 0) continue;
-            if ((int)printers[links[i].printer].type % MAX_LINKS != want) continue;
-            Serial.printf("[link] %s takes the %s backend from %s\n",
-                          printers[selectedPrinter].name.c_str(),
-                          "brand", printers[links[i].printer].name.c_str());
-            if (links[i].be) links[i].be->stop();
-            links[i] = Link{};
-            brandTaken[want] = false;
-        }
+        if (p.type == PT_NONE || (!p.visible && l.printer != selectedPrinter)) dropLink(l);
     }
 
     for (int pass = 0; pass < 2; pass++)
     for (int pi = 0; pi < MAX_PRINTERS; pi++) {
-        // The selected printer is placed first, so a brand it needs is never
-        // already spoken for by a sibling further up the list.
+        // The selected printer is placed FIRST, so that when memory is short it
+        // is the one screen someone is actually looking at that gets the link.
         if ((pass == 0) != (pi == selectedPrinter)) continue;
         const PrinterCfg& p = printers[pi];
         if (p.type == PT_NONE) continue;
         if (!p.visible && pi != selectedPrinter) continue;
         if (linkFor(pi)) continue;
-        const int slot = (int)p.type % MAX_LINKS;
-        if (brandTaken[slot]) continue;          // that brand's backend is in use
+        if (pi != selectedPrinter && deferred(pi)) continue;
+
+        if (!roomForOneMore()) {
+            // The selected printer does not queue behind a background one: it
+            // takes the room from the last link that nobody is looking at.
+            if (pi == selectedPrinter) {
+                for (int i = MAX_LINKS - 1; i >= 0; i--)
+                    if (links[i].printer >= 0 && links[i].printer != selectedPrinter) {
+                        Serial.printf("[link] heap %u - closing %s to make room for %s\n",
+                                      (unsigned)ESP.getFreeHeap(),
+                                      printers[links[i].printer].name.c_str(),
+                                      p.name.c_str());
+                        defer(links[i].printer);
+                        dropLink(links[i]);
+                        break;
+                    }
+            }
+            if (!roomForOneMore()) {
+                if (!s_heapWarned) {
+                    s_heapWarned = true;
+                    Serial.printf("[link] heap %u below floor %u - '%s' stays closed\n",
+                                  (unsigned)ESP.getFreeHeap(),
+                                  (unsigned)LINK_HEAP_FLOOR, p.name.c_str());
+                }
+                if (pi != selectedPrinter) defer(pi);
+                continue;
+            }
+        }
+
         for (int i = 0; i < MAX_LINKS; i++) {
             if (links[i].printer >= 0) continue;
             links[i] = Link{};
             links[i].printer = pi;
-            links[i].be = backendFor(p.type);
-            brandTaken[slot] = true;
+            links[i].be = newBackend(p.type);
+            s_heapWarned = false;
             break;
         }
     }
@@ -745,10 +804,18 @@ static void tickLink(Link& l) {
     // apply is the reachability probe below, which knocks on a LAN address
     // that was never going to answer.
 
-    if (l.be && l.be->connected()) {
+    if (l.be && l.dialled && l.be->connected()) {
+        // Two minutes up is what clears the back-off, not the mere fact of
+        // coming up: a link that connects and is closed again for memory a
+        // second later has proved nothing, and resetting there is how the
+        // blinking would have survived the back-off that was meant to stop it.
+        if (l.state == LINK_UP && millis() - l.startAt > 120000)
+            linkDeferCount[l.printer] = 0;
         if (l.state != LINK_UP) {
             l.state = LINK_UP; l.tries = 0;
-            Serial.printf("[link] up: %s\n", p.name.c_str());
+            Serial.printf("[link] up: %s  (heap %u, largest block %u)\n",
+                          p.name.c_str(), (unsigned)ESP.getFreeHeap(),
+                          (unsigned)ESP.getMaxAllocHeap());
         }
         return;
     }
@@ -780,6 +847,7 @@ static void tickLink(Link& l) {
     }
 
     l.be->begin(p);
+    l.dialled = true;
     l.tries++; l.startAt = millis(); l.state = LINK_TRYING;
     Serial.printf("[link] attempt %u/%u to %s\n", l.tries, l.budget, p.name.c_str());
 }
@@ -790,9 +858,32 @@ static void linkTick() {
     for (int i = 0; i < MAX_LINKS; i++)
         if (links[i].printer >= 0) tickLink(links[i]);
 
+    // A floor that is checked CONTINUOUSLY, not only when a link opens.
+    //
+    // The cost of a link lands when it connects, not when it is created: TLS
+    // and the MQTT buffer are allocated during the handshake. Checking the heap
+    // before opening one therefore protects nothing - measured on the bench,
+    // the free heap fell to 17 KB with the largest free block at 7 KB, which is
+    // not a device that is about to work. The last background link goes when
+    // that happens, and the user is looking at none of it.
+    if (ESP.getFreeHeap() < LINK_HEAP_HARD) {
+        for (int i = MAX_LINKS - 1; i >= 0; i--)
+            if (links[i].printer >= 0 && links[i].printer != selectedPrinter) {
+                Serial.printf("[link] heap %u - closing %s to stay alive\n",
+                              (unsigned)ESP.getFreeHeap(),
+                              printers[links[i].printer].name.c_str());
+                defer(links[i].printer);
+                dropLink(links[i]);
+                break;
+            }
+    }
+
     // What the screens read. They only ever show one printer at a time, so the
     // selected link is published through the names they already use.
     Link* sel = (selectedPrinter >= 0) ? linkFor(selectedPrinter) : nullptr;
+    // And the one being looked at is the one allowed to be greedy.
+    for (int i = 0; i < MAX_LINKS; i++)
+        if (links[i].be) links[i].be->setForeground(links[i].printer == selectedPrinter);
     backend   = sel ? sel->be : nullptr;
     linkState = sel ? sel->state : LINK_IDLE;
     linkTries = sel ? sel->tries : 0;

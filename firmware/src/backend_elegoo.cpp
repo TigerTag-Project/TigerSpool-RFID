@@ -15,29 +15,7 @@ namespace {
 //
 // So the exposed list is four trays when the hub is connected, and one external
 // spool when it is not; mapUi() is the whole of the difference.
-const int ESLOTS = 5;
-const char* const NAMES[ESLOTS] = { "", "S1", "S2", "S3", "S4" };
-
-WiFiClient   net;
-PubSubClient mqtt(net);
-
-String    g_host, g_sn, g_pass;
-String    g_cid, g_rid;
-String    g_topRequest, g_topStatus, g_topResponse, g_topRegister, g_topRegResp;
-bool      g_connected = false;
-bool      g_canvas = false;          // the hub is plugged in and reporting
-String    g_status = "Elegoo: connecting...";
-SlotState g_slots[ESLOTS];
-uint32_t  g_lastTry = 0, g_lastPoll = 0;
-uint32_t  g_msgId = 0;
-
-void publish(int method, const String& params) {
-    if (!mqtt.connected()) return;
-    String out = String("{\"id\":") + (++g_msgId) + ",\"method\":" + method +
-                 ",\"params\":" + params + "}";
-    Serial.printf("[elegoo] -> %d %s\n", method, params.c_str());
-    mqtt.publish(g_topRequest.c_str(), out.c_str());
-}
+const char* const NAMES[ElegooBackend::ESLOTS] = { "", "S1", "S2", "S3", "S4" };
 
 void applyTray(SlotState& s, JsonObjectConst t) {
     const char* type  = t["filament_type"] | "";
@@ -60,56 +38,6 @@ void applyTray(SlotState& s, JsonObjectConst t) {
             s.r = (v >> 16) & 0xFF; s.g = (v >> 8) & 0xFF; s.b = v & 0xFF;
         }
     }
-}
-
-void onResult(JsonObjectConst res, int method) {
-    if (method == 2005) {
-        JsonObjectConst ci = res["canvas_info"];
-        JsonArrayConst list = ci["canvas_list"];
-        if (list.isNull() || list.size() == 0) { g_canvas = false; return; }
-        JsonObjectConst c0 = list[0];
-        // `connected` absent means an older firmware that only reports the hub
-        // when it is there; a present-and-zero means it is unplugged, and the
-        // four trays it still sends are all empty strings. Believing them would
-        // wipe four slots on screen every poll.
-        g_canvas = !c0["connected"].is<int>() || (c0["connected"] | 0) != 0;
-        if (!g_canvas) return;
-        for (JsonObjectConst t : c0["tray_list"].as<JsonArrayConst>()) {
-            int id = t["tray_id"] | -1;
-            if (id < 0 || id > 3) continue;
-            applyTray(g_slots[1 + id], t);
-        }
-        g_status = "Elegoo: canvas";
-        return;
-    }
-    if (method == 1061) {
-        JsonObjectConst m = res["mono_filament_info"];
-        if (!m.isNull()) {
-            applyTray(g_slots[0], m);
-            g_status = "Elegoo: mono";
-        }
-        return;
-    }
-}
-
-void onMqtt(char* topic, uint8_t* payload, unsigned int len) {
-    JsonDocument doc;
-    if (deserializeJson(doc, payload, len)) return;
-
-    // The register acknowledgement names its error field "error" and puts "ok"
-    // in it on success, which is worth knowing before reading it as a failure.
-    if (doc["error"].is<const char*>() && strcmp(doc["error"] | "", "ok") == 0) {
-        Serial.println("[elegoo] registered");
-        return;
-    }
-    int method = doc["method"] | 0;
-    JsonObjectConst res = doc["result"];
-    if (!res.isNull()) {
-        int err = res["error_code"] | 0;
-        if (err) Serial.printf("[elegoo] method %d error_code %d\n", method, err);
-        onResult(res, method);
-    }
-    (void)topic;
 }
 
 String hexColour(const TagInfo& t) {
@@ -140,94 +68,151 @@ String writeParams(int canvasId, int trayId, const TagInfo& t) {
 
 }  // namespace
 
+void ElegooBackend::publish(int method, const String& params) {
+if (!mqtt_.connected()) return;
+String out = String("{\"id\":") + (++msgId_) + ",\"method\":" + method +
+             ",\"params\":" + params + "}";
+Serial.printf("[elegoo] -> %d %s\n", method, params.c_str());
+mqtt_.publish(topRequest_.c_str(), out.c_str());
+}
+
+void ElegooBackend::onResult(JsonObjectConst res, int method) {
+if (method == 2005) {
+    JsonObjectConst ci = res["canvas_info"];
+    JsonArrayConst list = ci["canvas_list"];
+    if (list.isNull() || list.size() == 0) { canvas_ = false; return; }
+    JsonObjectConst c0 = list[0];
+    // `connected` absent means an older firmware that only reports the hub
+    // when it is there; a present-and-zero means it is unplugged, and the
+    // four trays it still sends are all empty strings. Believing them would
+    // wipe four slots on screen every poll.
+    canvas_ = !c0["connected"].is<int>() || (c0["connected"] | 0) != 0;
+    if (!canvas_) return;
+    for (JsonObjectConst t : c0["tray_list"].as<JsonArrayConst>()) {
+        int id = t["tray_id"] | -1;
+        if (id < 0 || id > 3) continue;
+        applyTray(slots_[1 + id], t);
+    }
+    status_ = "Elegoo: canvas";
+    return;
+}
+if (method == 1061) {
+    JsonObjectConst m = res["mono_filament_info"];
+    if (!m.isNull()) {
+        applyTray(slots_[0], m);
+        status_ = "Elegoo: mono";
+    }
+    return;
+}
+}
+
+void ElegooBackend::onMqtt(uint8_t* payload, unsigned int len) {
+JsonDocument doc;
+if (deserializeJson(doc, payload, len)) return;
+
+// The register acknowledgement names its error field "error" and puts "ok"
+// in it on success, which is worth knowing before reading it as a failure.
+if (doc["error"].is<const char*>() && strcmp(doc["error"] | "", "ok") == 0) {
+    Serial.println("[elegoo] registered");
+    return;
+}
+int method = doc["method"] | 0;
+JsonObjectConst res = doc["result"];
+if (!res.isNull()) {
+    int err = res["error_code"] | 0;
+    if (err) Serial.printf("[elegoo] method %d error_code %d\n", method, err);
+    onResult(res, method);
+}
+}
+
 void ElegooBackend::begin(const PrinterCfg& cfg) {
-    g_host = cfg.host;
-    g_sn   = cfg.sn;
+    host_ = cfg.host;
+    sn_   = cfg.sn;
     // "123456" is the factory access code and the one every printer nobody has
     // touched still has. An empty field in the account means "not changed",
     // not "no password".
-    g_pass = cfg.cc.length() ? cfg.cc : String("123456");
+    pass_ = cfg.cc.length() ? cfg.cc : String("123456");
 
-    for (int i = 0; i < ESLOTS; i++) g_slots[i] = SlotState{};
-    g_connected = false;
-    g_canvas = false;
-    g_status = "Elegoo: connecting...";
+    for (int i = 0; i < ESLOTS; i++) slots_[i] = SlotState{};
+    connected_ = false;
+    canvas_ = false;
+    status_ = "Elegoo: connecting...";
 
     // A fresh client id per connection. The printer keys its unicast response
     // topic on it, so two boxes on one printer must not share one.
-    g_cid = String("TTG_") + String(random(1000, 10000));
-    g_rid = g_cid + "_req";
-    g_topRequest  = String("elegoo/") + g_sn + "/" + g_cid + "/api_request";
-    g_topResponse = String("elegoo/") + g_sn + "/" + g_cid + "/api_response";
-    g_topStatus   = String("elegoo/") + g_sn + "/api_status";
-    g_topRegister = String("elegoo/") + g_sn + "/api_register";
-    g_topRegResp  = String("elegoo/") + g_sn + "/" + g_rid + "/register_response";
+    cid_ = String("TTG_") + String(random(1000, 10000));
+    rid_ = cid_ + "_req";
+    topRequest_  = String("elegoo/") + sn_ + "/" + cid_ + "/api_request";
+    topResponse_ = String("elegoo/") + sn_ + "/" + cid_ + "/api_response";
+    topStatus_   = String("elegoo/") + sn_ + "/api_status";
+    topRegister_ = String("elegoo/") + sn_ + "/api_register";
+    topRegResp_  = String("elegoo/") + sn_ + "/" + rid_ + "/register_response";
 
-    mqtt.setServer(g_host.c_str(), 1883);
+    mqtt_.setServer(host_.c_str(), 1883);
     // A full 1002 snapshot with a file list runs to a few kilobytes. Nothing
     // here approaches Bambu's 50 KB pushall.
-    mqtt.setBufferSize(8192);
-    mqtt.setKeepAlive(60);
-    mqtt.setCallback(onMqtt);
-    g_lastTry = 0;
+    mqtt_.setBufferSize(8192);
+    mqtt_.setKeepAlive(60);
+    mqtt_.setCallback([this](char*, uint8_t* p, unsigned int l) { onMqtt(p, l); });
+    lastTry_ = 0;
 }
 
 void ElegooBackend::loop() {
-    if (!mqtt.connected()) {
-        g_connected = false;
-        if (millis() - g_lastTry < 4000) return;
-        g_lastTry = millis();
-        Serial.printf("[elegoo] connecting to %s:1883...\n", g_host.c_str());
-        if (mqtt.connect(g_cid.c_str(), "elegoo", g_pass.c_str())) {
-            mqtt.subscribe(g_topStatus.c_str());
-            mqtt.subscribe(g_topResponse.c_str());
-            mqtt.subscribe(g_topRegResp.c_str());
-            String reg = String("{\"client_id\":\"") + g_cid +
-                         "\",\"request_id\":\"" + g_rid + "\"}";
-            mqtt.publish(g_topRegister.c_str(), reg.c_str());
+    if (!mqtt_.connected()) {
+        connected_ = false;
+        if (millis() - lastTry_ < 4000) return;
+        lastTry_ = millis();
+        Serial.printf("[elegoo] connecting to %s:1883...\n", host_.c_str());
+        if (mqtt_.connect(cid_.c_str(), "elegoo", pass_.c_str())) {
+            mqtt_.subscribe(topStatus_.c_str());
+            mqtt_.subscribe(topResponse_.c_str());
+            mqtt_.subscribe(topRegResp_.c_str());
+            String reg = String("{\"client_id\":\"") + cid_ +
+                         "\",\"request_id\":\"" + rid_ + "\"}";
+            mqtt_.publish(topRegister_.c_str(), reg.c_str());
             // The slicer announces itself before anything else and the printer
             // expects it; sending a query first is not refused, but this is the
             // order the official client uses and the one the captures cover.
             publish(1043, "{\"hostname\":\"TigerSpool\"}");
-            g_connected = true;
-            g_status = "Elegoo: connected";
+            connected_ = true;
+            status_ = "Elegoo: connected";
             Serial.println("[elegoo] connected + subscribed");
             refresh();
         } else {
-            g_status = String("Elegoo: MQTT rc=") + mqtt.state() + " (access code?)";
-            Serial.println(g_status);
+            status_ = String("Elegoo: MQTT rc=") + mqtt_.state() + " (access code?)";
+            Serial.println(status_);
         }
         return;
     }
-    mqtt.loop();
-    if (millis() - g_lastPoll > 8000) { g_lastPoll = millis(); refresh(); }
+    mqtt_.loop();
+    if (millis() - lastPoll_ > 8000) { lastPoll_ = millis(); refresh(); }
 }
 
 void ElegooBackend::stop() {
-    mqtt.disconnect();
-    g_connected = false;
-    g_status = "Elegoo: stopped";
+    mqtt_.disconnect();
+    connected_ = false;
+    status_ = "Elegoo: stopped";
 }
 
-bool ElegooBackend::connected() { return g_connected; }
-bool ElegooBackend::firstIsExternal() { return !g_canvas; }
-String ElegooBackend::status()  { return g_status; }
+bool ElegooBackend::connected() { return connected_; }
+bool ElegooBackend::firstIsExternal() { return !canvas_; }
+String ElegooBackend::status()  { return status_; }
 
 // UI index -> internal index. With the hub: 0..3 are trays 1..4. Without it,
 // the only slot is the mono spool at 0.
-static int mapUi(int i) {
-    if (!g_canvas) return 0;
+int ElegooBackend::mapUi(int i) const {
+    if (!canvas_) return 0;
     return (i >= 0 && i < 4) ? i + 1 : 1;
 }
 
-int ElegooBackend::slotCount() { return g_canvas ? 4 : 1; }
+int ElegooBackend::slotCount() { return canvas_ ? 4 : 1; }
 
 const char* ElegooBackend::slotLabel(int i) {
     const char* n = NAMES[mapUi(i)];
     return *n ? n : i18n::T(S_HOLDER);
 }
 
-const SlotState& ElegooBackend::slot(int i) { return g_slots[mapUi(i)]; }
+const SlotState& ElegooBackend::slot(int i) { return slots_[mapUi(i)]; }
 
 void ElegooBackend::refresh() {
     // Both, every time. Which one answers with content is how the hub is
@@ -239,9 +224,9 @@ void ElegooBackend::refresh() {
 
 bool ElegooBackend::assign(int idx, const TagInfo& t) {
     if (idx < 0 || idx >= slotCount()) return false;
-    if (!mqtt.connected()) return false;
+    if (!mqtt_.connected()) return false;
 
-    if (!g_canvas) {
+    if (!canvas_) {
         // 2003 without the hub answers error_code 1003 and changes nothing, so
         // the mono spool goes through 1055 - the method the official slicer
         // uses in exactly this situation.
@@ -249,7 +234,7 @@ bool ElegooBackend::assign(int idx, const TagInfo& t) {
     } else {
         publish(2003, writeParams(0, mapUi(idx) - 1, t));
     }
-    g_status = String("Elegoo: sent -> ") + slotLabel(idx);
+    status_ = String("Elegoo: sent -> ") + slotLabel(idx);
     // The printer sends no acknowledgement for the write itself, so the only
     // proof is reading the slot back. The caller does that too; this makes the
     // screen catch up without waiting for the eight-second poll.

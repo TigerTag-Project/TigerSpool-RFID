@@ -93,6 +93,15 @@ public:
     virtual void begin(const PrinterCfg& cfg) = 0;
     virtual void loop() = 0;                        // pump the transport
     virtual void stop() {}                          // close connections, free heap
+    // Is this the printer the user is looking at?
+    //
+    // Only one backend needs to be sized for the worst case at a time. A Bambu
+    // receive buffer holds a whole pushall - up to 50 KB on an X1 with four AMS
+    // units - and three of those at once is more internal RAM than this chip
+    // has. The foreground link gets the full buffer; the others get one large
+    // enough for the machines that answer in less, and say so in the log if a
+    // report does not fit. Backends with nothing to size ignore this.
+    virtual void setForeground(bool) {}
     virtual bool connected() = 0;
 
     virtual int  slotCount() = 0;                   // may change at runtime
