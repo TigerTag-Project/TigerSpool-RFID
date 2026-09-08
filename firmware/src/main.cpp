@@ -101,7 +101,7 @@ bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
-             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER };
+             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING };
 State   state = ST_LANG;
 // Whether the language screen was opened from Settings rather than reached on
 // first boot. It decides two things: that the screen offers a way back, and
@@ -1245,10 +1245,6 @@ void loop() {
         lvgl_port::loop();
 
         {
-            if (screen_home::takeReloadTap()) {
-                if (ttcloud::startAsyncSync())
-                    Serial.println("[account] manual refresh from the home header");
-            }
             int tapped = screen_home::takeTappedPrinter();
             if (tapped >= 0) { screen_home::leave(); selectPrinter(tapped); }
             else if (screen_home::takeSettingsTap()) {
@@ -1347,10 +1343,10 @@ void loop() {
         lvgl_port::loop();
 
         if (screen_settings::takeReload()) {
-            // The reload below applies whatever comes back, exactly as it does
-            // for the timed sync - this only skips the wait.
-            if (ttcloud::startAsyncSync())
-                Serial.println("[account] manual refresh from the printer list");
+            Serial.println("[account] manual refresh from the printer list");
+            ttcloud::startAsyncSync();       // may already be running; fine
+            screen_setup::hide();
+            state = ST_SYNCING; stateSince = millis(); break;
         }
 
         int t = screen_settings::takeToggled();
@@ -1519,6 +1515,30 @@ void loop() {
             seen = TagInfo();
             screen_settings::invalidate();
             state = ST_SETTINGS; stateSince = millis();
+        }
+        break;
+    }
+
+    // A screen for the wait, not a spinning icon in a corner.
+    //
+    // The account read takes about fifteen seconds. A tinted glyph is a still
+    // picture and a still picture is what makes someone press the button
+    // again; a screen that says what is happening is unmistakable, and it also
+    // stops the list being touched while it is about to be rebuilt underneath.
+    case ST_SYNCING: {
+        screen_setup::showBusy(i18n::T(S_TT_IMPORTING), false);
+        lvgl_port::loop();
+        // A minimum on screen, or a cached answer flashes it for one frame and
+        // reads as a glitch rather than as work done.
+        if (!ttcloud::asyncBusy() && millis() - stateSince > 900) {
+            String sum;
+            if (ttcloud::asyncTake(sum) && ttcloud::consumeChanged()) {
+                loadCfg();
+                for (int i = 0; i < MAX_PRINTERS; i++) pLastSeen[i] = 0;
+            }
+            screen_setup::hide();
+            screen_settings::invalidate();
+            state = ST_PICK; stateSince = millis();
         }
         break;
     }

@@ -53,7 +53,21 @@ void onEntry(lv_event_t* e) {
 void onBack()  { s_back = true; }
 bool s_reload = false;
 lv_obj_t* s_reloadIcon = nullptr;
+lv_obj_t* s_reloadSpin = nullptr;
 void onReload(lv_event_t*) { s_reload = true; }
+
+// Which of the two is showing. Written into widgets that are already there:
+// the header is never rebuilt to change this.
+void setReloadBusy(bool busy) {
+    if (!s_reloadIcon || !s_reloadSpin) return;
+    if (busy) {
+        lv_obj_add_flag(s_reloadIcon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_reloadSpin, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_clear_flag(s_reloadIcon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_reloadSpin, LV_OBJ_FLAG_HIDDEN);
+    }
+}
 void onCheck()   { ota::checkAsync(); }
 void onInstall() { ota::applyAsync(); }
 // Flips the switch on the spot, then reports the tap.
@@ -204,13 +218,11 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
         // The one thing that changes without a rebuild. The button is its own
         // progress indicator: a control that does something invisible for
         // fifteen seconds gets pressed again, and again.
-        if (s_reloadIcon)
-            lv_obj_set_style_text_color(
-                s_reloadIcon, lv_color_hex(syncing ? theme::ACCENT : theme::TEXT), 0);
+        setReloadBusy(syncing);
         return;
     }
     s_pickSig = sig;
-    s_reloadIcon = nullptr;
+    s_reloadIcon = s_reloadSpin = nullptr;
 
     lv_obj_t* body = frame::build(i18n::T(S_PRINTER), onBack);
 
@@ -227,9 +239,24 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
     s_reloadIcon = lv_label_create(reload);
     lv_label_set_text(s_reloadIcon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_font(s_reloadIcon, &font_ui_20, 0);
-    lv_obj_set_style_text_color(
-        s_reloadIcon, lv_color_hex(syncing ? theme::ACCENT : theme::TEXT), 0);
+    lv_obj_set_style_text_color(s_reloadIcon, lv_color_hex(theme::TEXT), 0);
     lv_obj_center(s_reloadIcon);
+
+    // A turning ring for the waiting state, in the same button.
+    //
+    // The glyph itself cannot turn: LVGL rotates images, not labels, and a
+    // refresh arrow drawn as text has no angle to set. So the two swap - the
+    // arrow when there is nothing happening, an arc that actually moves while
+    // the account is being read. A colour change alone is a still picture, and
+    // a still picture is what makes someone press the button a second time.
+    s_reloadSpin = lv_spinner_create(reload, 900, 60);
+    lv_obj_set_size(s_reloadSpin, 22, 22);
+    lv_obj_center(s_reloadSpin);
+    lv_obj_set_style_arc_width(s_reloadSpin, 3, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(s_reloadSpin, 3, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(s_reloadSpin, lv_color_hex(theme::LINE), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(s_reloadSpin, lv_color_hex(theme::WARN), LV_PART_INDICATOR);
+    setReloadBusy(syncing);
 
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

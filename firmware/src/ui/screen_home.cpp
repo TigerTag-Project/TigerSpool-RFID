@@ -20,12 +20,9 @@ lv_obj_t* s_wifi     = nullptr;
 bool      s_active   = false;
 int       s_tapped   = -1;
 bool      s_settings = false;
-bool      s_reload   = false;
-lv_obj_t* s_reloadIcon = nullptr;
 
 void onRow(lv_event_t* e)      { s_tapped   = (int)(intptr_t)lv_event_get_user_data(e); }
 void onSettings(lv_event_t*)   { s_settings = true; }
-void onReload(lv_event_t*)     { s_reload   = true; }
 
 // A status dot: 9 px, and colour is the only thing that changes. Green means
 // the printer answered on its control port recently; grey means it did not.
@@ -54,12 +51,7 @@ void buildScreen() {
 
     lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, i18n::T(S_PRINTER));
-    // 14, not 16, and only on this screen. Four controls and a title share
-    // 240 px, and the offsets below are measured off a capture rather than
-    // chosen: at 16 "Imprimantes" ends at x=114 and the refresh glyph begins
-    // at 117, which reads as one run of ink. Every other screen has at most a
-    // chevron beside its title and keeps 16.
-    lv_obj_set_style_text_font(title, &font_ui_14, 0);
+    lv_obj_set_style_text_font(title, &font_ui_16, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(theme::TEXT), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, 9, 0);
 
@@ -68,32 +60,16 @@ void buildScreen() {
     // they are reached over Wi-Fi. The same person glyph the Account row in
     // Settings uses, so the two are recognisably the same subject.
     s_account = icons::build(header, icons::USER, theme::OK);
-    lv_obj_align(s_account, LV_ALIGN_RIGHT_MID, -72, 0);
+    lv_obj_align(s_account, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 32, 0);
 
     s_wifi = icons::wifiWave(header);
-    lv_obj_align(s_wifi, LV_ALIGN_RIGHT_MID, -46, 0);
-
-    // The same refresh the Settings printer list carries, on the screen the
-    // user is actually looking at when a printer is missing from the list.
-    // 32 px wide, not the gear's 52: this is the control that can give when
-    // four of them share the bar. Still a full 44 tall, which is the dimension
-    // a thumb misses on.
-    lv_obj_t* reload = lv_btn_create(header);
-    lv_obj_remove_style_all(reload);
-    lv_obj_set_size(reload, 32, theme::HEADER_H);
-    lv_obj_align(reload, LV_ALIGN_RIGHT_MID, -98, 0);
-    lv_obj_add_event_cb(reload, onReload, LV_EVENT_CLICKED, nullptr);
-    s_reloadIcon = lv_label_create(reload);
-    lv_label_set_text(s_reloadIcon, LV_SYMBOL_REFRESH);
-    lv_obj_set_style_text_font(s_reloadIcon, &font_ui_16, 0);
-    lv_obj_set_style_text_color(s_reloadIcon, lv_color_hex(theme::TEXT_DIM), 0);
-    lv_obj_center(s_reloadIcon);
+    lv_obj_align(s_wifi, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 4, 0);
 
     // The gear's hit area is 52 x 44 (6.6 x 5.6 mm) even though the glyph is
     // small. Sizing a target to its icon is how a 2 mm button happens.
     lv_obj_t* gear = lv_btn_create(header);
     lv_obj_remove_style_all(gear);
-    lv_obj_set_size(gear, 44, theme::HEADER_H);
+    lv_obj_set_size(gear, theme::ICON_HIT_W, theme::HEADER_H);
     lv_obj_align(gear, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_add_event_cb(gear, onSettings, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* gearIcon = lv_label_create(gear);
@@ -221,11 +197,6 @@ void show(const PrinterCfg* printers, int count,
     // to wonder whether a yellow means "middling" or "look out".
     icons::setSignal(s_wifi, icons::wifiLevelFromRssi(wifiRssi), wifiRssi != 0);
 
-    // The refresh glyph is the progress indicator too: a control that does
-    // something invisible for fifteen seconds gets pressed again, and again.
-    if (s_reloadIcon)
-        lv_obj_set_style_text_color(
-            s_reloadIcon, lv_color_hex(syncing ? theme::ACCENT : theme::TEXT_DIM), 0);
 
     if (!s_active) {
         lv_scr_load(s_screen);
@@ -239,6 +210,5 @@ void leave()  { s_active = false; }
 
 int  takeTappedPrinter() { int v = s_tapped; s_tapped = -1; return v; }
 bool takeSettingsTap()   { bool v = s_settings; s_settings = false; return v; }
-bool takeReloadTap()     { bool v = s_reload;   s_reload   = false; return v; }
 
 }  // namespace screen_home

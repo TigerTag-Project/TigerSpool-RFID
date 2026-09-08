@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.40.0] - 2026-09-08
+
+### Changed
+
+- **Refreshing the printer list shows a screen, not a tinted icon.** The
+  account read takes about fifteen seconds, and a coloured glyph in a corner is
+  a still picture - which is what makes somebody press the button a second
+  time. A turning ring and "Importing printers" instead, until the answer is
+  in; then straight back to the list, rebuilt. It also stops the list being
+  touched while it is about to change underneath.
+- **The refresh button is gone from the main printer list.** It belongs where a
+  missing printer is noticed and dealt with, which is Settings > Printers - and
+  its absence gives the main screen its full-size title back.
+
+
 ## [1.39.0] - 2026-09-08
 
 ### Added
