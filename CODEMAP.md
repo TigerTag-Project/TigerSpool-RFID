@@ -20,15 +20,30 @@ repeated here.
 | `tt_db.cpp` | The TigerTag reference tables exist **twice**, and every lookup goes through here rather than through `tigertag_db.h`. The compiled tables are the floor - what a brand-new box knows offline - and the downloaded ones in LittleFS are preferred when they parse. The fallback is per table, not all-or-nothing, so a corrupt brand file does not throw away a good material file. Calling `tt_material()` directly bypasses the whole mechanism and looks identical until a spool from last month reads as `brand#48804`. |
 | `tigertag_cloud.cpp` | Its network calls are on a **mixed** regime, not a uniform one. The sync and the pairing start run on their own FreeRTOS tasks; `pairPoll()` and `signInWithCustomToken()` are called straight from the main loop and stall it for about a second each. Neither pattern is the rule, so check which one a call is on before adding another. |
 
-### One board, three TLS talkers
+### One board, three TLS talkers - and what it actually costs
 
 The account sync, the firmware check and the reference-table update each open
 their own `WiFiClientSecure`. Two at once is fine; **three is not** - the third
-gets a refused connection, because internal RAM is what LVGL's draw buffers and
-every TLS session compete for, and PSRAM does not help. That is why the table
-update runs on its own clock ninety seconds after boot rather than beside the
-update check, and skips while either of the other two is talking. It is not a
-scheduling preference; it was measured, as `HTTP -1` on every attempt.
+gets a refused connection. That is why the table update runs on its own clock
+ninety seconds after boot rather than beside the update check, and skips while
+either of the other two is talking. It was measured, as `HTTP -1` on every
+attempt.
+
+**Do not generalise that to printer sessions.** Those three verify against the
+Arduino core's root CA bundle, and parsing it is most of what they cost. A
+printer session is `setInsecure()` and is far cheaper. Measured on this board,
+free internal RAM from a 199 936 byte baseline:
+
+| | cost |
+|---|---|
+| plain TCP session (Elegoo MQTT 1883) | ~3 KB, and ~0.6 KB for a second |
+| TLS session, insecure (Anycubic MQTT 9883) | ~38 KB |
+| two plain + one TLS, all open | 158 KB free, largest block 115 KB |
+| **three TLS, all open** | **all three connect** - 79 KB free, largest block 64 KB |
+
+So several printers connected at once is a question of how many are TLS, not a
+wall. Three plain sessions are essentially free; three TLS ones fit and leave
+enough for the UI, though not comfortably alongside an account sync.
 
 ## Landmines
 

@@ -15,6 +15,7 @@
 // ============================================================================
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <Preferences.h>
 #include <nvs.h>
 #include <LovyanGFX.hpp>

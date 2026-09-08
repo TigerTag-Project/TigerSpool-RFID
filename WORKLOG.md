@@ -597,4 +597,11 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
 - Anycubic over mbedTLS: works. That was the biggest open question in the
   protocol notes and the answer is plain - connected + subscribed, TLS 1.2,
   self-signed, no client certificate.
+- "Three printer connections at once" - Benoit pushed back on my claim that it
+  would not fit, and he was right. Measured rather than argued: a plain MQTT
+  session costs ~3 KB (~0.6 KB for the next), a setInsecure TLS session ~38 KB,
+  and THREE TLS sessions all connect with 79 KB still free. My earlier "three
+  TLS talkers fail" is true of the account sync, the OTA check and the table
+  update, which verify against the root CA bundle - a different and much more
+  expensive thing. Generalising from it was wrong.
 
