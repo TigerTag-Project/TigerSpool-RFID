@@ -630,89 +630,140 @@ static void backToPrinters() {
 }
 // Brings the link up and keeps it up. Called every loop; does nothing at all
 // once connected, which is the common case.
-static void linkTick() {
-    if (!WiFi.isConnected() || selectedPrinter < 0) return;
-    if (printers[selectedPrinter].type == PT_NONE) return;
+// One link per BRAND, and that is the whole trick.
+//
+// Holding several printers open sounds like it needs one backend object per
+// printer, and one day it will. But every backend is a singleton per brand, and
+// a fleet is usually one machine per brand - so binding each brand's backend to
+// at most one printer buys simultaneous connections for the price of an array
+// and no change to any backend at all. Measured first: a plain MQTT session
+// costs about 3 KB and a setInsecure TLS one about 38 KB, and three TLS
+// sessions open together still leave 79 KB of internal RAM.
+//
+// THE LIMIT THIS LEAVES, stated so nobody discovers it as a bug: two printers
+// of the SAME brand still cannot both be connected. The second would overwrite
+// the first's host, topics and slots, because that state lives in file statics
+// inside the backend. Whichever appears first in the list wins, and the other
+// is simply not linked.
+struct Link {
+    int             printer = -1;
+    PrinterBackend* be      = nullptr;
+    LinkState       state   = LINK_IDLE;
+    uint8_t         tries   = 0;
+    uint8_t         budget  = LINK_MAX_TRIES;
+    uint32_t        startAt = 0;
+};
+static const int MAX_LINKS = 6;          // one per PrinterType
+static Link links[MAX_LINKS];
 
-    // A different printer means a different link. Hang up FIRST.
-    //
-    // Without the stop, the next line saw the previous printer's session still
-    // connected and declared the link up - so the header named one printer
-    // while the grid showed another's filament, and no reconnection was ever
-    // attempted. The backends are singletons, so re-pointing one at a new host
-    // means stopping it, not just calling begin() again.
-    if (linkPrinter != selectedPrinter) {
-        if (backend) { backend->stop(); backend = nullptr; }
-        linkPrinter = selectedPrinter;
-        linkState = LINK_IDLE; linkTries = 0; linkBudget = LINK_MAX_TRIES;
+static PrinterBackend* backendFor(PrinterType t) {
+    switch (t) {
+        case PT_FF_C5:     return &flashForgeBackend;
+        case PT_BAMBU:     return &bambuBackend;
+        case PT_SNAPMAKER: return &snapmakerBackend;
+        case PT_ELEGOO:    return &elegooBackend;
+        case PT_ANYCUBIC:  return &anycubicBackend;
+        default:           return &crealityBackend;
     }
+}
 
-    if (backend && backend->connected()) {
-        if (linkState != LINK_UP) {
-            linkState = LINK_UP; linkTries = 0;
-            Serial.printf("[link] up: %s\n", printers[selectedPrinter].name.c_str());
+static Link* linkFor(int printerIdx) {
+    for (int i = 0; i < MAX_LINKS; i++)
+        if (links[i].printer == printerIdx) return &links[i];
+    return nullptr;
+}
+
+// Which printers get a link: the ones the user left switched on. The toggle in
+// Settings used to decide only what the home screen listed; it decides what the
+// box talks to now, which is what someone ticking it expects.
+static void assignLinks() {
+    bool brandTaken[MAX_LINKS] = { false };
+    for (int i = 0; i < MAX_LINKS; i++) {
+        Link& l = links[i];
+        if (l.printer < 0) continue;
+        const PrinterCfg& p = printers[l.printer];
+        const bool keep = p.type != PT_NONE && (p.visible || l.printer == selectedPrinter);
+        if (!keep) {
+            if (l.be) l.be->stop();
+            l = Link{};
+            continue;
+        }
+        brandTaken[(int)p.type % MAX_LINKS] = true;
+    }
+    for (int pi = 0; pi < MAX_PRINTERS; pi++) {
+        const PrinterCfg& p = printers[pi];
+        if (p.type == PT_NONE) continue;
+        if (!p.visible && pi != selectedPrinter) continue;
+        if (linkFor(pi)) continue;
+        const int slot = (int)p.type % MAX_LINKS;
+        if (brandTaken[slot]) continue;          // that brand's backend is in use
+        for (int i = 0; i < MAX_LINKS; i++) {
+            if (links[i].printer >= 0) continue;
+            links[i] = Link{};
+            links[i].printer = pi;
+            links[i].be = backendFor(p.type);
+            brandTaken[slot] = true;
+            break;
+        }
+    }
+}
+
+// One link's state machine - the same one that used to be the only one.
+static void tickLink(Link& l) {
+    const PrinterCfg& p = printers[l.printer];
+
+    if (l.be && l.be->connected()) {
+        if (l.state != LINK_UP) {
+            l.state = LINK_UP; l.tries = 0;
+            Serial.printf("[link] up: %s\n", p.name.c_str());
         }
         return;
     }
+    if (l.state == LINK_GAVE_UP) return;         // waiting for the user
+    if (l.state == LINK_UP) { l.state = LINK_IDLE; l.tries = 0; }
+    if (l.state == LINK_TRYING && millis() - l.startAt < LINK_ATTEMPT_MS) return;
 
-    if (linkState == LINK_GAVE_UP) return;      // waiting for the user
-
-    // Connected a moment ago and now not: that is a drop, not a fresh start,
-    // and it is worth its own attempts rather than inheriting a spent budget.
-    if (linkState == LINK_UP) { linkState = LINK_IDLE; linkTries = 0; }
-
-    if (linkState == LINK_TRYING && millis() - linkStartAt < LINK_ATTEMPT_MS) return;
-
-    if (linkTries >= linkBudget) {
-        linkState = LINK_GAVE_UP;
-        if (backend) { backend->stop(); backend = nullptr; }
-        Serial.printf("[link] gave up on %s after %u tries\n",
-                      printers[selectedPrinter].name.c_str(), linkBudget);
+    if (l.tries >= l.budget) {
+        l.state = LINK_GAVE_UP;
+        if (l.be) l.be->stop();
+        Serial.printf("[link] gave up on %s after %u tries\n", p.name.c_str(), l.budget);
         return;
     }
 
     // Do not dial a printer the probe says is not there.
     //
-    // This is the fix for the freezes, and it is measured: backend->loop()
-    // spends 1.2 seconds inside a blocking TCP connect for an unreachable host,
-    // in the main loop, on EVERY screen - so selecting a switched-off printer
-    // and then walking into Settings made the whole interface stutter for the
-    // forty seconds the attempts lasted. The reachability probe already runs on
-    // its own task and already knows the answer; asking it costs nothing.
-    //
-    // A printer that has never been probed is still dialled: on the first
-    // seconds of a boot the absence of a timestamp means "not looked at yet",
-    // not "not there", and refusing on that would delay every first connection.
-    // The attempt is still SPENT, so five of them still end at the failure
-    // screen with its retry button - the user gets the same answer, just
-    // without the device seizing up while it arrives.
-    if (pProbed[selectedPrinter] && !isOnline(selectedPrinter)) {
-        // And hang up, not just refrain from dialling. The WebSocket client
-        // reconnects on its own schedule once it has been given a host, so a
-        // session left open kept paying the 1.2-second connect out of the main
-        // loop no matter what this function decided. Anything still connected
-        // has already returned above, so there is nothing here worth keeping.
-        if (backend) { backend->stop(); backend = nullptr; }
-        linkTries++; linkStartAt = millis(); linkState = LINK_TRYING;
+    // Measured: backend->loop() spends over a second inside a blocking TCP
+    // connect for an unreachable host, in the main loop, on every screen. The
+    // reachability probe runs on its own task and already knows; asking it is
+    // free. A printer never probed is still dialled - at boot the absence of a
+    // timestamp means "not looked at yet", not "not there". The attempt is
+    // still spent, so the user reaches the failure screen just as fast.
+    if (pProbed[l.printer] && !isOnline(l.printer)) {
+        if (l.be) l.be->stop();
+        l.tries++; l.startAt = millis(); l.state = LINK_TRYING;
         Serial.printf("[link] attempt %u/%u to %s - probe says unreachable,"
-                      " not dialling\n", linkTries, linkBudget,
-                      printers[selectedPrinter].name.c_str());
+                      " not dialling\n", l.tries, l.budget, p.name.c_str());
         return;
     }
 
-    if (backend) backend->stop();
-    switch (printers[selectedPrinter].type) {
-        case PT_FF_C5:     backend = &flashForgeBackend; break;
-        case PT_BAMBU:     backend = &bambuBackend;      break;
-        case PT_SNAPMAKER: backend = &snapmakerBackend;  break;
-        case PT_ELEGOO:    backend = &elegooBackend;     break;
-        case PT_ANYCUBIC:  backend = &anycubicBackend;   break;
-        default:           backend = &crealityBackend;   break;
-    }
-    backend->begin(printers[selectedPrinter]);
-    linkTries++; linkStartAt = millis(); linkState = LINK_TRYING;
-    Serial.printf("[link] attempt %u/%u to %s\n", linkTries, linkBudget,
-                  printers[selectedPrinter].name.c_str());
+    l.be->begin(p);
+    l.tries++; l.startAt = millis(); l.state = LINK_TRYING;
+    Serial.printf("[link] attempt %u/%u to %s\n", l.tries, l.budget, p.name.c_str());
+}
+
+static void linkTick() {
+    if (!WiFi.isConnected()) return;
+    assignLinks();
+    for (int i = 0; i < MAX_LINKS; i++)
+        if (links[i].printer >= 0) tickLink(links[i]);
+
+    // What the screens read. They only ever show one printer at a time, so the
+    // selected link is published through the names they already use.
+    Link* sel = (selectedPrinter >= 0) ? linkFor(selectedPrinter) : nullptr;
+    backend   = sel ? sel->be : nullptr;
+    linkState = sel ? sel->state : LINK_IDLE;
+    linkTries = sel ? sel->tries : 0;
+    linkBudget = sel ? sel->budget : LINK_MAX_TRIES;
 }
 
 // The user asking again. The address may be what was wrong, so the account is
@@ -720,7 +771,8 @@ static void linkTick() {
 // five more times.
 static void linkRetry() {
     ttcloud::startAsyncSync();
-    linkTries = 0; linkBudget = LINK_RETRY_TRIES; linkState = LINK_IDLE;
+    Link* l = (selectedPrinter >= 0) ? linkFor(selectedPrinter) : nullptr;
+    if (l) { l->tries = 0; l->budget = LINK_RETRY_TRIES; l->state = LINK_IDLE; }
     Serial.println("[link] retry requested - re-reading the account first");
 }
 
@@ -853,8 +905,12 @@ void loop() {
     // where the user happens to be standing.
     if (ttcloud::due() && !ttcloud::asyncBusy()) ttcloud::startAsyncSync();
 
-    if (backend) backend->loop();
-    linkTick();                  // keep the printer link up, everywhere
+    // Every open link, not only the selected one. A connection nobody is
+    // looking at still has to be pumped or it drops, and the whole point of
+    // holding several is that switching to one costs nothing.
+    for (int i = 0; i < MAX_LINKS; i++)
+        if (links[i].printer >= 0 && links[i].be) links[i].be->loop();
+    linkTick();                  // keep the printer links up, everywhere
     if (webStarted || webcfg::apActive()) webcfg::loop();
 
     // A Google pairing started from the phone puts the same QR on this screen
@@ -1162,8 +1218,17 @@ void loop() {
         disc::finish();              // the sweep itself runs on the probe task
 
         {
+            // A dot is green if the probe saw the printer OR a link to it is
+            // open - and the link is the better witness of the two. The probe
+            // walks one printer at a time and its timestamp expires, so with
+            // four printers a machine the box is actively talking to could
+            // still show red between two sweeps. Nothing about that was
+            // explicable from the outside.
             bool online[MAX_PRINTERS];
-            for (int i = 0; i < MAX_PRINTERS; i++) online[i] = isOnline(i);
+            for (int i = 0; i < MAX_PRINTERS; i++) {
+                const Link* l = linkFor(i);
+                online[i] = (l && l->be && l->state == LINK_UP) || isOnline(i);
+            }
             screen_home::show(printers, MAX_PRINTERS, selectedPrinter,
                               online, ttcloud::asyncBusy(),
                               WiFi.isConnected() ? WiFi.RSSI() : 0,

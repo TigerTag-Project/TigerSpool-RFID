@@ -15,6 +15,9 @@ public:
     void loop() override;
     void stop() override;
     bool connected() override;
+    // Four extruders and nothing else. A U1 has no external spool, so E1 must
+    // not be split onto a row of its own the way a Creality's Ext. is.
+    bool firstIsExternal() override { return false; }
     int  slotCount() override { return 4; }
     const char* slotLabel(int i) override;
     const SlotState& slot(int i) override;

@@ -604,4 +604,16 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   TLS talkers fail" is true of the account sync, the OTA check and the table
   update, which verify against the root CA bundle - a different and much more
   expensive thing. Generalising from it was wrong.
+- Multi-connection, the cheap way: one link per BRAND. The backends are
+  singletons per brand, and a fleet is usually one machine per brand, so an
+  array of links buys simultaneous sessions with no change to any backend. Two
+  printers of one brand still cannot both connect - that needs instancing, and
+  that is the day this design ends.
+- The Snapmaker 403 took the library's own DEBUG_ESP_PORT trace to find. Worth
+  remembering that WebSocketsClient sends `Origin: file://` and
+  `Sec-WebSocket-Protocol: arduino` by default, and that Moonraker rejects the
+  first. Nothing in our own logging could have shown it: the client never
+  raised an event, so every layer above saw silence.
+- Verified end to end on a U1: tag read, review, send, and the printer itself
+  then reports E4 as R3D / PLA / High_Speed / DC123FFF.
 

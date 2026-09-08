@@ -7,6 +7,60 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-09-08
+
+### Added
+
+- **Several printers stay connected at once.** Every printer you leave switched
+  on in Settings gets its own live session, kept open whatever screen you are
+  looking at - so opening one is instant instead of a connection you wait for.
+  Four brands were held open together on the bench: Creality, Snapmaker, Elegoo
+  and Anycubic.
+
+  It costs almost nothing, which was measured before it was written: a plain
+  MQTT session is about 3 KB of internal RAM and a TLS one about 38 KB, and
+  three TLS sessions open together still leave 79 KB free.
+
+  **The limit this leaves:** two printers of the SAME brand cannot both be
+  connected, because a backend holds its state in file statics. Whichever is
+  first in the list wins.
+
+### Fixed
+
+- **Snapmaker never connected at all, and said nothing about it.** Moonraker
+  answered **403 Forbidden** to the WebSocket upgrade and the client fired no
+  event, so a printer answering perfectly over HTTP looked exactly like one
+  switched off. The cause is a default nobody would look for: the WebSocket
+  library sends `Origin: file://` on every handshake, and Moonraker refuses an
+  origin that is not in its `cors_domains`. The same upgrade without an Origin
+  is accepted.
+- **A Snapmaker showed no vendor.** `filament_vendor` was in every report and
+  never read, so four spools Moonraker names R3D, Generic, Generic and
+  Snapmaker all showed a dash. The variant joins the family too, the way the
+  printer's own screen writes it: "PLA Silk", not "PLA".
+- **Writing to a Snapmaker put the whole name in the wrong field.** It sent
+  `FILAMENT_TYPE=PLA_High_Speed` where the printer keeps a family and a variant
+  separately. Split at the first space now, so a written slot reads like the
+  ones the printer wrote itself.
+- **A Snapmaker's four extruders are on one row.** No external spool exists on
+  a U1, so nothing should be split off onto a row of its own.
+- **A black spool was an invisible cell.** The panel's ground is black and so
+  are plenty of filaments; the colour was right and the slot looked empty. A
+  hairline edge fixes it.
+- **A long vendor name no longer wraps** and takes its row's height with it.
+- **The dots on the home screen tell the truth.** They came from the
+  reachability probe alone, which walks one printer at a time and expires - so
+  a printer the box was actively talking to could show red between two sweeps.
+  An open link lights the dot.
+
+### Changed
+
+- The WebSocket timeout goes from 1200 ms to 2500. 1200 was set to stop a
+  five-second freeze per attempt on an unreachable printer; the probe gate does
+  that job now, and the same macro is also the deadline for an upgrade
+  response.
+
+
 ## [1.36.1] - 2026-09-08
 
 ### Fixed

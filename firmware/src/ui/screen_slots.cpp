@@ -312,6 +312,11 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_style_bg_color(block,
             st.known ? lv_color_make(st.r, st.g, st.b) : lv_color_hex(0x3A424E), 0);
         lv_obj_clear_flag(block, LV_OBJ_FLAG_SCROLLABLE);
+        // A hairline edge, because the panel's ground is black and so are
+        // plenty of filaments. Without it a black spool is an invisible cell -
+        // the colour is right and the slot looks empty.
+        lv_obj_set_style_border_width(block, 1, 0);
+        lv_obj_set_style_border_color(block, lv_color_hex(theme::LINE), 0);
         // And not clickable. A bare lv_obj is clickable by default in LVGL 8,
         // and this one covers almost the whole cell - so every press aimed at
         // the slot landed on the colour block and stopped there. The cell was
@@ -337,6 +342,10 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_label_set_text(brand, st.brand.length() ? st.brand.c_str() : "-");
         lv_label_set_long_mode(brand, LV_LABEL_LONG_DOT);
         lv_obj_set_width(brand, CELL_W);
+        // One line, or a long vendor wraps and pushes its cell taller than the
+        // three beside it - "Snapmaker" came out as "Snapma / ker" and took the
+        // row with it. With the height pinned, LONG_DOT ellipsises instead.
+        lv_obj_set_height(brand, 14);
         lv_obj_set_style_text_align(brand, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(brand, lv_color_hex(theme::TEXT_DIM), 0);
         lv_obj_set_style_text_font(brand, &font_ui_12, 0);
