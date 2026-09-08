@@ -475,7 +475,19 @@ bool ttcloud::syncNow(String& summary) {
             }
             Serial.printf("[account]   dev=%s ip='%s' transport='%s' cloud=%d modelId='%s' -> type %d\n",
                           dev.c_str(), ip.c_str(), transport.c_str(), cloud, mid.c_str(), t);
-            if (cloud) { Serial.println("[account]     ignorado: modo cloud"); cloudN++; continue; }
+            // Cloud printers used to be dropped here. They are imported now -
+            // a printer the user owns should appear on the device even when
+            // the device cannot write to it, and being told why is better than
+            // wondering where it went. Only Bambu Lab, though: it is the one
+            // maker whose cloud this firmware can read.
+            if (cloud) {
+                cloudN++;
+                if (t != PT_BAMBU) {
+                    Serial.println("[account]     ignored: cloud mode, no reader for this brand");
+                    ignored++; continue;
+                }
+                Serial.println("[account]     cloud mode: imported read-only");
+            }
             if (t == PT_NONE) {
                 Serial.printf("[account]     skipped: %s has no backend / unsupported model\n", brand);
                 ignored++; continue;
@@ -485,6 +497,7 @@ bool ttcloud::syncNow(String& summary) {
 
             PrinterCfg& p = got[n];
             p.type = t;
+            p.cloud = cloud;
             p.name = fsStr(f, "printerName");
             if (p.name.isEmpty()) p.name = String(brand) + " " + dev.substring(0, 6);
             p.host = ip;
@@ -549,6 +562,7 @@ bool ttcloud::syncNow(String& summary) {
         snprintf(key, sizeof(key), "p%dd", i); cd = k.getString(key, "");
         snprintf(key, sizeof(key), "p%du", i); cu = k.getString(key, "");
         snprintf(key, sizeof(key), "p%dm", i); cm = k.getString(key, "");
+        bool ck; snprintf(key, sizeof(key), "p%dk", i); ck = k.getBool(key, false);
         int    nt = (i < n) ? (int)got[i].type : 0;
         String nn = (i < n) ? got[i].name : String();
         String nh = (i < n) ? got[i].host : String();
@@ -557,6 +571,7 @@ bool ttcloud::syncNow(String& summary) {
         String nd = (i < n) ? got[i].devId : String();
         String nu = (i < n) ? got[i].user  : String();
         String nm2 = (i < n) ? got[i].model : String();
+        bool   nk  = (i < n) ? got[i].cloud : false;
         // The import fills gaps, it does not overwrite. A value the user typed by
         // hand survives a sync that does not know it - which also means a stale
         // one is not corrected automatically. Clearing the field is how you
@@ -576,7 +591,7 @@ bool ttcloud::syncNow(String& summary) {
             if (cm.length()) nm2 = cm;
         }
         if (nt != ct || nn != cn || nh != ch || ns != cs || nc != cc ||
-            nd != cd || nu != cu || nm2 != cm) {
+            nd != cd || nu != cu || nm2 != cm || nk != ck) {
             diff = true;
             snprintf(key, sizeof(key), "p%dt", i); k.putInt(key, nt);
             snprintf(key, sizeof(key), "p%dn", i); k.putString(key, nn);
@@ -586,6 +601,7 @@ bool ttcloud::syncNow(String& summary) {
             snprintf(key, sizeof(key), "p%dd", i); k.putString(key, nd);
             snprintf(key, sizeof(key), "p%du", i); k.putString(key, nu);
             snprintf(key, sizeof(key), "p%dm", i); k.putString(key, nm2);
+            snprintf(key, sizeof(key), "p%dk", i); k.putBool(key, nk);
         }
     }
     k.end();

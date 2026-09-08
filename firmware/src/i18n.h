@@ -131,6 +131,8 @@ enum StrId : uint8_t {
     S_LINK_ATTEMPT,
     S_LINK_FAIL,
     S_LF_SCAN,
+    S_CLOUD_ONLY,
+    S_CLOUD_HOW,
     S_READER,
     S_READER_OK,
     S_READER_NONE,

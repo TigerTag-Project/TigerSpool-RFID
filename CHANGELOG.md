@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.39.0] - 2026-09-08
+
+### Added
+
+- **Bambu Lab printers in cloud mode appear on the device.** They used to be
+  dropped at import, so a printer you own simply was not there and nothing said
+  why. They are listed now, and opening one explains itself: **cloud printer,
+  read only**, with a QR code to the page that explains switching it to LAN
+  mode. Their slots are not tappable, because a cell that looks pressable and
+  can never do anything is worse than one that plainly is not - Bambu's cloud
+  broker accepts a report subscription and refuses the command that sets a
+  tray.
+
+  **What is not here yet:** the slots themselves. Reading them needs a session
+  against Bambu's own broker, and everything that needs is now known - see
+  WORKLOG.md. Nothing is dialled meanwhile: a cloud printer is never probed and
+  never gets a link, so it costs nothing to list.
+
+### Fixed
+
+- **A FlashForge's first slot is no longer split onto its own row.** The
+  station has four slots, 1A to 1D, and none of them is an external spool - so
+  an AD5X showed 1A alone above the other three.
+
+
 ## [1.38.2] - 2026-09-08
 
 ### Added

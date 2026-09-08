@@ -616,4 +616,18 @@ since the header is already carrying the account and Wi-Fi at 240 px wide.
   raised an event, so every layer above saw silence.
 - Verified end to end on a U1: tag read, review, send, and the printer itself
   then reports E4 as R3D / PLA / High_Speed / DC123FFF.
+- Bambu cloud, read-only: everything needed for the actual session is now
+  known and written down here so the next step is short.
+    Firestore: users/{uid}/printers/bambulab/secrets/cloud_session
+    fields:    bambuUid, mqttUsername ("u_<uid>"), region ("eu"|"us"),
+               accessToken, and an expiry (Bambu's tokens last ~3 months)
+    broker:    mqtts://<region>.mqtt.bambulab.com:8883, insecure TLS
+    auth:      username = mqttUsername, password = accessToken
+    client id: must be unique per device - a shared one makes the broker kick
+               the phone or the desktop off
+    topics:    subscribe device/<dev>/report, publish device/<dev>/request
+               with the same pushall the LAN path already sends
+  The report format is IDENTICAL to LAN, so the existing Bambu parser is
+  reused unchanged. What is missing is the account fetch and a cloud flag on
+  the backend.
 

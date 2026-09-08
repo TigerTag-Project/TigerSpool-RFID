@@ -15,6 +15,10 @@ namespace {
 // The white margin a scanner needs around a QR code, in pixels, on every side.
 const lv_coord_t QUIET = 7;
 
+// Where a cloud printer's owner is sent to make it writable.
+const char* const CLOUD_HELP_URL =
+    "https://wiki.tigersystem.io/compatibility/bambu-lab/#switch-to-lan-mode";
+
 lv_obj_t* s_grid = nullptr;
 bool s_built = false;
 int  s_tapped = -1;
@@ -70,14 +74,14 @@ void progressText(char* out, size_t n, int tries, int budget, bool fetching) {
 
 void show(const char* printerName, PrinterBackend* backend,
           int selected, bool readerReady, int link,
-          int tries, int budget, bool fetching) {
+          int tries, int budget, bool fetching, bool cloud) {
     // No backend is a state to DRAW, not a reason to draw nothing. When the
     // link has given up there is no backend at all, and that is exactly the
     // moment the user needs a screen with a retry button on it.
     const int n = backend ? backend->slotCount() : 0;
     bool anyKnown = false;
     for (int i = 0; i < n && !anyKnown; i++) anyKnown = backend->slot(i).known;
-    const uint32_t sig = signature(backend, n, selected, link);
+    const uint32_t sig = signature(backend, n, selected, link) ^ (cloud ? 0x5A5Au : 0u);
     // Nothing has changed: leave the screen alone. The header was built with
     // this same `link`, so its dot and its retry button are already right -
     // rebuilding them here once per frame stacked a fresh button on the old
@@ -148,7 +152,41 @@ void show(const char* printerName, PrinterBackend* backend,
     // the difference between waiting and wondering. It replaces the grid only
     // while there is no grid to show - a reconnection after a drop keeps the
     // slots on screen, because stale filament is better than a blank screen.
-    if (link < 2 && !anyKnown) {
+    // A cloud printer is not connecting and never will be from here, so it
+    // gets neither the spinner nor the failure screen. It gets its slots, if
+    // they are known, under a line saying they cannot be written and a code
+    // pointing at how to change that.
+    if (cloud) {
+        lv_obj_t* t = lv_label_create(body);
+        lv_label_set_text(t, i18n::T(S_CLOUD_ONLY));
+        // Wrapped and centred: "Imprimante cloud - lecture seule" is wider
+        // than 240 px at this size and ran off the edge without it.
+        lv_label_set_long_mode(t, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(t, theme::SCREEN_W - 2 * theme::PAD - 6);
+        lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_font(t, &font_ui_14, 0);
+        lv_obj_set_style_text_color(t, lv_color_hex(theme::WARN), 0);
+        lv_obj_set_style_pad_bottom(t, 2, 0);
+        lv_obj_set_style_pad_top(t, 2, 0);
+        frame::caption(i18n::T(S_CLOUD_HOW), theme::TEXT_DIM);
+
+        lv_obj_t* card = lv_obj_create(body);
+        lv_obj_remove_style_all(card);
+        lv_obj_set_style_bg_color(card, lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(card, 4, 0);
+        lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t* q = lv_qrcode_create(card, 84, lv_color_black(), lv_color_white());
+        lv_qrcode_update(q, CLOUD_HELP_URL, strlen(CLOUD_HELP_URL));
+        lv_obj_update_layout(q);
+        const lv_coord_t qw = lv_obj_get_width(q);
+        lv_obj_set_size(q, qw, qw);
+        lv_obj_set_size(card, qw + 2 * QUIET, qw + 2 * QUIET);
+        lv_obj_align(q, LV_ALIGN_TOP_LEFT, QUIET, QUIET);
+        lv_obj_set_style_pad_top(card, 0, 0);
+    }
+
+    if (!cloud && link < 2 && !anyKnown) {
         // A transparent box to hold the gap. Margin styles are compiled out of
         // this build, and padding on the arc itself insets the arc inside its
         // own bounds - 48 top and 14 bottom on a 56 px spinner left negative
@@ -171,7 +209,7 @@ void show(const char* printerName, PrinterBackend* backend,
         return;
     }
 
-    if (link == 3) {
+    if (!cloud && link == 3) {
         lv_obj_t* t = lv_label_create(body);
         lv_label_set_text(t, i18n::T(S_LINK_FAIL));
         lv_obj_set_style_text_font(t, &font_ui_16, 0);
@@ -282,7 +320,10 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_flex_align(cell, LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_row(cell, 3, 0);
-        lv_obj_add_event_cb(cell, onCell, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+        // No handler and no press feedback when the printer cannot be written.
+        // A cell that looks pressable and does nothing is worse than one that
+        // plainly is not.
+        if (!cloud) lv_obj_add_event_cb(cell, onCell, LV_EVENT_CLICKED, (void*)(intptr_t)i);
         if (i == selected) {
             lv_obj_set_style_outline_width(cell, 2, 0);
             lv_obj_set_style_outline_pad(cell, 2, 0);
@@ -351,7 +392,10 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_style_text_font(brand, &font_ui_12, 0);
     }
 
-    if (n == 0) frame::caption(i18n::T(S_FIND_PRINTERS), theme::TEXT_DIM);
+    // Not on a cloud printer: it has no slots here because nothing is
+    // connected to it, and "looking for printers" would be answering a
+    // question nobody asked.
+    if (n == 0 && !cloud) frame::caption(i18n::T(S_FIND_PRINTERS), theme::TEXT_DIM);
 }
 
 int  takeTappedSlot() { int v = s_tapped; s_tapped = -1; return v; }

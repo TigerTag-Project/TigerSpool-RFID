@@ -17,9 +17,12 @@ namespace screen_slots {
 // deliberately NOT part of what decides a rebuild: a counter that rebuilt the
 // screen would destroy the spinner and start it again from zero on every tick,
 // which is the exact bug that made the Wi-Fi screen look frozen.
+// `cloud` marks a printer this device can read and must not write. Its slots
+// are drawn and are NOT tappable, and the screen says why rather than letting
+// somebody press a cell that will never do anything.
 void show(const char* printerName, PrinterBackend* backend,
           int selected, bool readerReady, int link,
-          int tries, int budget, bool fetching);
+          int tries, int budget, bool fetching, bool cloud);
 void invalidate();                 // force a rebuild on the next show()
 int  takeTappedSlot();             // slot index, or -1
 bool takeBack();

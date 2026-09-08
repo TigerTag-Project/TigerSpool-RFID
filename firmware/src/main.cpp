@@ -158,7 +158,10 @@ static uint16_t ctrlPort(PrinterType t) {
     }
 }
 static bool probeOne(const PrinterCfg& p) {
-    if (p.type == PT_NONE || p.host.isEmpty()) return false;
+    // A cloud printer has nothing on this network to knock on. Probing its
+    // stale LAN address would mark it unreachable and hide it behind a failure
+    // screen, when the truth is simply that it is somewhere else.
+    if (p.type == PT_NONE || p.cloud || p.host.isEmpty()) return false;
     WiFiClient c;
     bool ok = c.connect(p.host.c_str(), ctrlPort(p.type), 900);
     c.stop();
@@ -415,6 +418,7 @@ static void migrateLegacyConfig() {
         snprintf(k, sizeof(k), "p%dd", i); dst.putString(k, src.getString(k, ""));
         snprintf(k, sizeof(k), "p%du", i); dst.putString(k, src.getString(k, ""));
         snprintf(k, sizeof(k), "p%dm", i); dst.putString(k, src.getString(k, ""));
+        snprintf(k, sizeof(k), "p%dk", i); dst.putBool(k, src.getBool(k, false));
     }
     dst.putBool("migrated", true);
     dst.end();
@@ -451,6 +455,7 @@ static void loadCfg() {
         snprintf(k, sizeof(k), "p%dd", i); printers[i].devId = nvs.getString(k, "");
         snprintf(k, sizeof(k), "p%du", i); printers[i].user  = nvs.getString(k, "");
         snprintf(k, sizeof(k), "p%dm", i); printers[i].model = nvs.getString(k, "");
+        snprintf(k, sizeof(k), "p%dk", i); printers[i].cloud = nvs.getBool(k, false);
         snprintf(k, sizeof(k), "p%dv", i); printers[i].visible = nvs.getBool(k, true);
     }
     String oldK2 = nvs.getString("k2ip", "");
@@ -677,6 +682,8 @@ static Link* linkFor(int printerIdx) {
 // Settings used to decide only what the home screen listed; it decides what the
 // box talks to now, which is what someone ticking it expects.
 static void assignLinks() {
+    // A cloud printer gets no link at all - see tickLink's first line. It is
+    // still listed, still selectable, and its slot screen explains itself.
     bool brandTaken[MAX_LINKS] = { false };
     for (int i = 0; i < MAX_LINKS; i++) {
         Link& l = links[i];
@@ -711,6 +718,7 @@ static void assignLinks() {
 // One link's state machine - the same one that used to be the only one.
 static void tickLink(Link& l) {
     const PrinterCfg& p = printers[l.printer];
+    if (p.cloud) { l.state = LINK_IDLE; return; }   // nothing here to dial
 
     if (l.be && l.be->connected()) {
         if (l.state != LINK_UP) {
@@ -1545,7 +1553,8 @@ void loop() {
     case ST_GRID: {
         screen_slots::show(printers[selectedPrinter].name.c_str(), backend,
                            selSlot, nfcReady, (int)linkState,
-                           linkTries, linkBudget, ttcloud::asyncBusy());
+                           linkTries, linkBudget, ttcloud::asyncBusy(),
+                           printers[selectedPrinter].cloud);
         lvgl_port::loop();
 
         if (screen_slots::takeRetry()) { linkRetry(); screen_slots::invalidate(); break; }

@@ -46,6 +46,11 @@ struct PrinterCfg {
     String host;        // IP address on the LAN
     String sn;          // serial number (FlashForge, Bambu Lab)
     String cc;          // check code / access code / broker password
+    // Reachable only through the maker's cloud, not on this network. Bambu
+    // Lab's cloud is READ-ONLY by design: the broker accepts a report
+    // subscription and refuses the commands that set a tray, so a slot on such
+    // a printer can be shown and must not be offered as something to write.
+    bool   cloud = false;
     String devId;       // Anycubic: 32-hex broker device id, part of its topics
     String user;        // Anycubic: broker username
     String model;       // Anycubic: numeric model id, also part of its topics

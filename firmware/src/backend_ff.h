@@ -9,6 +9,10 @@ public:
     void begin(const PrinterCfg& cfg) override;
     void loop() override;
     bool connected() override;
+    // Four station slots, 1A to 1D, and no external spool among them - so the
+    // first must not be split onto a row of its own the way a Creality's Ext.
+    // is. It was, and an AD5X showed 1A alone above 1B, 1C and 1D.
+    bool firstIsExternal() override { return false; }
     int  slotCount() override { return 4; }        // material station, 1A..1D
     const char* slotLabel(int i) override;
     const SlotState& slot(int i) override;
