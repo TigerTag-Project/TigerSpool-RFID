@@ -684,7 +684,7 @@ Verified on hardware throughout: A1 Home and X1C Home connected at the same
 time showing their own slots, AD5X green beside a red Creator 5 Pro, and a
 forced two-brand sync failure keeping all thirteen printers.
 
-## 2026-09-08 - the update screen says what it is moving from
+## 2026-09-08 - the update screen says what it is moving from (released in 1.42.1)
 
 ### Changed
 

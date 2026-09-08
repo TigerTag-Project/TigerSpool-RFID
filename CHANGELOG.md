@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.1] - 2026-09-08
+
+### Changed
+
+- **The update screen shows both versions**, the one installed and the one on
+  offer: `1.42.0 > 1.42.1`, the version being left in grey and the new one in
+  orange. The caption "Version available" is gone - it spent a line saying what
+  the number under it plainly was, while what you are updating *from* was not
+  on the screen at all.
+- The update page no longer repeats the installed version in a row of its own
+  while an update is waiting.
+
+
 ## [1.42.0] - 2026-09-08
 
 ### Changed
