@@ -293,6 +293,7 @@ namespace {
         else if (preview == "setrestart") screen_settings::showRestart();
         else if (preview == "setfactory") screen_settings::showFactory();
         else if (preview == "pick")      screen_settings::showPrinters(nullptr, 0, false);
+        else if (preview == "cloudslot") screen_slots::showCloudNotice("B2");
 
         // The boot screen cannot be captured the way it is actually shown: it
         // is drawn before the web server exists. This redraws it on demand so

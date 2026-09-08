@@ -394,24 +394,34 @@ void showCloudNotice(const char* slotLabel) {
     lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(t, &font_ui_16, 0);
     lv_obj_set_style_text_color(t, lv_color_hex(theme::WARN), 0);
-    lv_obj_set_style_pad_bottom(t, 4, 0);
+    lv_obj_set_style_pad_bottom(t, 10, 0);
 
-    frame::caption(i18n::T(S_CLOUD_HOW), theme::TEXT_DIM);
-
+    // Built exactly like the failure screen's code, for the same reasons: a
+    // white BOX sized from the code rather than a border on it, no padding of
+    // its own, and the code pinned at QUIET from the top-left so all four
+    // margins are equal by construction. This screen carried a pad_top of 10
+    // instead - and lv_obj_align measures from the parent's CONTENT area, so
+    // that padding moved the code down and right inside a card sized for it
+    // being centred. That is what pushed the code off-centre and let it run
+    // into the card's own edge, which is the one place a scanner needs white.
     lv_obj_t* card = lv_obj_create(body);
     lv_obj_remove_style_all(card);
+    lv_obj_set_style_pad_all(card, 0, 0);
     lv_obj_set_style_bg_color(card, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(card, 4, 0);
     lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_pad_top(card, 10, 0);
-    lv_obj_t* q = lv_qrcode_create(card, 96, lv_color_black(), lv_color_white());
+
+    lv_obj_t* q = lv_qrcode_create(card, 104, lv_color_black(), lv_color_white());
     lv_qrcode_update(q, CLOUD_HELP_URL, strlen(CLOUD_HELP_URL));
     lv_obj_update_layout(q);
     const lv_coord_t qw = lv_obj_get_width(q);
     lv_obj_set_size(q, qw, qw);
     lv_obj_set_size(card, qw + 2 * QUIET, qw + 2 * QUIET);
     lv_obj_align(q, LV_ALIGN_TOP_LEFT, QUIET, QUIET);
+
+    lv_obj_set_style_pad_top(
+        frame::caption(i18n::T(S_CLOUD_HOW), theme::TEXT_DIM), 8, 0);
 }
 
 int  takeTappedSlot() { int v = s_tapped; s_tapped = -1; return v; }
