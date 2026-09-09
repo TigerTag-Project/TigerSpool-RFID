@@ -759,7 +759,7 @@ field active read 2.3 dB BETTER than 30 with it idle.
   TLS operation and come straight back; the selected printer keeps its link,
   and nothing new is opened while the handshake needs the room.
 
-## 2026-09-10 - the NFC tester, and a Wi-Fi that came back
+## 2026-09-10 - the NFC tester, and a Wi-Fi that came back (released in 1.44.0)
 
 ### Added
 

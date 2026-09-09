@@ -7,6 +7,38 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.44.0] - 2026-09-10
+
+### Fixed
+
+- **The device reconnects to Wi-Fi on its own.** It asked for the network once
+  at startup and never again - so if the association failed at boot, or the
+  access point dropped the device later, it stayed there with a lit screen,
+  every printer red and no way back short of unplugging it. It now asks again
+  after fifteen seconds and keeps asking. This is the most important fix in the
+  release.
+
+### Changed
+
+- **The NFC Tester is a proper bench instrument.** It reads in English whatever
+  language the device is set to - it is used beside a reader log and a
+  datasheet, and two people comparing the same spool have to see the same
+  words. One field per row, in a fixed order, with a colour bar across the top
+  and the raw chip pages behind a HEX Code button.
+- **A spool's readings stay on screen when you take the spool away.** They used
+  to clear the moment the chip left the reader, which is exactly when you want
+  to read them.
+- **The colour bar shows two or three colours for bicolour and tricolour
+  spools**, decided by the spool's aspect rather than by the colour bytes -
+  black is a real colour, and an unused slot is stored the same way.
+- Colours are shown in hex, the main one with its alpha byte, and the page dump
+  is set in a monospace face so it lines up in columns.
+- **Titles, menu rows and printer names are heavier and larger**, and buttons
+  are set in a size meant to be read at arm's length.
+- The NFC Tester has an icon of its own instead of borrowing the Display row's
+  sun, and the sun now matches the other icons' size.
+
+
 ## [1.43.1] - 2026-09-09
 
 ### Fixed
