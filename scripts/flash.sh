@@ -78,8 +78,19 @@ command -v pio >/dev/null 2>&1 || {
 ESPTOOL="$HOME/.platformio/penv/bin/python -m esptool"
 EXPECT="${TIGERSPOOL_MAC:-$(cat .bench-mac 2>/dev/null || true)}"
 
-mac_of() { $ESPTOOL --port "$1" --no-stub read_mac 2>/dev/null \
-             | awk '/^MAC:/ { print tolower($2); exit }'; }
+# A port that does not answer is not an error: it is a port that is not an
+# ESP32, or one another program is holding. It has to come back EMPTY and let
+# the search carry on to the next port.
+#
+# Without the `|| true` this function's failure took the whole script with it -
+# `set -e` plus `pipefail`, and the read is a pipeline. A second USB serial
+# device appeared on this bench, esptool could not talk to it, and flash.sh
+# exited before writing anything while printing nothing at all. Three flashes
+# in a row were believed to have landed and had not; the board kept running
+# older firmware and every measurement taken from it was about that older
+# firmware. A tool that fails silently is worse than one that fails.
+mac_of() { { $ESPTOOL --port "$1" --no-stub read_mac 2>/dev/null \
+             | awk '/^MAC:/ { print tolower($2); exit }'; } || true; }
 
 if [ "$ANY" = 1 ]; then
   echo "== --any: skipping the board check"
