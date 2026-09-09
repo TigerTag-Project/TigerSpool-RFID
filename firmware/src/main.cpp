@@ -1151,6 +1151,36 @@ void loop() {
     // checked without someone standing in front of the device.
     if (!webStarted && WiFi.status() == WL_CONNECTED) onWifiUp();
 
+    // Wi-Fi is dialled once at boot and never again - until now.
+    //
+    // If the association fails at startup, or the access point drops it later,
+    // the device sits there for ever with a lit screen, every printer red and
+    // no route to the account: watched happening twice in one afternoon, once
+    // at boot and once mid-session, on a link measured at -80 dBm where the
+    // radio is at the edge of what it can hold. Arduino's own auto-reconnect
+    // did not bring it back either time.
+    //
+    // So: after fifteen seconds down, ask again, and keep asking every thirty.
+    // A device left alone on a bad afternoon has to end up connected, because
+    // nobody is going to power-cycle it.
+    if (!wifiSsid.isEmpty() && state != ST_AP && state != ST_WIFI) {
+        static uint32_t downSince = 0, lastRetry = 0;
+        if (WiFi.status() == WL_CONNECTED) { downSince = 0; lastRetry = 0; }
+        else {
+            const uint32_t now = millis();
+            if (!downSince) downSince = now ? now : 1;
+            else if (now - downSince > 15000 && now - lastRetry > 30000) {
+                lastRetry = now;
+                Serial.printf("[wifi] down for %lus - associating to '%s' again\n",
+                              (unsigned long)((now - downSince) / 1000),
+                              wifiSsid.c_str());
+                WiFi.disconnect();
+                WiFi.mode(WIFI_STA);
+                WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+            }
+        }
+    }
+
     // The backlight is the only thing that sleeps. Everything below this line
     // keeps running whether the screen is lit or not.
     // Follow the accelerometer, but only when the user asked for it and only
