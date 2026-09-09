@@ -48,6 +48,60 @@ void disc(lv_obj_t* p, int x, int y, int d, uint32_t c) {
     bar(p, x, y, d, d, LV_RADIUS_CIRCLE, c);
 }
 
+// The same glyph, turned.
+//
+// LVGL rotates IMAGES, not labels - a font glyph drawn as text has no angle to
+// set. So the glyph is drawn once into a canvas, and the canvas, being an
+// image, is rotated.
+//
+// This exists so the NFC row can carry the Wi-Fi wave itself rather than a
+// hand-drawn lookalike. Three arcs and a dot drawn from primitives came close
+// and were not the same picture: different stroke, different spacing, and the
+// eye reads two icons that are nearly identical as a mistake rather than as a
+// family.
+//
+// One canvas is alive at a time - a single row uses this - so the pixel buffer
+// is shared. It is 22 x 22 at two bytes plus an alpha byte per pixel, which is
+// about 1.5 KB, and it lives in static memory rather than being allocated and
+// freed on every screen build.
+lv_obj_t* turnedSymbol(lv_obj_t* parent, const char* glyph, uint32_t colour,
+                       int16_t tenthsOfADegree, int scale = 100) {
+    // Two sizes, because there are two uses: 22 px on a menu row, and a big one
+    // for a screen whose whole subject is the reader. The buffer is sized for
+    // the larger of them and the canvas is told how much of it to use.
+    const bool big = (scale >= 150);
+    const lv_coord_t side = big ? BOX * 2 : BOX;
+    const lv_font_t* face = big ? &font_ui_24 : &font_ui_16;
+    static uint8_t buf[LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(BOX * 2, BOX * 2)];
+
+    // The box is larger than the canvas in the big case, because the canvas is
+    // then ZOOMED and a parent clips what its child draws outside it. 24 px is
+    // the largest face compiled in, so the only way to a bigger wave is to
+    // scale the drawn one - acceptable here, where the shape is three strokes
+    // and a dot rather than a letterform full of detail.
+    lv_obj_t* box = piece(parent, 0, 0, big ? BOX * 3 : side, big ? BOX * 3 : side);
+    lv_obj_t* cv = lv_canvas_create(box);
+    lv_canvas_set_buffer(cv, buf, side, side, LV_IMG_CF_TRUE_COLOR_ALPHA);
+    lv_canvas_fill_bg(cv, lv_color_black(), LV_OPA_TRANSP);
+
+    lv_draw_label_dsc_t d;
+    lv_draw_label_dsc_init(&d);
+    d.font  = face;
+    d.color = lv_color_hex(colour);
+    d.align = LV_TEXT_ALIGN_CENTER;
+    const lv_coord_t h = lv_font_get_line_height(face);
+    lv_canvas_draw_text(cv, 0, (side - h) / 2, side, &d, glyph);
+
+    lv_img_set_pivot(cv, side / 2, side / 2);
+    lv_img_set_angle(cv, tenthsOfADegree);
+    if (big) {
+        lv_img_set_antialias(cv, true);
+        lv_img_set_zoom(cv, 410);        // 256 is 1:1, so this is 1.6x
+    }
+    lv_obj_center(cv);
+    return box;
+}
+
 lv_obj_t* symbol(lv_obj_t* parent, const char* glyph, uint32_t colour,
                  const lv_font_t* face = &font_ui_16) {
     lv_obj_t* box = piece(parent, 0, 0, BOX, BOX);
@@ -171,7 +225,18 @@ lv_obj_t* build(lv_obj_t* parent, Id id, uint32_t c, int scale) {
     // Text, so it tints through text_color like any other glyph - unlike the
     // drawn icons below, which tint through border_color or bg_color. No face
     // of its own any more: the sun is in the UI faces alongside the letters.
-    case SCREEN:  return symbol(parent, TT_SYMBOL_SUN, c);
+    // The sun at 20, not 16, and it is not an exception for its own sake.
+    //
+    // The drawn icons fill the 22 px box - the globe's sphere is a ring from
+    // 1 to 20 - while a glyph set at 16 px occupies about sixteen of it. Beside
+    // the Language row's globe, the Display row's sun read as a smaller icon
+    // for no reason a user could name. Matching the drawn diameter is what puts
+    // the two on the same footing.
+    case SCREEN:  return symbol(parent, TT_SYMBOL_SUN, c, &font_ui_20);
+    // The Wi-Fi wave, a quarter turn to the right: the field leaves towards
+    // the spool rather than upwards. Same glyph as the Wi-Fi row, so the two
+    // read as the same idea pointed two ways.
+    case NFC:     return turnedSymbol(parent, LV_SYMBOL_WIFI, c, 900, scale);
     case NONE:    return nullptr;
     default:      break;
     }

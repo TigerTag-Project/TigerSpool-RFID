@@ -95,3 +95,58 @@ it and what happens when it expires all have to be settled before any firmware
 is worth writing - the answer decides what the account stores.
 
 See [PRINTER-COMPATIBILITY.md](PRINTER-COMPATIBILITY.md).
+
+---
+
+## Move the MQTT buffers to PSRAM
+
+**The internal heap is the bottleneck; 8 MB of PSRAM sits idle.** Measured on
+hardware, on a device holding six printers:
+
+```
+[heap] 65916 free, 53236 largest, psram 8158611/8380983 free, 6 link(s) up
+```
+
+Sixty-five kilobytes of internal RAM decide how many printers this device can
+hold, while 8.16 MB of the 8.38 MB of PSRAM is untouched. Only LVGL lives
+there.
+
+**What a connection costs**, measured one link at a time by reading the free
+heap either side of each:
+
+| Brand | Cost | What it is |
+|---|---|---|
+| Bambu, on screen | ~88 KB | TLS, plus 50 KB of MQTT buffer |
+| Bambu, background | ~46 KB | the same TLS, 8 KB of buffer |
+| Anycubic | ~37 KB | TLS, 16 KB buffer |
+| Snapmaker | ~11 KB | WebSocket and its frame buffer |
+| Creality | ~8 KB | WebSocket |
+| Elegoo | ~3 KB | plain MQTT, no TLS at all |
+| FlashForge | ~1 KB | HTTP; nothing held between requests |
+
+Bambu is dearest for one reason nothing else shares: a `pushall` from an X1
+with four AMS units arrives as a SINGLE MQTT message of about 50 KB, and
+PubSubClient has no streaming API - the message fits in the buffer whole or it
+is dropped, and the topology is then never learned.
+
+**The move.** PubSubClient allocates that buffer with `realloc()`, so it lands
+in internal RAM, and its `buffer` member is private - a subclass cannot reach
+it. The change is to vendor a copy of the library whose allocation is
+`heap_caps_realloc(..., MALLOC_CAP_SPIRAM)`, three lines, plus a PSRAM
+allocator for the ArduinoJson documents that parse those reports. PSRAM's lower
+speed does not matter for a buffer walked once every eight seconds.
+
+**Expected: a Bambu on screen falls from ~88 KB to ~40 KB**, and the device
+goes from about two simultaneous Bambus to four, or from six printers to nine
+or ten on a mixed account.
+
+**What is NOT in scope, deliberately.** The ~40 KB TLS session stays where it
+is. Moving it needs `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`, which means an
+sdkconfig this build does not own - the Arduino core here is precompiled - and
+therefore a move to Arduino-as-an-IDF-component. That is a change of build
+system for a third of the win. LVGL's draw buffers stay in internal RAM too;
+they are DMA targets.
+
+**Decided, not forgotten:** to be done, in a release of its own rather than
+folded into a batch of interface work, so that a regression in the MQTT path
+has one obvious cause.

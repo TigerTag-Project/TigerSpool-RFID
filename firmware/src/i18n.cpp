@@ -101,10 +101,10 @@ static const Row STR[S_COUNT] = {
 /* S_TAG_TYPE       */ {{ "Type", "Type", "Typ", "Tipo", "Tipo", "Typ", "Tipo", "Tipo" }},
 /* S_TAG_BRAND      */ {{ "Brand", "Marque", "Marke", "Marca", "Marca", "Marka", "Marca", "Marca" }},
 /* S_TAG_ASPECT     */ {{ "Aspect 1/2", "Aspect 1/2", "Aspekt 1/2", "Aspecto 1/2", "Aspetto 1/2", "Aspekt 1/2", "Aspecto 1/2", "Aspeto 1/2" }},
-/* S_TAG_KIND       */ {{ "Kind / Diameter", "Nature / Diamètre", "Art / Durchmesser", "Tipo / Diametro", "Genere / Diametro", "Rodzaj / Srednica", "Genero / Diametro", "Genero / Diametro" }},
+/* S_TAG_KIND       */ {{ "Kind", "Nature", "Art", "Tipo", "Genere", "Rodzaj", "Genero", "Genero" }},
 /* S_TAG_PROTOCOL   */ {{ "Protocol", "Protocole", "Protokoll", "Protocolo", "Protocollo", "Protokol", "Protocolo", "Protocolo" }},
 /* S_TAG_STAMP      */ {{ "TimeStamp", "Horodatage", "Zeitstempel", "Marca de tiempo", "Marca temporale", "Znacznik czasu", "Data e hora", "Data e hora" }},
-/* S_TAG_DRY        */ {{ "Dry temp. / Time", "Séchage temp. / Durée", "Trocknung Temp. / Zeit", "Secado temp. / Tiempo", "Essiccazione temp. / Tempo", "Suszenie temp. / Czas", "Secagem temp. / Tempo", "Secagem temp. / Tempo" }},
+/* S_TAG_DRY        */ {{ "Dry temp.", "Séchage temp.", "Trocknung Temp.", "Secado temp.", "Essiccazione temp.", "Suszenie temp.", "Secagem temp.", "Secagem temp." }},
 /* S_TAG_QTY        */ {{ "Quantity", "Quantité", "Menge", "Cantidad", "Quantita", "Ilosc", "Quantidade", "Quantidade" }},
 /* S_TAG_LEFT       */ {{ "Remaining", "Restant", "Verbleibend", "Restante", "Rimanente", "Pozostalo", "Restante", "Restante" }},
 /* S_TAG_COLOURS    */ {{ "Colours 2/3", "Couleurs 2/3", "Farben 2/3", "Colores 2/3", "Colori 2/3", "Kolory 2/3", "Cores 2/3", "Cores 2/3" }},
@@ -130,6 +130,47 @@ static const Row STR[S_COUNT] = {
 /* S_ORIENTATION   */ {{ "Orientation", "Orientation", "Ausrichtung", "Orientacion", "Orientamento", "Orientacja", "Orientacao", "Orientacao" }},
 /* S_RESTARTING     */ {{ "Installed. Restarting...", "Installé. Redémarrage...", "Installiert. Neustart...", "Instalado. Reiniciando...", "Installato. Riavvio...", "Zainstalowano. Restart...", "Instalado. Reiniciando...", "Instalado. A reiniciar..." }},
 /* S_CHOOSE_PRINTERS */ {{ "Choose printers", "Vos imprimantes", "Drucker wahlen", "Elige impresoras", "Scegli stampanti", "Wybierz drukarki", "Suas impressoras", "Suas impressoras" }},
+/* S_WAITING_NFC    */ {{ "Waiting NFC...", "En attente NFC...", "Warte auf NFC...", "Esperando NFC...", "In attesa NFC...", "Oczekiwanie na NFC...", "Aguardando NFC...", "A aguardar NFC..." }},
+/* S_TAG_DIAMETER   */ {{ "Diameter", "Diamètre", "Durchmesser", "Diametro", "Diametro", "Srednica", "Diametro", "Diametro" }},
+/* S_TAG_DRY_TIME   */ {{ "Dry time", "Séchage durée", "Trocknungszeit", "Secado tiempo", "Essiccazione tempo", "Suszenie czas", "Secagem tempo", "Secagem tempo" }},
+/* ---------------------------------------------------------------------------
+   The NFC Tester's field names, identical in all eight languages.
+
+   That screen is a bench instrument, not part of the product's interface: it
+   dumps what came off the chip so it can be checked against a reader log, a
+   datasheet or the TigerTag SDK - all of which are in English. Two people
+   comparing the same spool in two countries have to be looking at the same
+   words, and a translated "Weight Available" would have to be translated back
+   before it could be compared with anything.
+
+   They go through the table rather than being written into the screen because
+   that is where drawn text lives; the rows are identical on purpose, and the
+   guard that checks the table against the enum keeps them honest.
+   --------------------------------------------------------------------------- */
+/* S_NT_BRAND       */ {{ "Brand", "Brand", "Brand", "Brand", "Brand", "Brand", "Brand", "Brand" }},
+/* S_NT_TYPE        */ {{ "Type", "Type", "Type", "Type", "Type", "Type", "Type", "Type" }},
+/* S_NT_MATERIAL    */ {{ "Material", "Material", "Material", "Material", "Material", "Material", "Material", "Material" }},
+/* S_NT_MESSAGE     */ {{ "Message", "Message", "Message", "Message", "Message", "Message", "Message", "Message" }},
+/* S_NT_ASPECT      */ {{ "Aspect 1/2", "Aspect 1/2", "Aspect 1/2", "Aspect 1/2", "Aspect 1/2", "Aspect 1/2", "Aspect 1/2", "Aspect 1/2" }},
+/* S_NT_KIND        */ {{ "Kind", "Kind", "Kind", "Kind", "Kind", "Kind", "Kind", "Kind" }},
+/* S_NT_WTOTAL      */ {{ "Weight Total", "Weight Total", "Weight Total", "Weight Total", "Weight Total", "Weight Total", "Weight Total", "Weight Total" }},
+/* S_NT_WAVAIL      */ {{ "Weight Available", "Weight Available", "Weight Available", "Weight Available", "Weight Available", "Weight Available", "Weight Available", "Weight Available" }},
+/* S_NT_DIAM        */ {{ "Diam.", "Diam.", "Diam.", "Diam.", "Diam.", "Diam.", "Diam.", "Diam." }},
+/* S_NT_NOZZLE      */ {{ "Nozzle Temp", "Nozzle Temp", "Nozzle Temp", "Nozzle Temp", "Nozzle Temp", "Nozzle Temp", "Nozzle Temp", "Nozzle Temp" }},
+/* S_NT_BED         */ {{ "Bed Temp.", "Bed Temp.", "Bed Temp.", "Bed Temp.", "Bed Temp.", "Bed Temp.", "Bed Temp.", "Bed Temp." }},
+/* S_NT_DRY         */ {{ "Drying Temp. / Time", "Drying Temp. / Time", "Drying Temp. / Time", "Drying Temp. / Time", "Drying Temp. / Time", "Drying Temp. / Time", "Drying Temp. / Time", "Drying Temp. / Time" }},
+/* S_NT_STAMP       */ {{ "Timestamp", "Timestamp", "Timestamp", "Timestamp", "Timestamp", "Timestamp", "Timestamp", "Timestamp" }},
+/* S_NT_DATE        */ {{ "Date", "Date", "Date", "Date", "Date", "Date", "Date", "Date" }},
+/* S_NT_COLOR1      */ {{ "Color 1 (RGBA)", "Color 1 (RGBA)", "Color 1 (RGBA)", "Color 1 (RGBA)", "Color 1 (RGBA)", "Color 1 (RGBA)", "Color 1 (RGBA)", "Color 1 (RGBA)" }},
+/* S_NT_COLOR2      */ {{ "Color 2 (RGB)", "Color 2 (RGB)", "Color 2 (RGB)", "Color 2 (RGB)", "Color 2 (RGB)", "Color 2 (RGB)", "Color 2 (RGB)", "Color 2 (RGB)" }},
+/* S_NT_COLOR3      */ {{ "Color 3 (RGB)", "Color 3 (RGB)", "Color 3 (RGB)", "Color 3 (RGB)", "Color 3 (RGB)", "Color 3 (RGB)", "Color 3 (RGB)", "Color 3 (RGB)" }},
+/* S_NT_TD          */ {{ "TD HueForge", "TD HueForge", "TD HueForge", "TD HueForge", "TD HueForge", "TD HueForge", "TD HueForge", "TD HueForge" }},
+/* S_NT_CERT        */ {{ "Certified", "Certified", "Certified", "Certified", "Certified", "Certified", "Certified", "Certified" }},
+/* S_NT_HEX         */ {{ "HEX Code", "HEX Code", "HEX Code", "HEX Code", "HEX Code", "HEX Code", "HEX Code", "HEX Code" }},
+/* S_NT_PAGE        */ {{ "Page", "Page", "Page", "Page", "Page", "Page", "Page", "Page" }},
+/* S_NT_INVALID     */ {{ "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID" }},
+/* S_NT_NONE        */ {{ "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE" }},
+/* S_NT_NOKEY       */ {{ "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY" }},
 };
 
 // A mismatch here is silent at runtime and reads as garbled text on screen, so

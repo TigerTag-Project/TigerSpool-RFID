@@ -5,6 +5,7 @@
 // spelled as bytes so the source itself stays ASCII.
 #define LV_DEG "\xC2\xB0"
 #include "frame.h"
+#include "icons.h"
 #include "theme.h"
 #include "i18n.h"
 #include "version.h"
@@ -47,12 +48,29 @@ inline void claimView(const void* owner, uint32_t sig) {
 uint32_t s_menuSig = 0;
 uint32_t s_pickSig = 0;
 uint32_t s_chooseSig = 0;
+bool s_hex = false;
 bool s_chosen = false;
 
 void onEntry(lv_event_t* e) {
     s_entry = (screen_settings::Entry)(intptr_t)lv_event_get_user_data(e);
 }
+// Vertical space between two things, as an object rather than as padding.
+//
+// Padding on a BUTTON is not space above it: a button's label is centred in its
+// content area, and padding shrinks that area from the top - so the word slides
+// down and sits below the middle of the control. It is visible at a glance once
+// you know, and invisible until then. An empty object of the right height puts
+// the space where it was meant to go and leaves the button alone.
+void gap(lv_obj_t* parent, lv_coord_t h) {
+    lv_obj_t* g = lv_obj_create(parent);
+    lv_obj_remove_style_all(g);
+    lv_obj_set_size(g, 1, h);
+    lv_obj_clear_flag(g, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(g, LV_OBJ_FLAG_CLICKABLE);
+}
+
 void onBack()  { s_back = true; }
+void onHex()   { s_hex  = true; }
 bool s_reload = false;
 lv_obj_t* s_reloadIcon = nullptr;
 lv_obj_t* s_reloadSpin = nullptr;
@@ -170,7 +188,7 @@ void showMenu(const MenuState& st) {
           icons::SCREEN,  0 },
         { E_LANGUAGE, i18n::T(S_LANGUAGE),   i18n::name(i18n::current()),
           icons::GLOBE,   0 },
-        { E_READER,   i18n::T(S_READER),   "",      icons::SCREEN,  0 },
+        { E_READER,   i18n::T(S_READER),   "",      icons::NFC,     0 },
         { E_UPDATE,   i18n::T(S_UPDATE),    vals[3], icons::UPDATE,  tints[3] },
         { E_RESTART,  i18n::T(S_RESTART),    "",
           icons::RESTART, theme::WARN },
@@ -203,6 +221,7 @@ void showMenu(const MenuState& st) {
 Entry takeEntry() { Entry v = s_entry; s_entry = E_NONE; return v; }
 bool  takeBack()  { bool v = s_back; s_back = false; return v; }
 bool  takeReload(){ bool v = s_reload; s_reload = false; return v; }
+bool  takeHex()   { bool v = s_hex;    s_hex = false;    return v; }
 
 // The list itself, shared by the settings view and the setup chooser: same
 // rows, same switches, same target area. Only the frame around it differs.
@@ -376,12 +395,11 @@ void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing) {
         printerRows(list, printers, count);
     }
 
-    lv_obj_t* ok = frame::button(body, i18n::T(S_CONFIRM), 1,
-                                 []() { s_chosen = true; });
-    lv_obj_set_style_pad_top(ok, 8, 0);
-    // The button is the last thing on the screen; without this it sits on
-    // the bezel.
-    lv_obj_set_style_pad_bottom(ok, 6, 0);
+    gap(body, 8);
+    frame::button(body, i18n::T(S_CONFIRM), 1, []() { s_chosen = true; });
+    // The button is the last thing on the screen; without this it sits on the
+    // bezel.
+    gap(body, 6);
 }
 
 int takeToggled() { int v = s_toggled; s_toggled = -1; return v; }
@@ -444,6 +462,38 @@ void segmented(lv_obj_t* parent, const char* const* labels, const int* values,
         lv_obj_set_style_text_color(l, lv_color_hex(on ? 0x0B0D10 : theme::TEXT), 0);
         lv_obj_center(l);
     }
+}
+
+// A label and its value side by side, reading left to right, for the block
+// beside the colour swatch.
+//
+// kv() cannot serve here: it spreads the pair to the two ends of a full-width
+// row, which is right for a list and wrong in a 150 px column - the label and
+// the value ended up touching, "TypePLA High Speed", with no space in between
+// to say which was which.
+lv_obj_t* pair(lv_obj_t* parent, const char* k, const char* v) {
+    lv_obj_t* row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 5, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* a = lv_label_create(row);
+    lv_label_set_text(a, k);
+    lv_obj_set_style_text_font(a, &font_ui_12, 0);
+    lv_obj_set_style_text_color(a, lv_color_hex(theme::TEXT_DIM), 0);
+
+    lv_obj_t* b = lv_label_create(row);
+    lv_label_set_text(b, v);
+    lv_label_set_long_mode(b, LV_LABEL_LONG_DOT);
+    lv_obj_set_flex_grow(b, 1);
+    lv_obj_set_style_text_font(b, &font_ui_12, 0);
+    lv_obj_set_style_text_color(b, lv_color_hex(theme::TEXT), 0);
+    return row;
 }
 
 lv_obj_t* kv(lv_obj_t* parent, const char* k, const char* v, uint32_t colour) {
@@ -635,8 +685,12 @@ void showScreen(uint8_t brightness, int sleepSeconds, int rotation, bool autoRot
 // chevron between them belongs to the first.
 static void versionStep(lv_obj_t* parent, const char* current, const char* latest) {
     char buf[96];
+    // The installed version in WHITE, not in the dim grey secondary text uses.
+    // It is not an aside: half of what this line says is where the device is
+    // now, and a reader compares the two numbers. Dimming one of a pair being
+    // compared makes it look like a caption for the other.
     snprintf(buf, sizeof(buf), "#%06X %s " LV_SYMBOL_RIGHT " ##%06X %s#",
-             (unsigned)theme::TEXT_DIM, current, (unsigned)theme::WARN, latest);
+             (unsigned)theme::TEXT, current, (unsigned)theme::WARN, latest);
 
     lv_obj_t* l = lv_label_create(parent);
     lv_label_set_recolor(l, true);
@@ -835,6 +889,72 @@ void showUpdateNotice(const char* current, const char* latest) {
     frame::button(body, i18n::T(S_LATER),   0, []() { s_action = A_LATER; });
 }
 
+// Every page the tag proper occupies, 0x04 to 0x17, four bytes to a line.
+//
+// Numbered by their REAL addresses, not 1 to 20: that is what the memory map
+// calls them and what a reader log prints, so a line here sits beside a line
+// there without anybody counting. The sixteen pages after 0x17 are the ECDSA
+// signature - read separately, verified, and of no use as hex.
+void showReaderHex(const TagInfo* tag) {
+    uint32_t sig = 0xB2000000u ^ (tag ? tag->idProduct * 2654435761u : 0u);
+    if (sameView((const void*)showReaderHex, sig)) return;
+    claimView((const void*)showReaderHex, sig);
+
+    lv_obj_t* body = frame::build(i18n::T(S_NT_HEX), onBack);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    theme::scrollbar(body);
+
+    if (!tag || !tag->ok) return;
+
+    char b[16];
+    const String& hex = tag->pages;
+    for (int i = 0, page = 0x04; i < (int)hex.length(); page++) {
+        int sp = hex.indexOf(' ', i);
+        if (sp < 0) sp = hex.length();
+
+        // A fixed column for the address, the bytes left-aligned after it, and
+        // both set in a MONOSPACE face.
+        //
+        // A dump is read down a column - you scan for the byte that changed -
+        // and that needs every character to sit under the one above it. Left-
+        // aligning the value got the lines starting together and no further:
+        // Montserrat's digits share a width but A to F do not, so the columns
+        // drifted apart across eight characters. No amount of alignment fixes
+        // a proportional font; the columns have to come from the typeface.
+        lv_obj_t* row = lv_obj_create(body);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        // No "Page" in front of the number. It is the same word on every line
+        // of the screen, and the screen is titled HEX Code already.
+        snprintf(b, sizeof(b), "0x%02X", page);
+        lv_obj_t* ad = lv_label_create(row);
+        lv_label_set_text(ad, b);
+        // Wider at 16 px than it was at 12: four monospace characters plus the
+        // gap to the bytes.
+        lv_obj_set_width(ad, 62);
+        lv_obj_set_style_text_font(ad, &font_ui_mono_16, 0);
+        lv_obj_set_style_text_color(ad, lv_color_hex(theme::TEXT_DIM), 0);
+
+        lv_obj_t* v = lv_label_create(row);
+        lv_label_set_text(v, hex.substring(i, sp).c_str());
+        lv_obj_set_style_text_font(v, &font_ui_mono_16, 0);
+        lv_obj_set_style_text_color(v, lv_color_hex(theme::TEXT), 0);
+
+        i = sp + 1;
+    }
+    gap(body, 12);
+    frame::button(body, i18n::T(S_BACK), 1, onBack);
+}
+
 void showReader(bool ready, const char* err, const TagInfo* tag) {
     // The tag's own identity is the signature: a new spool rebuilds, the same
     // spool held there does not.
@@ -849,11 +969,55 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
     lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
 
-    lv_obj_t* st = lv_label_create(body);
-    lv_label_set_text(st, ready ? i18n::T(S_READER_OK) : i18n::T(S_READER_NONE));
-    lv_obj_set_style_text_font(st, &font_ui_16, 0);
-    lv_obj_set_style_text_color(st, lv_color_hex(ready ? theme::OK : theme::DANGER), 0);
-    lv_obj_set_style_pad_bottom(st, 12, 0);
+    // WAITING is a state this screen spends most of its life in, and it was two
+    // lines of text on an otherwise black panel - nothing said where to put the
+    // spool, or that the device was doing anything at all. It now says the one
+    // thing it is for, the way the scan screen already does: the reader's own
+    // wave, large, over the instruction.
+    if (ready && (!tag || !tag->ok)) {
+        lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+        // The reader's own state first, above everything else. It is the
+        // premise of the screen - whether the hardware is even there - and it
+        // belongs before the thing it makes possible, not tucked underneath it
+        // like a footnote.
+        lv_obj_t* st = frame::caption(i18n::T(S_READER_OK), theme::OK);
+        lv_obj_set_style_text_font(st, &font_ui_bold_16, 0);
+        lv_obj_set_style_pad_bottom(st, 16, 0);
+
+        // In a ring, like the update screen's download and the up-to-date
+        // check. This device has one shape for "here is the state of the thing
+        // you came to look at", and a waiting reader is exactly that; a bare
+        // glyph floating in the middle would have been a fourth idea.
+        lv_obj_t* ring = lv_obj_create(body);
+        lv_obj_remove_style_all(ring);
+        lv_obj_set_size(ring, 86, 86);
+        lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_color(ring, lv_color_hex(theme::ACCENT), 0);
+        lv_obj_set_style_border_width(ring, 2, 0);
+        lv_obj_set_style_border_opa(ring, LV_OPA_COVER, 0);
+        lv_obj_clear_flag(ring, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_center(icons::build(ring, icons::NFC, theme::ACCENT, 200));
+
+        lv_obj_t* c = frame::caption(i18n::T(S_WAITING_NFC), theme::TEXT);
+        lv_obj_set_style_pad_top(c, 16, 0);
+        lv_obj_set_style_text_font(c, &font_ui_16, 0);
+        return;
+    }
+
+    // No "reader ready" line above the results.
+    //
+    // It answers a question the screen has already answered by being full of a
+    // chip's contents, and it cost the top of a view that has fifteen fields to
+    // fit. The waiting state still says it, which is where it means something.
+    if (!ready) {
+        lv_obj_t* st = lv_label_create(body);
+        lv_label_set_text(st, i18n::T(S_READER_NONE));
+        lv_obj_set_style_text_font(st, &font_ui_16, 0);
+        lv_obj_set_style_text_color(st, lv_color_hex(theme::DANGER), 0);
+        lv_obj_set_style_pad_bottom(st, 12, 0);
+    }
 
     if (!ready && err && *err) {
         frame::caption(err, theme::TEXT_DIM);
@@ -870,125 +1034,171 @@ void showReader(bool ready, const char* err, const TagInfo* tag) {
     // chip correctly", and that needs the values themselves rather than a
     // headline. The colour disc stays, because a colour is the one field a
     // number cannot be checked against - you compare it with the spool.
-    lv_obj_t* sw = lv_obj_create(body);
-    lv_obj_remove_style_all(sw);
-    lv_obj_set_size(sw, 44, 44);
-    lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(sw, lv_color_make(tag->r, tag->g, tag->b), 0);
-    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_bottom(sw, 10, 0);
+    // Everything the chip carried, one field per row, in the order somebody
+    // checking a tag reads them: identity, then what the spool is, then its
+    // numbers, then the raw pages the numbers came out of.
+    //
+    // The scrollbar is set HERE and not at the top of the function, because the
+    // waiting state has nothing to scroll and a bar spanning a full, still
+    // track is furniture pretending to be information.
+    theme::scrollbar(body);
 
-    char b[40];
-    kv(body, "UID", tag->uid.length() ? tag->uid.c_str() : "-", theme::TEXT);
-    snprintf(b, sizeof(b), "%lu", (unsigned long)tag->idProduct);
-    kv(body, i18n::T(S_TAG_PRODUCT), b, theme::TEXT);
-    kv(body, i18n::T(S_TAG_TYPE),  tag->material.c_str(), theme::TEXT);
-    kv(body, i18n::T(S_TAG_BRAND), tag->brand.c_str(), theme::TEXT);
-    snprintf(b, sizeof(b), "%u-%u\xC2\xB0""C", tag->nozMin, tag->nozMax);
-    kv(body, i18n::T(S_NOZZLE), b, theme::TEXT);
-    snprintf(b, sizeof(b), "%u / %u\xC2\xB0""C", tag->bedMin, tag->bedMax);
-    kv(body, i18n::T(S_BED), b, theme::TEXT);
+    // The colour as a bar across the width, in as many bands as the spool has
+    // colours. It is the one field that cannot be checked against a number -
+    // you hold the spool next to it - so it gets the width rather than a
+    // corner.
+    //
+    // How many bands is the ASPECT's answer, never the colour bytes'. A second
+    // colour of 00 00 00 is a black one on a bicolour spool and an unused slot
+    // on every other, and the chip stores both the same way; only "Bicolor" or
+    // "Tricolor" on the aspect tells them apart. The count is resolved from the
+    // reference database when the tag is decoded - see reader.cpp.
+    {
+        lv_obj_t* bar = lv_obj_create(body);
+        lv_obj_remove_style_all(bar);
+        lv_obj_set_size(bar, LV_PCT(100), 34);
+        lv_obj_set_style_radius(bar, 6, 0);
+        lv_obj_set_style_clip_corner(bar, true, 0);
+        lv_obj_set_style_border_color(bar, lv_color_hex(theme::LINE), 0);
+        lv_obj_set_style_border_width(bar, 1, 0);
+        lv_obj_set_style_border_opa(bar, LV_OPA_COVER, 0);
+        // NO padding on the bar. Its bands fill the CONTENT area, and padding
+        // shrinks that from the inside - which left a ten pixel strip of bare
+        // ground along the bottom, inside the border, looking like a fourth
+        // colour that happened to be black. The space below belongs between the
+        // bar and the list, not inside the bar.
+        lv_obj_set_style_pad_all(bar, 0, 0);
+        lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
 
-    snprintf(b, sizeof(b), "%s / %s",
-             tag->aspect1Label.c_str(), tag->aspect2Label.c_str());
-    kv(body, i18n::T(S_TAG_ASPECT), b, theme::TEXT);
-    snprintf(b, sizeof(b), "%s  %s mm",
-             tag->kindLabel.c_str(), tag->diameterLabel.c_str());
-    kv(body, i18n::T(S_TAG_KIND), b, theme::TEXT);
-    snprintf(b, sizeof(b), "%s", tag->protocolLabel.c_str());
-    kv(body, i18n::T(S_TAG_PROTOCOL), b, theme::TEXT);
-    // Seconds since 2000-01-01 GMT, shown as the date it means. The raw number
-    // stays in the serial log: on the panel a date can be checked against when
-    // a spool was made, and 836340782 cannot be checked against anything.
-    // Page 0x0C also carries the twin tag id, so a value that lands outside a
-    // plausible range is printed raw rather than dressed up as a date.
+        const uint8_t n = tag->colorCount < 1 ? 1 : (tag->colorCount > 3 ? 3 : tag->colorCount);
+        const lv_color_t cols[3] = {
+            lv_color_make(tag->r,   tag->g,   tag->b),
+            lv_color_make(tag->c2r, tag->c2g, tag->c2b),
+            lv_color_make(tag->c3r, tag->c3g, tag->c3b),
+        };
+        for (uint8_t i = 0; i < n; i++) {
+            lv_obj_t* band = lv_obj_create(bar);
+            lv_obj_remove_style_all(band);
+            lv_obj_set_height(band, LV_PCT(100));
+            lv_obj_set_flex_grow(band, 1);
+            lv_obj_set_style_bg_color(band, cols[i], 0);
+            lv_obj_set_style_bg_opa(band, LV_OPA_COVER, 0);
+            lv_obj_clear_flag(band, LV_OBJ_FLAG_SCROLLABLE);
+        }
+    }
+    gap(body, 10);
+
+    char b[64];
+    const char* DASH = "-";
+    auto orDash = [&](const String& v) { return v.length() ? v.c_str() : DASH; };
+
+    kv(body, "UID", orDash(tag->uid), theme::TEXT);
+    kv(body, i18n::T(S_NT_BRAND),    orDash(tag->brand),         theme::TEXT);
+    kv(body, i18n::T(S_NT_TYPE),     orDash(tag->protocolLabel), theme::TEXT);
+    kv(body, i18n::T(S_NT_MATERIAL), orDash(tag->material),      theme::TEXT);
+    kv(body, i18n::T(S_NT_MESSAGE),  orDash(tag->message),       theme::TEXT);
+
+    {
+        const bool a1 = tag->aspect1Label.length() > 0;
+        const bool a2 = tag->aspect2Label.length() > 0;
+        snprintf(b, sizeof(b), "%s / %s",
+                 a1 ? tag->aspect1Label.c_str() : DASH,
+                 a2 ? tag->aspect2Label.c_str() : DASH);
+        kv(body, i18n::T(S_NT_ASPECT), b, theme::TEXT);
+    }
+
+    kv(body, i18n::T(S_NT_KIND), orDash(tag->kindLabel), theme::TEXT);
+
+    snprintf(b, sizeof(b), "%lu %s", (unsigned long)tag->measure, tag->unitLabel.c_str());
+    kv(body, i18n::T(S_NT_WTOTAL), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%lu %s", (unsigned long)tag->available, tag->unitLabel.c_str());
+    kv(body, i18n::T(S_NT_WAVAIL), b, theme::TEXT);
+
+    snprintf(b, sizeof(b), "%s mm", orDash(tag->diameterLabel));
+    kv(body, i18n::T(S_NT_DIAM), b, theme::TEXT);
+
+    snprintf(b, sizeof(b), "%u - %u\xC2\xB0""C", tag->nozMin, tag->nozMax);
+    kv(body, i18n::T(S_NT_NOZZLE), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%u - %u\xC2\xB0""C", tag->bedMin, tag->bedMax);
+    kv(body, i18n::T(S_NT_BED), b, theme::TEXT);
+    snprintf(b, sizeof(b), "%u\xC2\xB0""C / %uh", tag->dryTemp, tag->dryHours);
+    kv(body, i18n::T(S_NT_DRY), b, theme::TEXT);
+
+    // The stamp raw AND as a date. The raw number is what a reader log and the
+    // SDK print, so it is what a value is compared against; the date is what
+    // tells a person whether the number is plausible at all. Page 0x0C also
+    // carries the twin tag id, so a stamp outside a sane range shows as a dash
+    // rather than as a date from 1970.
+    snprintf(b, sizeof(b), "%lu", (unsigned long)tag->stamp);
+    kv(body, i18n::T(S_NT_STAMP), b, theme::TEXT);
     {
         const time_t t = (time_t)tag->stamp + 946684800L;   // 2000-01-01 -> epoch
         struct tm g;
-        if (tag->stamp && gmtime_r(&t, &g)) {
+        if (tag->stamp && gmtime_r(&t, &g))
             snprintf(b, sizeof(b), "%04d-%02d-%02d %02d:%02d",
                      g.tm_year + 1900, g.tm_mon + 1, g.tm_mday, g.tm_hour, g.tm_min);
-        } else {
-            snprintf(b, sizeof(b), "%lu", (unsigned long)tag->stamp);
-        }
-        kv(body, i18n::T(S_TAG_STAMP), b, theme::TEXT);
-    }
-    snprintf(b, sizeof(b), "%u\xC2\xB0""C / %uh", tag->dryTemp, tag->dryHours);
-    kv(body, i18n::T(S_TAG_DRY), b, theme::TEXT);
-
-    // Remaining first, quantity second. On a box that sits next to a printer
-    // the useful number is how much is left - the factory figure is context
-    // for it, which is why they share a line rather than compete for one.
-    snprintf(b, sizeof(b), "%lu %s", (unsigned long)tag->available,
-             tag->unitLabel.c_str());
-    kv(body, i18n::T(S_TAG_LEFT), b, theme::TEXT);
-    snprintf(b, sizeof(b), "%lu %s", (unsigned long)tag->measure,
-             tag->unitLabel.c_str());
-    kv(body, i18n::T(S_TAG_QTY), b, theme::TEXT_DIM);
-
-    snprintf(b, sizeof(b), "%u.%u", tag->tdRaw / 10, tag->tdRaw % 10);
-    kv(body, i18n::T(S_TAG_TD), b, theme::TEXT_DIM);
-
-    // Two swatches on the value side, or a dash. A colour is the one field a
-    // number cannot be checked against, so the second and third are shown the
-    // same way the first is - as colour.
-    {
-        lv_obj_t* r2 = kv(body, i18n::T(S_TAG_COLOURS),
-                          (tag->hasColor2 || tag->hasColor3) ? "" : "-",
-                          theme::TEXT_DIM);
-        if (tag->hasColor2 || tag->hasColor3) {
-            lv_obj_t* box = lv_obj_create(r2);
-            lv_obj_remove_style_all(box);
-            lv_obj_set_size(box, 44, 16);
-            lv_obj_set_flex_flow(box, LV_FLEX_FLOW_ROW);
-            lv_obj_set_flex_align(box, LV_FLEX_ALIGN_END,
-                                  LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            lv_obj_set_style_pad_column(box, 4, 0);
-            lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
-            const uint8_t rgb[2][3] = { { tag->c2r, tag->c2g, tag->c2b },
-                                        { tag->c3r, tag->c3g, tag->c3b } };
-            const bool has[2] = { tag->hasColor2, tag->hasColor3 };
-            for (int i = 0; i < 2; i++) {
-                if (!has[i]) continue;
-                lv_obj_t* d = lv_obj_create(box);
-                lv_obj_remove_style_all(d);
-                lv_obj_set_size(d, 14, 14);
-                lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
-                lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
-                lv_obj_set_style_bg_color(
-                    d, lv_color_make(rgb[i][0], rgb[i][1], rgb[i][2]), 0);
-                lv_obj_clear_flag(d, LV_OBJ_FLAG_SCROLLABLE);
-            }
-        }
+        else
+            snprintf(b, sizeof(b), "-");
+        kv(body, i18n::T(S_NT_DATE), b, theme::TEXT);
     }
 
-    kv(body, i18n::T(S_TAG_MESSAGE),
-       tag->message.length() ? tag->message.c_str() : "-", theme::TEXT_DIM);
+    // The colours in hex, the way the chip stores them and the way every
+    // slicer, every palette and the spool's own listing writes them. Decimal
+    // triplets had to be converted in the head before they could be compared
+    // with anything.
+    //
+    // The primary carries its alpha too - #RRGGBBAA - because page 0x08 is four
+    // bytes and this screen exists to show what is on the chip.
+    snprintf(b, sizeof(b), "#%02X%02X%02X%02X", tag->r, tag->g, tag->b, tag->a);
+    kv(body, i18n::T(S_NT_COLOR1), b, theme::TEXT);
 
-    // The one row on this screen that is a verdict rather than a value, so it
-    // is the one row that gets a colour. Everything else is data.
+    // Shown whenever the aspect says the colour exists, INCLUDING #000000.
+    // That is a real black on a bicolour spool, and printing a dash for it
+    // would hide the very byte somebody opened this screen to check.
+    if (tag->colorCount >= 2) snprintf(b, sizeof(b), "#%02X%02X%02X", tag->c2r, tag->c2g, tag->c2b);
+    else                      snprintf(b, sizeof(b), "-");
+    kv(body, i18n::T(S_NT_COLOR2), b, theme::TEXT);
+    if (tag->colorCount >= 3) snprintf(b, sizeof(b), "#%02X%02X%02X", tag->c3r, tag->c3g, tag->c3b);
+    else                      snprintf(b, sizeof(b), "-");
+    kv(body, i18n::T(S_NT_COLOR3), b, theme::TEXT);
+
+    if (tag->tdRaw) snprintf(b, sizeof(b), "%u.%u", tag->tdRaw / 10, tag->tdRaw % 10);
+    else            snprintf(b, sizeof(b), "-");
+    kv(body, i18n::T(S_NT_TD), b, theme::TEXT);
+
+    // The signature verdict, and its colour carries it: this is the one row
+    // where the value is a judgement rather than a reading.
     {
-        StrId id = S_SIG_UNREAD;
+        const char* v = "-";
         uint32_t col = theme::TEXT_DIM;
         switch (tag->signature) {
-            case TagInfo::SIG_VALID:   id = S_SIG_VALID;   col = theme::OK;     break;
-            case TagInfo::SIG_INVALID: id = S_SIG_INVALID; col = theme::DANGER; break;
-            case TagInfo::SIG_NONE:    id = S_SIG_NONE;    break;
-            case TagInfo::SIG_NO_KEY:  id = S_SIG_NOKEY;   break;
+            case TagInfo::SIG_VALID:   v = "OK";      col = theme::OK;     break;
+            case TagInfo::SIG_INVALID: v = i18n::T(S_NT_INVALID); col = theme::DANGER; break;
+            case TagInfo::SIG_NONE:    v = i18n::T(S_NT_NONE);    break;
+            case TagInfo::SIG_NO_KEY:  v = i18n::T(S_NT_NOKEY);  col = theme::WARN;   break;
             default: break;
         }
-        kv(body, i18n::T(S_TAG_SIG), i18n::T(id), col);
+        kv(body, i18n::T(S_NT_CERT), v, col);
     }
 
-    if (tag->pages.length()) {
-        lv_obj_t* raw = lv_label_create(body);
-        lv_label_set_text(raw, tag->pages.c_str());
-        lv_label_set_long_mode(raw, LV_LABEL_LONG_WRAP);
-        lv_obj_set_width(raw, theme::SCREEN_W - 2 * theme::PAD - 6);
-        lv_obj_set_style_text_font(raw, &font_ui_12, 0);
-        lv_obj_set_style_text_color(raw, lv_color_hex(theme::TEXT_DIM), 0);
-        lv_obj_set_style_pad_top(raw, 10, 0);
-    }
+    // The hex dump is a screen of its own, behind a button.
+    //
+    // Twenty rows of it doubled the length of this view, and they are not what
+    // anyone reads first: the decoded fields answer "is this spool right", and
+    // the raw pages answer "why is that field wrong" - a question you only ask
+    // after the first one. One button keeps the second question one tap away
+    // without putting it in front of the first.
+    gap(body, 12);
+    frame::button(body, i18n::T(S_NT_HEX), 0, onHex);
+    // And a way out that is not the chevron. This view scrolls well past a
+    // screenful, and the header is at the top of it - somebody at the bottom of
+    // the page had to scroll back up to leave.
+    // The way out is the primary action of a screen you came to read: HEX Code
+    // is where you go next only if something looked wrong.
+    gap(body, 6);
+    frame::button(body, i18n::T(S_BACK), 1, onBack);
+
 }
 
 // Two answers to one question, laid out so neither is pressed by accident.

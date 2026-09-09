@@ -79,8 +79,8 @@ lv_obj_t* build(const char* title, Callback onBack) {
         // grew the label to two lines, pushed itself out of a 44 px header and
         // took the rule under it off the screen. A header is a fixed thing; a
         // title too long for it is truncated, not accommodated.
-        lv_obj_set_height(t, lv_font_get_line_height(&font_ui_16));
-        lv_obj_set_style_text_font(t, &font_ui_16, 0);
+        lv_obj_set_height(t, lv_font_get_line_height(&font_ui_bold_16));
+        lv_obj_set_style_text_font(t, &font_ui_bold_16, 0);
         lv_obj_align(t, LV_ALIGN_LEFT_MID, titleX, 0);
     }
 
@@ -162,7 +162,13 @@ lv_obj_t* button(lv_obj_t* parent, const char* text, int tone, Callback onClick)
     lv_obj_add_event_cb(b, clickCb, LV_EVENT_CLICKED, (void*)onClick);
     lv_obj_t* l = lv_label_create(b);
     lv_label_set_text(l, text);
-    lv_obj_set_style_text_font(l, &font_ui_14, 0);
+    // 20, not 14 - and Medium, not bold. A button is 52 px tall because it is
+    // the most consequential tap on the screen, and its label was set in the
+    // size used for a row's secondary value, so it read as one. Size is what
+    // was missing; weight was tried here and taken back out. The bold face is
+    // for titles, and a screen where the title and every button are both bold
+    // has no hierarchy left to express.
+    lv_obj_set_style_text_font(l, &font_ui_20, 0);
     lv_obj_center(l);
     return b;
 }
@@ -192,7 +198,14 @@ lv_obj_t* row(lv_obj_t* parent, const char* label, const char* value,
     lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
     lv_obj_set_flex_grow(l, 1);
     lv_obj_set_style_min_width(l, icon != icons::NONE ? 66 : 84, 0);
-    lv_obj_set_style_text_font(l, &font_ui_14, 0);
+    // A row's LABEL is set like a title: 16 and SemiBold, not 14 Medium.
+    //
+    // It is the thing a person reads to decide where to go, on a 48 px row they
+    // are about to press, on a panel held at arm's length. At 14 Medium it was
+    // the same weight and nearly the same size as the dim value beside it, and
+    // the two competed. The value stays 14 and dim, and that difference is now
+    // what tells them apart.
+    lv_obj_set_style_text_font(l, &font_ui_bold_16, 0);
 
     if (value && *value) {
         // The value gets a ceiling and truncates; the label never does. An

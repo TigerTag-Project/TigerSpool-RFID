@@ -10,7 +10,12 @@ struct TagInfo {
     bool     ok = false;
     uint32_t idProduct = 0;
     uint16_t idMaterial = 0, idBrand = 0;
-    uint8_t  r = 0, g = 0, b = 0;
+    // Page 0x08 is four bytes, not three: R, G, B and an ALPHA. Every colour on
+    // this chip is stored that way - the second and third carry one too, at
+    // bytes 39 and 43. Nothing in this firmware blends with it, but the tester
+    // exists to show what is on the chip, and a byte not shown is a byte
+    // nobody can check.
+    uint8_t  r = 0, g = 0, b = 0, a = 0;
     uint16_t nozMin = 0, nozMax = 0;
     uint8_t  bedMin = 0, bedMax = 0;
     // Straight off the chip, as numbers rather than resolved labels - this is
@@ -45,9 +50,19 @@ struct TagInfo {
     uint8_t  unitId = 0;
     String   unitLabel;
     uint32_t available = 0;              // remaining, kept up to date by the scale
+    // How many of the three colours actually mean something.
+    //
+    // NOT derived from the colour bytes, and it cannot be: 00 00 00 is a
+    // perfectly good black, and it is also exactly what an unused slot holds.
+    // The chip gives no way to tell those apart. The ASPECT does - "Bicolor"
+    // carries two, "Tricolor" three - and the count comes from the reference
+    // database rather than from ids written into this firmware.
+    uint8_t  colorCount = 1;
+    // Kept for the callers that only want to know whether a non-black second
+    // or third colour is present at all.
     bool     hasColor2 = false, hasColor3 = false;
-    uint8_t  c2r = 0, c2g = 0, c2b = 0;
-    uint8_t  c3r = 0, c3g = 0, c3b = 0;
+    uint8_t  c2r = 0, c2g = 0, c2b = 0, c2a = 0;
+    uint8_t  c3r = 0, c3g = 0, c3b = 0, c3a = 0;
     uint16_t tdRaw = 0;                  // HueForge transmission distance x10
     String   message;                    // custom text, ASCII-filtered for the panel
 

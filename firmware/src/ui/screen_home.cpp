@@ -51,7 +51,10 @@ void buildScreen() {
 
     lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, i18n::T(S_PRINTER));
-    lv_obj_set_style_text_font(title, &font_ui_16, 0);
+    // This screen builds its own header rather than using frame::build, so the
+    // title's weight has to be set here too - and it has to match, or the home
+    // screen is the one place in the product where a title is lighter.
+    lv_obj_set_style_text_font(title, &font_ui_bold_16, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(theme::TEXT), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, 9, 0);
 
@@ -157,7 +160,10 @@ void show(const PrinterCfg* printers, int count,
         lv_label_set_text(name, printers[i].name.c_str());
         lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
         lv_obj_set_flex_grow(name, 1);
-        lv_obj_set_style_text_font(name, &font_ui_14, 0);
+        // The printer's name in the weight a settings row uses. It is the same
+        // job: the one word on a 48 px line that a person reads before pressing
+        // it, at arm's length.
+        lv_obj_set_style_text_font(name, &font_ui_bold_16, 0);
 
         const uint8_t d = state ? state[i] : DOT_OFF;
         makeDot(row, d == DOT_UP     ? theme::OK

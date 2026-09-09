@@ -336,6 +336,15 @@ static const TTEntry TT_UNITS[] = {
 };
 static const size_t TT_UNITS_N = 11;
 
+// Aspects whose spool carries more than one colour, and how many.
+struct TTColors { uint16_t id; uint8_t count; };
+static const TTColors TT_ASPECT_COLORS[] = {
+  { 24, 3 },
+  { 145, 3 },
+  { 252, 2 },
+};
+static const size_t TT_ASPECT_COLORS_N = 3;
+
 static inline const char* tt_lookup(const TTEntry* t, size_t n, uint16_t id) {
   size_t lo = 0, hi = n;
   while (lo < hi) {
@@ -357,6 +366,12 @@ static inline const char* tt_lookup32(const TTEntry32* t, size_t n, uint32_t id)
 static inline const char* tt_material(uint16_t id) { return tt_lookup(TT_MATERIALS,  TT_MATERIALS_N,  id); }
 static inline const char* tt_brand(uint16_t id)    { return tt_lookup(TT_BRANDS,     TT_BRANDS_N,     id); }
 static inline const char* tt_aspect(uint16_t id)   { return tt_lookup(TT_ASPECTS,    TT_ASPECTS_N,    id); }
+// How many colours this aspect implies: 1 unless the database says otherwise.
+static inline uint8_t tt_aspect_colors(uint16_t id) {
+  for (size_t i = 0; i < TT_ASPECT_COLORS_N; i++)
+    if (TT_ASPECT_COLORS[i].id == id) return TT_ASPECT_COLORS[i].count;
+  return 1;
+}
 static inline const char* tt_type(uint16_t id)     { return tt_lookup(TT_TYPES,      TT_TYPES_N,      id); }
 static inline const char* tt_diameter(uint16_t id) { return tt_lookup(TT_DIAMETERS,  TT_DIAMETERS_N,  id); }
 static inline const char* tt_unit(uint16_t id)     { return tt_lookup(TT_UNITS,      TT_UNITS_N,      id); }

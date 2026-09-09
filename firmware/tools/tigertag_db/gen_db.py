@@ -129,6 +129,23 @@ def main():
     # every other id here, so it gets a table of its own.
     versions = rows("id_version.json", "name")
 
+    # How many colours an aspect implies, straight from the database.
+    #
+    # A spool's aspect is what says whether the second and third colours on the
+    # chip mean anything: "Bicolor" has two, "Tricolor" three, everything else
+    # one. It cannot be inferred from the colour bytes, because 00 00 00 is a
+    # perfectly good black and is exactly what an unused slot holds - the chip
+    # has no way to tell those apart, so the aspect has to.
+    #
+    # The ids are 24 and 252 today. They are NOT written into the firmware:
+    # this table mirrors the public API, the API carries color_count, and a
+    # number copied out of it by hand is a second source of truth that rots the
+    # first time somebody adds an aspect.
+    aspect_colors = [(int(e["id"]), int(e.get("color_count") or 1))
+                     for e in load("id_aspect.json")
+                     if int(e.get("color_count") or 1) > 1]
+    aspect_colors.sort()
+
     if repaired:
         print("note: reference labels rewritten for the panel:", file=sys.stderr)
         print("\n".join(repaired), file=sys.stderr)
@@ -192,6 +209,16 @@ def main():
             f.write("};\n")
             f.write(f"static const size_t {name}_N = {len(rows)};\n\n")
 
+        # Only the aspects that carry more than one colour, so the table is two
+        # rows rather than two hundred.
+        f.write("// Aspects whose spool carries more than one colour, and how many.\n")
+        f.write("struct TTColors { uint16_t id; uint8_t count; };\n")
+        f.write("static const TTColors TT_ASPECT_COLORS[] = {\n")
+        for ident, count in aspect_colors:
+            f.write(f"  {{ {ident}, {count} }},\n")
+        f.write("};\n")
+        f.write(f"static const size_t TT_ASPECT_COLORS_N = {len(aspect_colors)};\n\n")
+
         f.write("""static inline const char* tt_lookup(const TTEntry* t, size_t n, uint16_t id) {
   size_t lo = 0, hi = n;
   while (lo < hi) {
@@ -213,6 +240,12 @@ static inline const char* tt_lookup32(const TTEntry32* t, size_t n, uint32_t id)
 static inline const char* tt_material(uint16_t id) { return tt_lookup(TT_MATERIALS,  TT_MATERIALS_N,  id); }
 static inline const char* tt_brand(uint16_t id)    { return tt_lookup(TT_BRANDS,     TT_BRANDS_N,     id); }
 static inline const char* tt_aspect(uint16_t id)   { return tt_lookup(TT_ASPECTS,    TT_ASPECTS_N,    id); }
+// How many colours this aspect implies: 1 unless the database says otherwise.
+static inline uint8_t tt_aspect_colors(uint16_t id) {
+  for (size_t i = 0; i < TT_ASPECT_COLORS_N; i++)
+    if (TT_ASPECT_COLORS[i].id == id) return TT_ASPECT_COLORS[i].count;
+  return 1;
+}
 static inline const char* tt_type(uint16_t id)     { return tt_lookup(TT_TYPES,      TT_TYPES_N,      id); }
 static inline const char* tt_diameter(uint16_t id) { return tt_lookup(TT_DIAMETERS,  TT_DIAMETERS_N,  id); }
 static inline const char* tt_unit(uint16_t id)     { return tt_lookup(TT_UNITS,      TT_UNITS_N,      id); }

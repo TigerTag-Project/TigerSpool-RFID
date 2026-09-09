@@ -758,3 +758,54 @@ field active read 2.3 dB BETTER than 30 with it idle.
   failed the same way. Background links now stand down for the duration of a
   TLS operation and come straight back; the selected printer keeps its link,
   and nothing new is opened while the handshake needs the room.
+
+## 2026-09-10 - the NFC tester, and a Wi-Fi that came back
+
+### Added
+
+- `scripts/make-ui-font.sh` builds two more faces: Montserrat SemiBold 16 for
+  titles and row labels, and JetBrains Mono 16 - twenty glyphs, 8 KB - for the
+  page dump. Both fetched from their own projects, cached outside the tree,
+  never committed; both cited in THIRD_PARTY_LICENSES.md.
+- `?preview=icons` draws every icon beside its name, and `?preview=greys` six
+  card fill/border pairs plus a primary and grey ramp.
+- The NFC Tester's page dump is a screen of its own behind a HEX Code button:
+  pages 0x04 to 0x17, four bytes a line, addressed by their real page numbers.
+- `tt_aspect_colors()` in the generated database, from the `color_count` the
+  API already carried. Three aspects are multicolour, not two.
+
+### Changed
+
+- The NFC Tester is a technical view in English in every language, one field
+  per row, in a fixed order: a colour bar across the width, then UID, brand,
+  tag type, material, message, aspects, kind, weights, diameter, temperatures,
+  the stamp raw AND as a date, the three colours in hex, HueForge TD and the
+  signature verdict.
+- The colour bar carries one band per colour, and how many is the ASPECT's
+  answer - never the colour bytes'. 00 00 00 is a real black and also what an
+  unused slot holds; only the aspect tells them apart.
+- Colours are shown in hex, and the primary with its alpha: page 0x08 is four
+  bytes and the tester shows what is on the chip.
+- Waiting for a tag is the reader's wave in a ring over "Waiting NFC...", with
+  the reader's own state above it.
+- Titles and row labels are SemiBold 16; buttons are 20; the printer list's
+  names match. Weight is on titles and labels only - weight everywhere is
+  weight nowhere.
+- The reader row has its own icon: the Wi-Fi wave turned a quarter turn, drawn
+  by rotating the glyph itself rather than redrawing it by hand.
+
+### Fixed
+
+- Wi-Fi is asked for again when it goes away. See its own commit.
+- A tag's readings STAY on screen when the spool is taken away, and are
+  replaced only by a different chip. Clearing on removal made the result vanish
+  at the moment somebody wanted to read it - and made the screen flicker
+  whenever detection dropped a poll, which it does.
+- Padding on a button is not space above it: a label is centred in the content
+  area, which padding shrinks from the top, so the word sat below the middle.
+  Same fault put a ten pixel strip of bare ground inside the colour bar. Space
+  is an object now, `gap()`.
+- The Display row's sun matches the Language row's globe; a long title no
+  longer pushes the header's rule off the screen.
+
+Verified on hardware throughout, on a real R3D spool.

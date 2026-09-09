@@ -204,6 +204,7 @@ bool reader::read(TagInfo& out) {
     out.idMaterial = be16(payload + 8);
     out.idBrand    = be16(payload + 14);
     out.r = payload[16]; out.g = payload[17]; out.b = payload[18];
+    out.a = payload[19];
     out.nozMin = be16(payload + 24);
     out.nozMax = be16(payload + 26);
     out.bedMin = payload[30];
@@ -224,7 +225,9 @@ bool reader::read(TagInfo& out) {
     out.measure   = be24(payload + 20);
     out.unitId    = payload[23];
     out.c2r = payload[36]; out.c2g = payload[37]; out.c2b = payload[38];
+    out.c2a = payload[39];
     out.c3r = payload[40]; out.c3g = payload[41]; out.c3b = payload[42];
+    out.c3a = payload[43];
     // All three zero is "no second colour", not "black". A tricolour spool that
     // really wanted black would still differ in one of the other two, and a
     // mono spool leaves the whole block at zero - which is the shape the tag
@@ -257,6 +260,13 @@ bool reader::read(TagInfo& out) {
     const auto label = [](const char* got, uint8_t id) {
         return got ? String(got) : (String("#") + id);
     };
+    // Either aspect can be the one that says how many colours there are, so the
+    // larger of the two wins: a spool marked Silk and Bicolor has two.
+    {
+        const uint8_t c1 = tt_aspect_colors(out.aspect1);
+        const uint8_t c2 = tt_aspect_colors(out.aspect2);
+        out.colorCount = c1 > c2 ? c1 : c2;
+    }
     out.aspect1Label  = label(tt_db::aspect(out.aspect1), out.aspect1);
     out.aspect2Label  = label(tt_db::aspect(out.aspect2), out.aspect2);
     out.kindLabel     = label(tt_db::type(out.kind), out.kind);

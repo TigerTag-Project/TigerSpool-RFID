@@ -42,6 +42,8 @@ enum Id {
     UPDATE,      // LV_SYMBOL
     RESTART,     // LV_SYMBOL
     ERASE,       // LV_SYMBOL
+    NFC,         // drawn - a card and the field leaving it; FontAwesome 5 free
+                 // has no NFC glyph, and the reader row was borrowing the sun
 };
 
 // Builds the icon into a 22x22 box parented to `parent`. `colour` is applied to

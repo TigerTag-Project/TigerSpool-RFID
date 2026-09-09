@@ -14,6 +14,7 @@
 #include "ui/screen_scan.h"
 #include "ui/screen_settings.h"
 #include "ui/frame.h"
+#include "ui/icons.h"
 #include "ui/theme.h"
 #include "ui/fonts.h"
 #include "net/portal_page.h"
@@ -330,6 +331,31 @@ namespace {
         }
     }
 
+
+    // Every icon at once, each beside its name.
+    //
+    // Icons are drawn from primitives at three different sizes and two of them
+    // are font glyphs, so "are they the same weight and the same diameter" is a
+    // question no single screen answers - the menu shows five of them, and the
+    // rest are below the fold on a panel that cannot be scrolled from here. Two
+    // faults were found this way: a sun set at 16 px beside a globe drawn to 20,
+    // and a reader row quietly borrowing the sun.
+    void previewIcons() {
+        struct Row { icons::Id id; const char* name; };
+        static const Row ROWS[] = {
+            { icons::PRINTER, "PRINTER" }, { icons::WIFI,   "WIFI"   },
+            { icons::USER,    "USER"    }, { icons::SCREEN, "SCREEN" },
+            { icons::GLOBE,   "GLOBE"   }, { icons::NFC,    "NFC"    },
+            { icons::UPDATE,  "UPDATE"  }, { icons::RESTART,"RESTART"},
+            { icons::ERASE,   "ERASE"   },
+        };
+        lv_obj_t* body = frame::build("Icons", nullptr);
+        lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        for (const Row& r : ROWS)
+            frame::row(body, r.name, "", false, nullptr, nullptr, r.id, theme::TEXT);
+    }
+
     void handleShot() {
         if (!canvasReady) { server.send(503, "text/plain", "no canvas"); return; }
 
@@ -377,6 +403,7 @@ namespace {
         else if (preview == "choose")    screen_settings::showChoosePrinters(printers, MAX_PRINTERS, false);
         else if (preview == "choosing")  screen_settings::showChoosePrinters(nullptr, 0, true);
         else if (preview == "greys")     previewGreys();
+        else if (preview == "icons")     previewIcons();
 
         // The boot screen cannot be captured the way it is actually shown: it
         // is drawn before the web server exists. This redraws it on demand so

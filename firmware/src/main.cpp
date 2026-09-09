@@ -97,7 +97,7 @@ bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
-             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING, ST_CLOUD_SLOT, ST_CHOOSE_PRINTERS };
+             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING, ST_CLOUD_SLOT, ST_CHOOSE_PRINTERS, ST_SET_READER_HEX };
 State   state = ST_LANG;
 // Whether the language screen was opened from Settings rather than reached on
 // first boot. It decides two things: that the screen offers a way back, and
@@ -130,6 +130,8 @@ static const char* typeTag(PrinterType t) {
 // ARP cache or a congested link often enough that treating one miss as "gone"
 // would make the list flicker.
 static uint32_t pLastSeen[MAX_PRINTERS] = { 0 };
+// The tag the NFC tester is showing, so the hex view can read the same one.
+static const TagInfo* readerTag = nullptr;
 static uint32_t pProbeAt = 0;
 static int      pProbeIdx = 0;
 static const uint32_t ONLINE_TTL_MS = 25000;   // stays "online" for 25 s without an answer
@@ -729,16 +731,31 @@ static void dropLink(Link& l) {
 // then landed during the handshake, took the heap under the safety floor, and
 // the link was closed again seconds later. Deciding with the price in hand is
 // what makes a link that is opened a link that stays.
+// Measured on hardware, one link at a time, reading the free heap either side
+// of each connection - not estimated. The margin over the measurement is about
+// a quarter, which covers the difference between a printer with one AMS unit
+// and one with four.
+//
+//   Bambu, on screen      88 KB   TLS, plus a 50 KB buffer for a full pushall
+//   Bambu, background     46 KB   the same TLS with an 8 KB buffer
+//   Anycubic              37 KB   TLS, 16 KB buffer
+//   Snapmaker             11 KB   WebSocket and its frame buffer
+//   Creality               8 KB   WebSocket
+//   Elegoo                 3 KB   plain MQTT, no TLS at all
+//   FlashForge            ~1 KB   HTTP; nothing is held between requests
+//
+// The spread is the point: one Bambu costs as much as fifteen Elegoos. A limit
+// expressed as a NUMBER of printers would be wrong for almost every account -
+// too mean for a workshop of FlashForges, too generous for a rack of Bambus.
+// The limit is a budget, and this is the price list.
 static uint32_t linkCost(PrinterType t, bool foreground) {
     switch (t) {
-        // 50 KB of receive buffer for the printer on screen, 8 KB for the
-        // others, plus about 40 KB of TLS either way.
         case PT_BAMBU:     return foreground ? 96000 : 52000;
-        case PT_ANYCUBIC:  return 60000;    // TLS + a 16 KB buffer
-        case PT_ELEGOO:    return 16000;    // plain MQTT, 8 KB buffer
-        case PT_CREALITY:
-        case PT_SNAPMAKER: return 16000;    // a WebSocket and its frame buffer
-        case PT_FF_C5:     return 6000;     // HTTP, nothing held between calls
+        case PT_ANYCUBIC:  return 44000;
+        case PT_SNAPMAKER: return 14000;
+        case PT_CREALITY:  return 10000;
+        case PT_ELEGOO:    return 6000;
+        case PT_FF_C5:     return 4000;
         default:           return 16000;
     }
 }
@@ -1155,10 +1172,10 @@ void loop() {
     //
     // If the association fails at startup, or the access point drops it later,
     // the device sits there for ever with a lit screen, every printer red and
-    // no route to the account: watched happening twice in one afternoon, once
-    // at boot and once mid-session, on a link measured at -80 dBm where the
-    // radio is at the edge of what it can hold. Arduino's own auto-reconnect
-    // did not bring it back either time.
+    // no route to the account: watched happening twice today, once at boot and
+    // once mid-session, on a link measured at -80 dBm where the radio is at the
+    // edge of what it can hold. Arduino's own auto-reconnect did not bring it
+    // back either time.
     //
     // So: after fifteen seconds down, ask again, and keep asking every thirty.
     // A device left alone on a bad afternoon has to end up connected, because
@@ -1226,8 +1243,16 @@ void loop() {
             lastHeapLog = millis();
             int live = 0;
             for (int i = 0; i < MAX_LINKS; i++) if (links[i].state == LINK_UP) live++;
-            Serial.printf("[heap] %u free, %u largest, %d link(s) up, wifi=%d rssi=%d\n",
+            // PSRAM alongside the internal heap, because the two answer
+            // different questions. Internal RAM is what a socket, a TLS session
+            // and an MQTT buffer come out of, and it is the one that runs out.
+            // The 8 MB of PSRAM is almost untouched - LVGL's heap lives there
+            // and nothing else does - so knowing how much of it is idle is how
+            // anyone decides whether moving a buffer there is worth the work.
+            Serial.printf("[heap] %u free, %u largest, psram %u/%u free, "
+                          "%d link(s) up, wifi=%d rssi=%d\n",
                           (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                          (unsigned)ESP.getFreePsram(), (unsigned)ESP.getPsramSize(),
                           live, (int)WiFi.isConnected(), (int)WiFi.RSSI());
         }
     }
@@ -1839,22 +1864,34 @@ void loop() {
         // The poll is rate-limited too: it is 33 ms with a tag in the field and
         // up to 120 without one, which at frame rate is most of the loop.
         static TagInfo seen;
+        readerTag = seen.ok ? &seen : nullptr;
         static uint8_t seenUid[7] = {0};
         static uint8_t seenLen = 0;
         static uint32_t lastPoll = 0;
+
+        // What is read STAYS on the screen when the spool is taken away.
+        //
+        // This is a bench instrument. The reason to hold a spool against the
+        // box is to get its values on screen; the reason to take it away is to
+        // read them. Clearing on removal meant the answer vanished at the exact
+        // moment somebody wanted to look at it, and it also made the display
+        // flicker whenever detection dropped a poll - which it does, because
+        // the exchange is 120 ms through a field the tag sits at the edge of.
+        //
+        // The results are replaced when a DIFFERENT chip arrives, and cleared
+        // by leaving the screen. Presenting the same spool again changes
+        // nothing, because nothing about it has changed.
         if (nfcReady && millis() - lastPoll > 300) {
             lastPoll = millis();
             uint8_t uid[7] = {0}; uint8_t ul = 0;
-            if (!reader::present(uid, &ul)) {
-                // Gone. Forget it, so putting the SAME spool back reads it
-                // again - which is what someone testing a reader expects.
-                if (seen.ok) { seen = TagInfo(); seenLen = 0; }
-            } else if (!seen.ok || ul != seenLen || memcmp(uid, seenUid, ul) != 0) {
+            if (reader::present(uid, &ul)
+                && (!seen.ok || ul != seenLen || memcmp(uid, seenUid, ul) != 0)) {
                 TagInfo t;
                 if (reader::read(t)) {
                     seen = t;
                     memcpy(seenUid, uid, ul > 7 ? 7 : ul);
                     seenLen = ul;
+                    Serial.printf("[reader] tag %s read\n", t.uid.c_str());
                 }
             }
         }
@@ -1866,10 +1903,29 @@ void loop() {
         // spent, so the chevron cleared the tag and stayed put. With a spool
         // sitting on the reader the tag came straight back, and the screen
         // could not be left at all.
+        if (screen_settings::takeHex()) {
+            screen_settings::invalidate();
+            state = ST_SET_READER_HEX; stateSince = millis();
+            break;
+        }
         if (screen_settings::takeBack()) {
             seen = TagInfo();
             screen_settings::invalidate();
             state = ST_SETTINGS; stateSince = millis();
+        }
+        break;
+    }
+
+    // The raw pages, on their own. The tag lives in ST_SET_READER's own static,
+    // so this state borrows it through a pointer the reader case publishes -
+    // the alternative was copying a TagInfo, with its eight Strings, on every
+    // frame of a screen that only reads it.
+    case ST_SET_READER_HEX: {
+        screen_settings::showReaderHex(readerTag);
+        lvgl_port::loop();
+        if (screen_settings::takeBack()) {
+            screen_settings::invalidate();
+            state = ST_SET_READER; stateSince = millis();
         }
         break;
     }

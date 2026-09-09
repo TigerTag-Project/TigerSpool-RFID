@@ -95,6 +95,8 @@ void showUpdateNotice(const char* current, const char* latest);
 // which is a pixel that says nothing on every screen it appears on. Moved here
 // and made to earn its place: it reports the reader AND reads a tag, so it
 // answers "is my reader working" and "what is on this spool" in one place.
+void showReaderHex(const TagInfo* tag);
+bool takeHex();
 void showReader(bool ready, const char* err, const TagInfo* tag);
 
 void showRestart();
