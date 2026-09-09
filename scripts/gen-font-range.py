@@ -30,7 +30,18 @@ SOURCE_UNAVAILABLE = 3
 
 
 def main() -> int:
-    sources = sorted((REPO / "firmware" / "src" / "ui").glob("font_ui_*.c"))
+    # The mono face is deliberately NOT part of this.
+    #
+    # Every other face carries the same wide range, and that shared range is
+    # what check-ui-fonts.py tests drawn strings against. font_ui_mono_* is a
+    # twenty-glyph subset - space, 0-9, A-F, x - compiled for one screen, the
+    # NFC tester's page dump, whose text is hex generated at runtime rather than
+    # a literal anybody could get wrong. Folding its range into the union would
+    # collapse the shared range to those twenty characters and the check would
+    # stop meaning anything; leaving it out keeps the check honest and costs a
+    # face that no literal is ever drawn in.
+    sources = sorted(f for f in (REPO / "firmware" / "src" / "ui").glob("font_ui_*.c")
+                     if "_mono_" not in f.name)
     if not sources:
         print("no generated UI face under firmware/src/ui - "
               "run 'bash scripts/make-ui-font.sh'", file=sys.stderr)

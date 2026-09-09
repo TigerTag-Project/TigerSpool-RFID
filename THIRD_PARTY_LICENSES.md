@@ -24,6 +24,7 @@ components that keep their own licenses.
 | [mbedTLS](https://github.com/Mbed-TLS/mbedtls) | Apache-2.0 | TLS, bundled with ESP-IDF |
 | [Font Awesome Free](https://fontawesome.com) | Fonts under SIL OFL 1.1, icon artwork under CC BY 4.0 | Every `LV_SYMBOL_*` glyph, plus the sun on the Display row, extracted into the `firmware/src/ui/font_ui_*.c` faces by `scripts/make-ui-font.sh`. The outlines come from the copy shipped inside the pinned LVGL package, so the library version pins them; no font file is committed. `lv_font_conv` extracts outlines from the font, so it is the OFL that governs what is compiled in. |
 | [Montserrat](https://github.com/JulietaUla/Montserrat) | SIL OFL 1.1 | The UI typeface. Latin-1 and Latin Extended-A subsets extracted into `firmware/src/ui/font_ui_*.c` by `scripts/make-ui-font.sh`, from the copy shipped inside the pinned LVGL package. No font file is committed. |
+| [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | SIL OFL 1.1 | The NFC tester's page dump, which has to line up in columns a proportional face cannot give. Twenty glyphs - space, 0-9, A-F and x - extracted into `firmware/src/ui/font_ui_mono_12.c` by `scripts/make-ui-font.sh`, fetched from the project's own repository and cached outside the tree. No font file is committed. |
 
 ## The vendored PN532 driver
 

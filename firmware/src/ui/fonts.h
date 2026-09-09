@@ -22,4 +22,16 @@ LV_FONT_DECLARE(font_ui_14)
 LV_FONT_DECLARE(font_ui_16)
 LV_FONT_DECLARE(font_ui_20)
 LV_FONT_DECLARE(font_ui_24)
+
+// Montserrat SemiBold, text only, for the ONE place weight is used: a screen's
+// title. Everything else - rows, buttons, values, captions - is Medium, and
+// that is what lets the title stand out at all. Weight everywhere is weight
+// nowhere.
+LV_FONT_DECLARE(font_ui_bold_16)
+
+// JetBrains Mono, for the one screen that needs columns: the NFC tester's page
+// dump. Space, 0-9, A-F and the x of "0x" - twenty glyphs, because that is all
+// a hex dump contains. Nothing else in this interface uses it, and nothing else
+// should: a monospace face is for data that lines up, not for prose.
+LV_FONT_DECLARE(font_ui_mono_16)
 }
