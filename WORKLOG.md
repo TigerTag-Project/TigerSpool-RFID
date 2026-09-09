@@ -748,7 +748,7 @@ Measured on hardware: six printers connect unattended and hold, heap flat at
 RFID reader was cleared of suspicion for the weak Wi-Fi - 38 samples with the
 field active read 2.3 dB BETTER than 30 with it idle.
 
-## 2026-09-09 - the heap had room, just not in one piece
+## 2026-09-09 - the heap had room, just not in one piece (released in 1.43.1)
 
 ### Fixed
 

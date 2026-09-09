@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.43.1] - 2026-09-09
+
+### Fixed
+
+- **The device can check for updates and refresh its account again while
+  several printers are connected.** With six connections open there was still
+  memory free, but not in one continuous piece large enough for a secure
+  connection - so the update screen showed "manifest HTTP -1" and the printer
+  list stopped refreshing. The background connections now step aside for the
+  second or two a secure request needs, and come straight back. The printer you
+  are looking at keeps its connection throughout.
+
+
 ## [1.43.0] - 2026-09-09
 
 ### Added
