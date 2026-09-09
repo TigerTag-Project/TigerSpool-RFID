@@ -7,6 +7,41 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.43.0] - 2026-09-09
+
+### Added
+
+- **A "Choose printers" step when you set the device up.** Right after your
+  account is linked, the device lists every printer on it with none selected,
+  and you turn on the ones this box should talk to. An account with a dozen
+  printers should not have a new device dialling all of them on its first boot.
+  The step belongs to setup and to a factory reset; signing in again does not
+  wipe what you chose.
+- **A blue dot while a printer is being connected to**, green once it is, red
+  when it is not. Red for a machine the device is actively dialling is wrong,
+  and it is wrong for exactly the seconds you are standing there watching.
+
+### Fixed
+
+- **A printer that lost its connection now comes back on its own.** Once a link
+  ran out of attempts it never tried again until you tapped the printer - so a
+  device left alone through a Wi-Fi blink or a printer reboot ended up with
+  every dot red and no way back. It now starts over after a minute.
+- **The interface no longer freezes when the network goes bad.** Opening a
+  connection blocks, and the underlying defaults are very long - fifteen seconds
+  for an MQTT socket, two minutes for a TLS handshake. With one connection per
+  printer, all of them retried at once when Wi-Fi dropped and the screen stayed
+  lit but stopped responding. One printer is dialled at a time now, and the
+  waits are capped at a few seconds.
+- **Connections are no longer closed to keep memory in reserve.** Each one is
+  priced before it is opened, and the safety limit only acts on a shortage that
+  actually lasts, instead of on the brief dip an account refresh causes.
+- The cards behind rows are a black interior with a grey outline, which is what
+  the panel actually shows well; scrollbars are visible, the same everywhere,
+  and no longer touch the rows or the header.
+- A long title no longer pushes the header's rule off the screen.
+
+
 ## [1.42.1] - 2026-09-08
 
 ### Changed

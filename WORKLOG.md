@@ -697,7 +697,7 @@ forced two-brand sync failure keeping all thirteen printers.
 - `S_AVAILABLE` removed; nothing draws it any more.
 - `?preview=notice` shows an upgrade rather than a downgrade.
 
-## 2026-09-09 - links that come back, and a tool that was writing nothing
+## 2026-09-09 - links that come back, and a tool that was writing nothing (released in 1.43.0)
 
 ### Added
 
