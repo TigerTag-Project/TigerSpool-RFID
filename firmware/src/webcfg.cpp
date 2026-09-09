@@ -13,6 +13,9 @@
 #include "ui/screen_slots.h"
 #include "ui/screen_scan.h"
 #include "ui/screen_settings.h"
+#include "ui/frame.h"
+#include "ui/theme.h"
+#include "ui/fonts.h"
 #include "net/portal_page.h"
 #include "version.h"
 #include "web_assets.h"
@@ -25,6 +28,10 @@
 // The offscreen canvas lives in main.cpp; /screen.bmp serialises it as-is.
 // Declared at GLOBAL scope: inside the anonymous namespace below they
 // would name different symbols and the link step would fail.
+// The real list, so the chooser can be previewed as it will actually be
+// seen: an empty one says nothing about how rows and the button share the
+// screen, which is the whole question on this one.
+extern PrinterCfg printers[];
 extern LGFX_Sprite canvas;
 extern bool        canvasReady;
 
@@ -253,6 +260,76 @@ namespace {
     // ------------------------------------------------------------------
     void le32(uint8_t* p, uint32_t v) { p[0]=v; p[1]=v>>8; p[2]=v>>16; p[3]=v>>24; }
 
+
+    // A colour question the screenshot cannot answer.
+    //
+    // /screen.bmp serialises what LVGL DREW. Near black, an IPS panel's gamma
+    // stops being linear, so two fills that differ by a few counts in the
+    // buffer can be one colour on the glass - or one of them can come out with
+    // a cast that is not in the data at all. This has bitten this project once
+    // already, on the screen ground.
+    //
+    // So the card is not chosen from a capture. Six candidate fill/border pairs
+    // are drawn on the panel at once, labelled, and whoever is standing in
+    // front of it says which row separates. That is a measurement; reading a
+    // BMP of it is not.
+    void previewGreys() {
+        struct Pair { uint32_t fill, line; const char* label; };
+        static const Pair PAIRS[] = {
+            { 0x000000, 0x3A4046, "1  000000 / 3A4046" },
+            { 0x111417, 0x3A4046, "2  111417 / 3A4046" },
+            { 0x1A1E22, 0x454C54, "3  1A1E22 / 454C54" },
+            { 0x1B212A, 0x2E3646, "4  1B212A / 2E3646" },
+            { 0x22262B, 0x4E555D, "5  22262B / 4E555D" },
+            { 0x252A2F, 0x3A4046, "6  252A2F / 3A4046" },
+        };
+        lv_obj_t* body = frame::build("Panel test", nullptr);
+        lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        for (const Pair& p : PAIRS) {
+            lv_obj_t* card = lv_obj_create(body);
+            lv_obj_remove_style_all(card);
+            lv_obj_set_size(card, LV_PCT(100), 38);
+            lv_obj_set_style_bg_color(card, lv_color_hex(p.fill), 0);
+            lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_color(card, lv_color_hex(p.line), 0);
+            lv_obj_set_style_border_width(card, 1, 0);
+            lv_obj_set_style_border_opa(card, LV_OPA_COVER, 0);
+            lv_obj_set_style_radius(card, 10, 0);
+            lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_t* l = lv_label_create(card);
+            lv_label_set_text(l, p.label);
+            lv_obj_set_style_text_font(l, &font_ui_14, 0);
+            lv_obj_set_style_text_color(l, lv_color_hex(theme::TEXT), 0);
+            lv_obj_center(l);
+        }
+
+        // Primaries and a grey ramp, full brightness, as a control.
+        //
+        // The six cards above answer "which fill separates". This row answers
+        // the question behind it: does the panel put out the colour it was
+        // given at all. If R, G and B come out as themselves and the greys
+        // climb evenly, the cards are a gamma question and the numbers just
+        // need moving. If a dark grey lands blue here too, the fault is in the
+        // pixel path - colour order, depth or inversion - and no palette
+        // change would ever have fixed it.
+        static const uint32_t RAMP[] = { 0xFF0000, 0x00FF00, 0x0000FF, 0xFFFFFF,
+                                         0x808080, 0x404040, 0x202020, 0x101010 };
+        lv_obj_t* strip = lv_obj_create(body);
+        lv_obj_remove_style_all(strip);
+        lv_obj_set_size(strip, LV_PCT(100), 34);
+        lv_obj_set_flex_flow(strip, LV_FLEX_FLOW_ROW);
+        lv_obj_clear_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
+        for (uint32_t c : RAMP) {
+            lv_obj_t* sw = lv_obj_create(strip);
+            lv_obj_remove_style_all(sw);
+            lv_obj_set_flex_grow(sw, 1);
+            lv_obj_set_height(sw, 34);
+            lv_obj_set_style_bg_color(sw, lv_color_hex(c), 0);
+            lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
+        }
+    }
+
     void handleShot() {
         if (!canvasReady) { server.send(503, "text/plain", "no canvas"); return; }
 
@@ -295,8 +372,11 @@ namespace {
         else if (preview == "notice") screen_settings::showUpdateNotice("1.41.0", TIGERSPOOL_FW_VERSION);
         else if (preview == "setrestart") screen_settings::showRestart();
         else if (preview == "setfactory") screen_settings::showFactory();
-        else if (preview == "pick")      screen_settings::showPrinters(nullptr, 0, false);
+        else if (preview == "pick")      screen_settings::showPrinters(printers, MAX_PRINTERS, false);
         else if (preview == "cloudslot") screen_slots::showCloudNotice("B2");
+        else if (preview == "choose")    screen_settings::showChoosePrinters(printers, MAX_PRINTERS, false);
+        else if (preview == "choosing")  screen_settings::showChoosePrinters(nullptr, 0, true);
+        else if (preview == "greys")     previewGreys();
 
         // The boot screen cannot be captured the way it is actually shown: it
         // is drawn before the web server exists. This redraws it on demand so

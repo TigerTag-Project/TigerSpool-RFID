@@ -138,6 +138,7 @@ enum StrId : uint8_t {
     S_PRESENT_TAG,
     S_ORIENTATION,
     S_RESTARTING,
+    S_CHOOSE_PRINTERS,
     S_COUNT
 };
 

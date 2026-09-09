@@ -197,6 +197,17 @@ void BambuBackend::begin(const PrinterCfg& cfg) {
     // because the LVGL sprite lives in PSRAM).
     mqtt_.setBufferSize(foreground_ ? BAMBU_BUF_FULL : BAMBU_BUF_BG);
     mqtt_.setKeepAlive(30);
+    // A bounded wait, because this runs in the main loop.
+    //
+    // PubSubClient's socket timeout is FIFTEEN SECONDS by default, and a TLS
+    // handshake in the Arduino client waits two minutes. With one printer per
+    // backend that is now six of these in a row: when the network goes away -
+    // and at -78 dBm it does - the loop stopped for long enough that the panel
+    // was lit and completely unresponsive, which is what a frozen device looks
+    // like to the person holding it. Nothing here is worth more than a few
+    // seconds; a failed attempt is retried anyway.
+    mqtt_.setSocketTimeout(4);
+    net_.setHandshakeTimeout(5);
     mqtt_.setCallback([this](char*, uint8_t* p, unsigned int l) { onMqtt(p, l); });
     lastTry_ = 0;
 }

@@ -103,7 +103,7 @@ namespace screen_home {
 // under the finger that is pressing it - taps never land, the CPU does nothing
 // else, and the screen looks frozen while the device is perfectly healthy.
 static uint32_t signature(const PrinterCfg* printers, int count,
-                          int selected, const bool* online, bool syncing,
+                          int selected, const uint8_t* state, bool syncing,
                           int wifiRssi, int account) {
     uint32_t h = 2166136261u ^ (uint32_t)selected ^ ((uint32_t)syncing << 16)
                ^ ((uint32_t)icons::wifiLevelFromRssi(wifiRssi) << 24)
@@ -111,7 +111,7 @@ static uint32_t signature(const PrinterCfg* printers, int count,
     for (int i = 0; i < count; i++) {
         h = h * 16777619u ^ (uint32_t)printers[i].type;
         h = h * 16777619u ^ (uint32_t)printers[i].visible;
-        h = h * 16777619u ^ (uint32_t)(online && online[i]);
+        h = h * 16777619u ^ (uint32_t)(state ? state[i] : 0);
         for (const char* p = printers[i].name.c_str(); *p; p++)
             h = h * 16777619u ^ (uint8_t)*p;
     }
@@ -119,13 +119,13 @@ static uint32_t signature(const PrinterCfg* printers, int count,
 }
 
 void show(const PrinterCfg* printers, int count,
-          int selected, const bool* online, bool syncing, int wifiRssi,
+          int selected, const uint8_t* state, bool syncing, int wifiRssi,
           int account) {
     if (!s_screen) buildScreen();
 
     static uint32_t lastSig = 0;
     static bool     everBuilt = false;
-    uint32_t sig = signature(printers, count, selected, online, syncing, wifiRssi, account);
+    uint32_t sig = signature(printers, count, selected, state, syncing, wifiRssi, account);
     if (everBuilt && s_active && sig == lastSig) return;
     lastSig = sig; everBuilt = true;
 
@@ -159,7 +159,10 @@ void show(const PrinterCfg* printers, int count,
         lv_obj_set_flex_grow(name, 1);
         lv_obj_set_style_text_font(name, &font_ui_14, 0);
 
-        makeDot(row, (online && online[i]) ? theme::OK : theme::DANGER);
+        const uint8_t d = state ? state[i] : DOT_OFF;
+        makeDot(row, d == DOT_UP     ? theme::OK
+                   : d == DOT_TRYING ? theme::BUSY
+                                     : theme::DANGER);
     }
 
     if (!shown) {

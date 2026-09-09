@@ -50,6 +50,10 @@ void  invalidate();
 // three machines and cares about one of them today.
 // `syncing` colours the header's refresh button while an account sync runs.
 void showPrinters(const PrinterCfg* printers, int count, bool syncing);
+// The same list as a setup step: nothing selected, and a Confirm button
+// pinned below it instead of a back chevron above.
+void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing);
+bool takeChosen();
 // That button: ask the account for the printer list now, rather than waiting
 // out the five-minute cycle.
 bool takeReload();

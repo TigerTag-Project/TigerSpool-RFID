@@ -129,6 +129,7 @@ static const Row STR[S_COUNT] = {
 /* S_PRESENT_TAG    */ {{ "Hold a spool against the box", "Approchez une bobine du boîtier", "Spule an das Gerat halten", "Acerca una bobina a la caja", "Avvicina una bobina alla scatola", "Przyloz szpule do urzadzenia", "Aproxime uma bobina da caixa", "Aproxime uma bobina da caixa" }},
 /* S_ORIENTATION   */ {{ "Orientation", "Orientation", "Ausrichtung", "Orientacion", "Orientamento", "Orientacja", "Orientacao", "Orientacao" }},
 /* S_RESTARTING     */ {{ "Installed. Restarting...", "Installé. Redémarrage...", "Installiert. Neustart...", "Instalado. Reiniciando...", "Installato. Riavvio...", "Zainstalowano. Restart...", "Instalado. Reiniciando...", "Instalado. A reiniciar..." }},
+/* S_CHOOSE_PRINTERS */ {{ "Choose printers", "Vos imprimantes", "Drucker wahlen", "Elige impresoras", "Scegli stampanti", "Wybierz drukarki", "Suas impressoras", "Suas impressoras" }},
 };
 
 // A mismatch here is silent at runtime and reads as garbled text on screen, so

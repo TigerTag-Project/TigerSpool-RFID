@@ -80,12 +80,33 @@ lv_style_t* rowPressedStyle() { return &s_rowPressed; }
 
 }  // namespace theme
 
+// Wide enough to be a control rather than a hairline.
+static const lv_coord_t SCROLLBAR_W = 6;
+
 void theme::scrollbar(lv_obj_t* obj) {
     if (!obj) return;
-    lv_obj_set_style_bg_color(obj, lv_color_hex(theme::LINE), LV_PART_SCROLLBAR);
+    // One appearance, everywhere. Every list on this device calls this, so a
+    // scrollbar looks the same whichever screen it is on.
+    //
+    // It was 4 px of theme::LINE, which is the colour of a row outline: on the
+    // dark ground that is a bar you cannot see, and a scrollbar nobody sees is
+    // a list that looks like it ends at the fifth row. Wider, and in the colour
+    // secondary text is written in - present without competing with the rows.
+    lv_obj_set_style_bg_color(obj, lv_color_hex(theme::TEXT_DIM), LV_PART_SCROLLBAR);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_SCROLLBAR);
-    lv_obj_set_style_width(obj, 4, LV_PART_SCROLLBAR);
-    lv_obj_set_style_radius(obj, 2, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(obj, SCROLLBAR_W, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(obj, 3, LV_PART_SCROLLBAR);
     lv_obj_set_style_pad_right(obj, 2, LV_PART_SCROLLBAR);
+    // Short of the full height, so the bar never runs into the rule under the
+    // header at one end or the edge of the screen at the other. A scrollbar
+    // that touches both is a border; one that stops short is a position.
+    lv_obj_set_style_pad_top(obj, 6, LV_PART_SCROLLBAR);
+    lv_obj_set_style_pad_bottom(obj, 6, LV_PART_SCROLLBAR);
+    // And room for it, taken out of the container's own right padding rather
+    // than left to overlap. A scrollbar drawn hard against the rows reads as
+    // part of them - an edge one of the cards has grown - instead of as the
+    // position of the list. 2 + 6 + 6: the bar's own margin, the bar, and the
+    // gap between it and whatever it is scrolling.
+    lv_obj_set_style_pad_right(obj, 2 + SCROLLBAR_W + theme::GAP, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_ON);
 }

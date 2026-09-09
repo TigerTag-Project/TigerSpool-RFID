@@ -11,6 +11,12 @@
 // account sync updates it from a background task.
 namespace screen_home {
 
+// What a printer's dot says. Connecting is its own answer: red for a machine
+// the device is actively dialling is a lie that lasts several seconds, and
+// it is the several seconds during which somebody is watching.
+enum Dot : uint8_t { DOT_OFF = 0, DOT_UP = 1, DOT_TRYING = 2 };
+
+
 // Builds the screen on first call, refreshes it afterwards. Cheap to re-call.
 // `wifiRssi` is dBm, or 0 when there is no connection. It is bucketed into
 // four levels before it reaches the screen's redraw signature: raw dBm moves by
@@ -21,7 +27,7 @@ namespace screen_home {
 // be running - true for a second every five minutes, and grey the rest of the
 // time, which is not something anyone can act on.
 void show(const PrinterCfg* printers, int count,
-          int selected, const bool* online, bool syncing, int wifiRssi,
+          int selected, const uint8_t* state, bool syncing, int wifiRssi,
           int account);
 
 // True while this screen owns the display, so the legacy raw-drawn screens know

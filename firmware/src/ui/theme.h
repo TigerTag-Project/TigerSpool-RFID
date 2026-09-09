@@ -23,8 +23,22 @@ namespace theme {
 // consumer interfaces use anyway.
 constexpr uint32_t BG        = 0x000000;   // screen ground
 constexpr uint32_t HEADER    = 0x000000;   // the ground - the rule below is the bar
-constexpr uint32_t LINE      = 0x2E3646;   // rules and row outlines
-constexpr uint32_t SURFACE   = 0x1B212A;   // rows, cells, buttons
+// A card is its OUTLINE. The inside is the screen's own black.
+//
+// Chosen by looking at the panel, not at a screenshot: six fill/border pairs
+// were drawn on the glass at once and this is the one that separates. It is
+// also the only one that cannot go wrong. Every other candidate is a dark grey
+// a few counts above black, and that is the bottom of the IPS gamma curve
+// where the panel stops being linear - the same region that once turned this
+// interface's ground blue on the glass while the buffer held plain black, and
+// which turned a near-black card into a pale blue slab. Black has nothing to
+// skew: the ground already renders correctly, and the card now uses it.
+//
+// So the border does the whole job, and it is a neutral grey rather than the
+// blue-grey it was - that one sat close enough to the ground to read as part
+// of it, which left a row's edge to guesswork.
+constexpr uint32_t LINE      = 0x3A4046;   // rules and row outlines
+constexpr uint32_t SURFACE   = 0x000000;   // rows, cells, buttons
 constexpr uint32_t TEXT      = 0xFFFFFF;
 constexpr uint32_t TEXT_DIM  = 0x7C8590;
 constexpr uint32_t ACCENT    = 0xF2C744;   // selection, focus, progress

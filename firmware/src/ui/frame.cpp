@@ -74,6 +74,12 @@ lv_obj_t* build(const char* title, Callback onBack) {
         lv_label_set_text(t, title);
         lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
         lv_obj_set_width(t, theme::SCREEN_W - titleX - 60);
+        // ONE line, always. LV_LABEL_LONG_DOT wraps first and only then dots at
+        // the bottom of the box, so with a content-sized height a long title
+        // grew the label to two lines, pushed itself out of a 44 px header and
+        // took the rule under it off the screen. A header is a fixed thing; a
+        // title too long for it is truncated, not accommodated.
+        lv_obj_set_height(t, lv_font_get_line_height(&font_ui_16));
         lv_obj_set_style_text_font(t, &font_ui_16, 0);
         lv_obj_align(t, LV_ALIGN_LEFT_MID, titleX, 0);
     }

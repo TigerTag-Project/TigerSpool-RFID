@@ -696,3 +696,54 @@ forced two-brand sync failure keeping all thirteen printers.
   step line already carries that version.
 - `S_AVAILABLE` removed; nothing draws it any more.
 - `?preview=notice` shows an upgrade rather than a downgrade.
+
+## 2026-09-09 - links that come back, and a tool that was writing nothing
+
+### Added
+
+- **Choose printers**, a setup step after the account is linked: the account's
+  printers with nothing selected, a scrollbar, and Confirm pinned below the
+  list. A flag in NVS means it belongs to setting the box up, and to a factory
+  reset, rather than returning after every sign-in.
+- A third dot state: blue while the device is dialling a printer, green
+  connected, red not.
+- A heap heartbeat in the log every thirty seconds - free, largest block, links
+  up, Wi-Fi and RSSI - and `?preview=greys`, six card fill/border pairs plus a
+  primary and grey ramp for questions a screenshot cannot answer.
+
+### Changed
+
+- Cards are a black interior and a grey outline. Chosen on the glass, not from
+  a capture: every near-black grey candidate sits where the IPS gamma curve
+  stops being linear, and one of them rendered as pale blue slabs on the panel
+  while the buffer held near black.
+- Scrollbars: one definition for every list, 6 px, in the secondary text grey
+  instead of the outline grey it was invisible in, with a gutter beside it and
+  a gap at each end.
+- Titles are one line. LV_LABEL_LONG_DOT wraps before it truncates, so a long
+  translation grew the label and pushed the header's rule off the screen.
+
+### Fixed
+
+- **A link that gave up never dialled again** until somebody tapped the
+  printer. Left alone through one Wi-Fi blink, a device ended with every dot
+  red and no way back. Giving up is a minute's pause now.
+- **The interface froze whenever the network went bad.** PubSubClient waits 15
+  seconds on a socket and an Arduino TLS handshake waits two minutes; six
+  backends retry together the moment Wi-Fi drops. One link may dial at a time,
+  holding the slot for the whole attempt, and the waits are bounded to 4 and 5
+  seconds. Gating only the pump was worse than nothing: attempts were counted
+  while the backend never got the call that dials.
+- Links are priced before they are opened, one per pass, so the cost lands
+  before the next decision. The survival floor is 32 KB and acts only on a
+  shortage lasting three seconds - it was 55 KB and instantaneous, which closed
+  working links on the dip an account sync makes.
+- `scripts/flash.sh` wrote nothing, silently, whenever a second USB serial
+  device was present: reading its MAC failed, and under `set -e` with
+  `pipefail` that ended the script before it flashed. Three flashes in a row
+  were believed to have landed and had not.
+
+Measured on hardware: six printers connect unattended and hold, heap flat at
+66 KB for six minutes, no restart, interface answering in 2 s. Separately, the
+RFID reader was cleared of suspicion for the weak Wi-Fi - 38 samples with the
+field active read 2.3 dB BETTER than 30 with it idle.

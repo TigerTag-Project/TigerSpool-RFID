@@ -91,11 +91,13 @@ static const uint8_t  LINK_MAX_TRIES = 5;
 // short enough to wait through.
 static const uint8_t  LINK_RETRY_TRIES = 3;
 static const uint32_t LINK_ATTEMPT_MS = 8000;
+// How long a link that has run out of attempts waits before starting over.
+static const uint32_t LINK_GIVEUP_RETRY_MS = 60000;
 bool webStarted = false;
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
-             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING, ST_CLOUD_SLOT };
+             ST_WEB_PAIR, ST_UPDATE_NOTICE, ST_SET_READER, ST_SYNCING, ST_CLOUD_SLOT, ST_CHOOSE_PRINTERS };
 State   state = ST_LANG;
 // Whether the language screen was opened from Settings rather than reached on
 // first boot. It decides two things: that the screen offers a way back, and
@@ -666,6 +668,22 @@ struct Link {
 static const int MAX_LINKS = 10;
 static Link links[MAX_LINKS];
 
+// Which link, if any, is allowed to be in the middle of connecting.
+//
+// Opening a connection blocks the loop: a TCP connect, and for a cloud printer
+// a DNS lookup and a TLS handshake on top. Six backends retrying together -
+// which is what happens the moment Wi-Fi drops, since they all fail at once and
+// all back off by the same interval - put a dozen seconds of blocking calls in
+// a single pass, and the panel stays lit and stops answering. One at a time,
+// and the interface keeps running.
+//
+// The slot covers the WHOLE attempt, not just the call that starts it. Gating
+// only the pump was worse than not gating at all: tickLink counted an attempt,
+// the backend never got the loop() that actually dials, and a link burned all
+// five attempts and gave up without once having tried to reach the printer.
+static int      s_dialer = -1;
+static uint32_t s_dialerSince = 0;
+
 // One backend OBJECT per printer, built when the link opens and destroyed with
 // it. They used to be six globals, one per brand, and that single fact was the
 // cause of everything that follows: two printers of one brand shared a socket,
@@ -699,35 +717,61 @@ static void dropLink(Link& l) {
 // So links are opened while there is room and not after. A printer left without
 // one reads as disconnected, which is the truth: the device is not talking to
 // it. The alternative - opening it anyway - is a reset.
-static const uint32_t LINK_HEAP_FLOOR = 80000;
-// Below this, one open link is closed on the spot - the device staying up
-// matters more than a background printer's dot being green.
-static const uint32_t LINK_HEAP_HARD = 55000;
-// A printer closed for want of memory is not retried straight away.
+// What one more open connection costs, measured rather than guessed.
 //
-// Without this the two floors fight each other: a link opens because the heap
-// is above the opening floor, connecting drops the heap below the hard floor,
-// the link is closed, the heap recovers, and the same printer is opened again -
-// several times a minute, for ever. A minute of quiet is enough for the set of
-// live links to settle.
-// The wait grows each time the same printer is turned away, up to eight
-// minutes. With more printers switched on than there is memory for, a fixed
-// wait means the same two or three keep being opened and closed for ever and
-// their dots blink once a minute. Backing off lets the set of live links settle
-// on the ones that fit, and a printer that becomes reachable again is still
-// picked up - just not immediately.
-static const uint32_t LINK_DEFER_MS = 60000;
+// A link is not free, and the brands are not comparable: a Bambu holds a TLS
+// session AND a receive buffer big enough for a pushall, while a FlashForge
+// holds nothing at all between two HTTP calls. These are the numbers this
+// device showed on the bench, rounded up.
+//
+// They are used BEFORE opening a link, not after. The first version of this
+// checked the free heap against a fixed floor and let the link open; the cost
+// then landed during the handshake, took the heap under the safety floor, and
+// the link was closed again seconds later. Deciding with the price in hand is
+// what makes a link that is opened a link that stays.
+static uint32_t linkCost(PrinterType t, bool foreground) {
+    switch (t) {
+        // 50 KB of receive buffer for the printer on screen, 8 KB for the
+        // others, plus about 40 KB of TLS either way.
+        case PT_BAMBU:     return foreground ? 96000 : 52000;
+        case PT_ANYCUBIC:  return 60000;    // TLS + a 16 KB buffer
+        case PT_ELEGOO:    return 16000;    // plain MQTT, 8 KB buffer
+        case PT_CREALITY:
+        case PT_SNAPMAKER: return 16000;    // a WebSocket and its frame buffer
+        case PT_FF_C5:     return 6000;     // HTTP, nothing held between calls
+        default:           return 16000;
+    }
+}
+
+// The line the device will not cross. Below it, one background link is closed
+// on the spot: staying up matters more than a dot being green.
+// Low enough to be about survival and nothing else.
+//
+// It was 55 KB, which is roughly what one TLS request needs - so the floor was
+// really saying "always keep room for an account sync", and it paid for that
+// room by closing printer links that were working. Six links leave this device
+// at about 40 KB free and it runs there for hours; what it cannot survive is
+// running out. A sync that cannot allocate fails and is retried, and a brand
+// that does not answer now keeps the printers it already knew, so the cost of
+// being squeezed is a late refresh rather than a lost list.
+static const uint32_t LINK_HEAP_HARD = 32000;
+
+// A link closed by that safety net waits before being tried again, so the two
+// rules cannot take turns opening and closing the same printer. Half a minute,
+// flat - it used to grow to eight, which is how printers with room to spare
+// sat red for minutes with 150 KB free. The wait is for a heap that was short
+// a moment ago, not a punishment the printer has to serve out.
+static const uint32_t LINK_DEFER_MS = 30000;
 static uint32_t linkDeferUntil[MAX_PRINTERS] = { 0 };
-static uint8_t  linkDeferCount[MAX_PRINTERS] = { 0 };
 static bool deferred(int pi) {
     return linkDeferUntil[pi] && (int32_t)(linkDeferUntil[pi] - millis()) > 0;
 }
-static void defer(int pi) {
-    if (linkDeferCount[pi] < 8) linkDeferCount[pi]++;
-    linkDeferUntil[pi] = millis() + LINK_DEFER_MS * linkDeferCount[pi];
+static void defer(int pi) { linkDeferUntil[pi] = millis() + LINK_DEFER_MS; }
+
+static bool roomFor(PrinterType t, bool foreground) {
+    return ESP.getFreeHeap() > LINK_HEAP_HARD + linkCost(t, foreground);
 }
-static bool  roomForOneMore() { return ESP.getFreeHeap() > LINK_HEAP_FLOOR; }
-static bool  s_heapWarned = false;
+static bool s_heapWarned = false;
 
 static Link* linkFor(int printerIdx) {
     for (int i = 0; i < MAX_LINKS; i++)
@@ -738,6 +782,24 @@ static Link* linkFor(int printerIdx) {
 // Which printers get a link: the ones the user left switched on. The toggle in
 // Settings used to decide only what the home screen listed; it decides what the
 // box talks to now, which is what someone ticking it expects.
+// Has anyone ever chosen which printers this device talks to?
+//
+// Set once, by the setup step. Without the flag the chooser would come back
+// after every sign-in and wipe a selection the user had already made; with it,
+// the step belongs to setting the box up - and to a factory reset, which
+// clears the flag with everything else.
+static bool printersChosen() {
+    Preferences k; k.begin("tigerspool", true);
+    const bool v = k.getBool("pchosen", false);
+    k.end();
+    return v;
+}
+static void markPrintersChosen() {
+    Preferences k; k.begin("tigerspool", false);
+    k.putBool("pchosen", true);
+    k.end();
+}
+
 static void assignLinks() {
     // Drop the links of printers the user has switched off.
     for (int i = 0; i < MAX_LINKS; i++) {
@@ -747,6 +809,19 @@ static void assignLinks() {
         if (p.type == PT_NONE || (!p.visible && l.printer != selectedPrinter)) dropLink(l);
     }
 
+    // ONE new link per pass. Not one per settled link - one per pass.
+    //
+    // A pass that opened eight links measured the same free heap for all eight
+    // and admitted every one of them; they then all paid at once and the safety
+    // floor closed half of them again. Opening one is enough to fix that,
+    // because this function runs from linkTick() and the backend's begin() and
+    // connect() both run before it is called again: by the next pass the heap
+    // already reflects what was decided in this one.
+    //
+    // Waiting for the new link to REACH "up" was the first version and it was
+    // worse than the problem. One printer that is switched off spends forty
+    // seconds failing five attempts, and every other printer on the account sat
+    // red behind it for that whole time.
     for (int pass = 0; pass < 2; pass++)
     for (int pi = 0; pi < MAX_PRINTERS; pi++) {
         // The selected printer is placed FIRST, so that when memory is short it
@@ -758,7 +833,7 @@ static void assignLinks() {
         if (linkFor(pi)) continue;
         if (pi != selectedPrinter && deferred(pi)) continue;
 
-        if (!roomForOneMore()) {
+        if (!roomFor(p.type, pi == selectedPrinter)) {
             // The selected printer does not queue behind a background one: it
             // takes the room from the last link that nobody is looking at.
             if (pi == selectedPrinter) {
@@ -773,12 +848,12 @@ static void assignLinks() {
                         break;
                     }
             }
-            if (!roomForOneMore()) {
+            if (!roomFor(p.type, pi == selectedPrinter)) {
                 if (!s_heapWarned) {
                     s_heapWarned = true;
-                    Serial.printf("[link] heap %u below floor %u - '%s' stays closed\n",
-                                  (unsigned)ESP.getFreeHeap(),
-                                  (unsigned)LINK_HEAP_FLOOR, p.name.c_str());
+                    Serial.printf("[link] heap %u, '%s' needs %u - stays closed\n",
+                                  (unsigned)ESP.getFreeHeap(), p.name.c_str(),
+                                  (unsigned)linkCost(p.type, pi == selectedPrinter));
                 }
                 if (pi != selectedPrinter) defer(pi);
                 continue;
@@ -791,7 +866,7 @@ static void assignLinks() {
             links[i].printer = pi;
             links[i].be = newBackend(p.type);
             s_heapWarned = false;
-            break;
+            return;                      // let this one settle before the next
         }
     }
 }
@@ -805,12 +880,6 @@ static void tickLink(Link& l) {
     // that was never going to answer.
 
     if (l.be && l.dialled && l.be->connected()) {
-        // Two minutes up is what clears the back-off, not the mere fact of
-        // coming up: a link that connects and is closed again for memory a
-        // second later has proved nothing, and resetting there is how the
-        // blinking would have survived the back-off that was meant to stop it.
-        if (l.state == LINK_UP && millis() - l.startAt > 120000)
-            linkDeferCount[l.printer] = 0;
         if (l.state != LINK_UP) {
             l.state = LINK_UP; l.tries = 0;
             Serial.printf("[link] up: %s  (heap %u, largest block %u)\n",
@@ -819,7 +888,22 @@ static void tickLink(Link& l) {
         }
         return;
     }
-    if (l.state == LINK_GAVE_UP) return;         // waiting for the user
+    // Giving up is a pause, not a verdict.
+    //
+    // It used to be terminal: five failed attempts and the link never dialled
+    // again until somebody tapped the printer. That is a box which, left alone
+    // for an afternoon, ends with every dot red - a printer rebooted, a switch
+    // blinked, the Wi-Fi dropped for ten seconds - and only a finger brings any
+    // of them back. The retry button is for impatience, not for correctness.
+    //
+    // A minute is long enough not to hammer a machine that is genuinely off,
+    // and short enough that a printer switched on comes up while its owner is
+    // still in the room.
+    if (l.state == LINK_GAVE_UP) {
+        if (millis() - l.startAt < LINK_GIVEUP_RETRY_MS) return;
+        l.tries = 0; l.state = LINK_IDLE;
+        Serial.printf("[link] trying %s again\n", p.name.c_str());
+    }
     if (l.state == LINK_UP) { l.state = LINK_IDLE; l.tries = 0; }
     if (l.state == LINK_TRYING && millis() - l.startAt < LINK_ATTEMPT_MS) return;
 
@@ -846,6 +930,11 @@ static void tickLink(Link& l) {
         return;
     }
 
+    // Wait for the slot rather than spending an attempt without dialling.
+    const int me = (int)(&l - links);
+    if (s_dialer >= 0 && s_dialer != me) return;
+    s_dialer = me; s_dialerSince = millis();
+
     l.be->begin(p);
     l.dialled = true;
     l.tries++; l.startAt = millis(); l.state = LINK_TRYING;
@@ -854,6 +943,17 @@ static void tickLink(Link& l) {
 
 static void linkTick() {
     if (!WiFi.isConnected()) return;
+
+    // Release the dialling slot when its attempt is over - connected, gone, or
+    // out of time. The timeout is the backstop: a backend that never resolves
+    // must not hold every other printer hostage.
+    if (s_dialer >= 0) {
+        const Link& d = links[s_dialer];
+        if (d.printer < 0 || !d.be || d.be->connected()
+            || millis() - s_dialerSince > LINK_ATTEMPT_MS + 4000)
+            s_dialer = -1;
+    }
+
     assignLinks();
     for (int i = 0; i < MAX_LINKS; i++)
         if (links[i].printer >= 0) tickLink(links[i]);
@@ -866,7 +966,20 @@ static void linkTick() {
     // the free heap fell to 17 KB with the largest free block at 7 KB, which is
     // not a device that is about to work. The last background link goes when
     // that happens, and the user is looking at none of it.
-    if (ESP.getFreeHeap() < LINK_HEAP_HARD) {
+    // Sustained, not instantaneous.
+    //
+    // The heap dips hard and briefly all the time: an account sync opens a TLS
+    // session and parses its answer, which is fifty-odd kilobytes for a second
+    // or two. Reacting to the dip closed a working link every few minutes and
+    // the printer's dot went red for no reason a user could see - the memory
+    // was back before the screen had finished redrawing. What matters is a
+    // shortage that LASTS.
+    static uint32_t lowSince = 0;
+    if (ESP.getFreeHeap() >= LINK_HEAP_HARD) lowSince = 0;
+    else if (!lowSince) lowSince = millis() ? millis() : 1;
+
+    if (lowSince && millis() - lowSince > 3000) {
+        lowSince = 0;
         for (int i = MAX_LINKS - 1; i >= 0; i--)
             if (links[i].printer >= 0 && links[i].printer != selectedPrinter) {
                 Serial.printf("[link] heap %u - closing %s to stay alive\n",
@@ -1024,6 +1137,26 @@ void loop() {
                        || state == ST_ACCOUNT || state == ST_WEB_PAIR);
     lvgl_port::sleepTick(inSetup ? 0 : screenSleepSec, screenBrightness);
 
+    // A heartbeat for the heap, every thirty seconds.
+    //
+    // Links open and close over hours, and each cycle builds and destroys a
+    // backend. Whether that returns everything it took cannot be seen from a
+    // single reading - only from the trend - and the device has already been
+    // found at two kilobytes free with its network stack unable to open a
+    // socket while it still believed it was on Wi-Fi. This line is what makes
+    // the difference between a leak and a busy afternoon visible.
+    {
+        static uint32_t lastHeapLog = 0;
+        if (millis() - lastHeapLog > 30000) {
+            lastHeapLog = millis();
+            int live = 0;
+            for (int i = 0; i < MAX_LINKS; i++) if (links[i].state == LINK_UP) live++;
+            Serial.printf("[heap] %u free, %u largest, %d link(s) up, wifi=%d rssi=%d\n",
+                          (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                          live, (int)WiFi.isConnected(), (int)WiFi.RSSI());
+        }
+    }
+
     // The account is kept fresh from here rather than from one screen, so the
     // freshness the header reports is a fact about the network and not about
     // where the user happens to be standing.
@@ -1032,8 +1165,28 @@ void loop() {
     // Every open link, not only the selected one. A connection nobody is
     // looking at still has to be pumped or it drops, and the whole point of
     // holding several is that switching to one costs nothing.
-    for (int i = 0; i < MAX_LINKS; i++)
-        if (links[i].printer >= 0 && links[i].be) links[i].be->loop();
+    //
+    // But only ONE of them may try to CONNECT at a time.
+    //
+    // Pumping a live connection is cheap. Opening one is not: it is a blocking
+    // TCP connect, and for the cloud printers a DNS lookup and a TLS handshake
+    // on top. Six backends all retrying at once - which is exactly what happens
+    // the moment the Wi-Fi drops, because they all fail together and all back
+    // off by the same four seconds - put a dozen seconds of blocking calls into
+    // a single pass of the loop. The screen stays lit and stops responding, and
+    // the device looks dead while it is working perfectly hard at nothing.
+    //
+    // A live link is pumped every pass. A dead one gets its turn, one at a
+    // time, and the others wait. Recovery takes a moment longer and the
+    // interface never stops answering.
+    for (int i = 0; i < MAX_LINKS; i++) {
+        Link& l = links[i];
+        if (l.printer < 0 || !l.be) continue;
+        // A live connection is pumped every pass: that is cheap and it is what
+        // keeps it alive. A dead one is pumped only while it holds the dialling
+        // slot, because for it loop() IS the blocking connect.
+        if (l.be->connected() || i == s_dialer) l.be->loop();
+    }
     linkTick();                  // keep the printer links up, everywhere
     if (webStarted || webcfg::apActive()) webcfg::loop();
 
@@ -1258,7 +1411,8 @@ void loop() {
                 Serial.printf("[account] linked as %s\n", ttcloud::email().c_str());
                 screen_setup::hide();
                 step = CHOICE;
-                state = ST_PRINTER; stateSince = millis();
+                state = printersChosen() ? ST_PRINTER : ST_CHOOSE_PRINTERS;
+                stateSince = millis();
             }
             break;
         }
@@ -1303,7 +1457,8 @@ void loop() {
                         Serial.printf("[account] linked as %s\n", email.c_str());
                         screen_setup::hide();
                         step = CHOICE;                // ready for a next time
-                        state = ST_PRINTER; stateSince = millis();
+                        state = printersChosen() ? ST_PRINTER : ST_CHOOSE_PRINTERS;
+                        stateSince = millis();
                         break;
                     }
                     failReason = err; step = FAILED;
@@ -1348,13 +1503,22 @@ void loop() {
             // four printers a machine the box is actively talking to could
             // still show red between two sweeps. Nothing about that was
             // explicable from the outside.
-            bool online[MAX_PRINTERS];
+            uint8_t dot[MAX_PRINTERS];
             for (int i = 0; i < MAX_PRINTERS; i++) {
                 const Link* l = linkFor(i);
-                online[i] = (l && l->be && l->state == LINK_UP) || isOnline(i);
+                if ((l && l->be && l->state == LINK_UP) || isOnline(i))
+                    dot[i] = screen_home::DOT_UP;
+                // Blue while the device is actually dialling it. A printer
+                // being connected to is not a printer that is off, and the
+                // difference is exactly the few seconds somebody stands there
+                // wondering whether anything is happening.
+                else if (l && l->state == LINK_TRYING)
+                    dot[i] = screen_home::DOT_TRYING;
+                else
+                    dot[i] = screen_home::DOT_OFF;
             }
             screen_home::show(printers, MAX_PRINTERS, selectedPrinter,
-                              online, ttcloud::asyncBusy(),
+                              dot, ttcloud::asyncBusy(),
                               WiFi.isConnected() ? WiFi.RSSI() : 0,
                               ttcloud::health());
         }
@@ -1655,6 +1819,52 @@ void loop() {
             screen_setup::hide();
             screen_settings::invalidate();
             state = ST_PICK; stateSince = millis();
+        }
+        break;
+    }
+
+    // The one step between an account and a working device: which printers.
+    //
+    // Nothing arrives selected. An account with thirteen printers would
+    // otherwise have the box dialling all thirteen on its first boot - not
+    // what anyone wants, and more than its memory holds. What the user turns on
+    // here is what it talks to.
+    case ST_CHOOSE_PRINTERS: {
+        static bool entered = false;
+        static uint32_t touched = 0;      // printers the user has decided about
+
+        if (!entered) {
+            entered = true; touched = 0;
+            for (int i = 0; i < MAX_PRINTERS; i++)
+                if (printers[i].visible) savePrinterVisible(i, false);
+            ttcloud::startAsyncSync();    // the account was linked a moment ago
+        }
+
+        // A sync landing while this screen is up brings printers that were not
+        // in the list when it was drawn. They arrive switched off like the
+        // rest; only the ones the user has actually touched keep their state.
+        {
+            String s;
+            if (ttcloud::asyncTake(s) && ttcloud::consumeChanged()) {
+                loadCfg();
+                for (int i = 0; i < MAX_PRINTERS; i++)
+                    if (!(touched & (1u << i)) && printers[i].visible)
+                        savePrinterVisible(i, false);
+            }
+        }
+
+        screen_settings::showChoosePrinters(printers, MAX_PRINTERS,
+                                            ttcloud::asyncBusy());
+        lvgl_port::loop();
+
+        int t = screen_settings::takeToggled();
+        if (t >= 0) { touched |= (1u << t); savePrinterVisible(t, !printers[t].visible); }
+
+        if (screen_settings::takeChosen()) {
+            markPrintersChosen();
+            entered = false;
+            screen_settings::invalidate();
+            state = ST_PRINTER; stateSince = millis();
         }
         break;
     }

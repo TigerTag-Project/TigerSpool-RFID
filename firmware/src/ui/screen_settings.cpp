@@ -46,6 +46,8 @@ inline void claimView(const void* owner, uint32_t sig) {
 }
 uint32_t s_menuSig = 0;
 uint32_t s_pickSig = 0;
+uint32_t s_chooseSig = 0;
+bool s_chosen = false;
 
 void onEntry(lv_event_t* e) {
     s_entry = (screen_settings::Entry)(intptr_t)lv_event_get_user_data(e);
@@ -97,7 +99,7 @@ uint32_t hashOf(const char* s, uint32_t h = 2166136261u) {
 namespace screen_settings {
 
 void invalidate() {
-    s_menuSig = 0; s_pickSig = 0;
+    s_menuSig = 0; s_pickSig = 0; s_chooseSig = 0;
     // And drop the ownership claim. Leaving a screen means its widgets are
     // about to be destroyed, so no later call has any business writing into
     // the pointers it cached - clearing the owner is what makes that true
@@ -202,6 +204,54 @@ Entry takeEntry() { Entry v = s_entry; s_entry = E_NONE; return v; }
 bool  takeBack()  { bool v = s_back; s_back = false; return v; }
 bool  takeReload(){ bool v = s_reload; s_reload = false; return v; }
 
+// The list itself, shared by the settings view and the setup chooser: same
+// rows, same switches, same target area. Only the frame around it differs.
+static void printerRows(lv_obj_t* body, const PrinterCfg* printers, int count) {
+    int shown = 0;
+    for (int i = 0; i < count; i++) {
+        if (printers[i].type == PT_NONE) continue;
+        shown++;
+
+        lv_obj_t* row = lv_obj_create(body);
+        lv_obj_remove_style_all(row);
+        lv_obj_add_style(row, theme::rowStyle(), 0);
+        lv_obj_set_size(row, LV_PCT(100), theme::ROW_H);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(row, 8, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t* name = lv_label_create(row);
+        lv_label_set_text(name, printers[i].name.c_str());
+        lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+        lv_obj_set_flex_grow(name, 1);
+        lv_obj_set_style_text_font(name, &font_ui_14, 0);
+
+        // The switch is the control, and the whole row is its target: a 40 px
+        // switch on a 240 px row is a small thing to aim at when the row it
+        // sits in is already the obvious place to press.
+        lv_obj_t* sw = lv_switch_create(row);
+        lv_obj_set_size(sw, 44, 24);
+        lv_obj_clear_flag(sw, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_color(sw, lv_color_hex(0x2A313B), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(sw, lv_color_hex(theme::ACCENT),
+                                  LV_PART_INDICATOR | LV_STATE_CHECKED);
+        if (printers[i].visible) lv_obj_add_state(sw, LV_STATE_CHECKED);
+
+        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(row, onToggle, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+    }
+
+    if (!shown) {
+        lv_obj_t* none = lv_label_create(body);
+        lv_label_set_text(none, i18n::T(S_NO_PRINTERS));
+        lv_obj_set_style_text_font(none, &font_ui_14, 0);
+        lv_obj_set_style_text_color(none, lv_color_hex(theme::TEXT_DIM), 0);
+        lv_obj_set_style_pad_top(none, 12, 0);
+    }
+}
+
 void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
     // Deliberately NOT hashing `visible`. It changes on every toggle, and a
     // changed signature means a rebuilt screen, and a rebuilt list has lost
@@ -264,46 +314,78 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
     theme::scrollbar(body);
 
-    int shown = 0;
+    printerRows(body, printers, count);
+}
+
+// The setup step: which printers does this box talk to?
+//
+// It exists because the alternative is a first boot that silently opens a
+// connection to every printer on the account - which is not what someone with
+// thirteen of them wants, and is more than the device can hold anyway. Nothing
+// is selected when this screen appears; the user turns on the ones they want.
+//
+// The list scrolls and the button does not. A "confirm" that has to be scrolled
+// to is one a person does not know is there, and this screen is the only thing
+// between them and a device that works.
+void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing) {
+    uint32_t sig = 2166136261u ^ (syncing ? 0x5AA5u : 0u);
     for (int i = 0; i < count; i++) {
         if (printers[i].type == PT_NONE) continue;
-        shown++;
+        sig = hashOf(printers[i].name.c_str(), sig);
+    }
+    if (sig == s_chooseSig) return;
+    s_chooseSig = sig;
 
-        lv_obj_t* row = lv_obj_create(body);
-        lv_obj_remove_style_all(row);
-        lv_obj_add_style(row, theme::rowStyle(), 0);
-        lv_obj_set_size(row, LV_PCT(100), theme::ROW_H);
-        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
-                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(row, 8, 0);
-        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    // No back chevron: this is a step, not a place, and the button below is
+    // the way out of it.
+    lv_obj_t* body = frame::build(i18n::T(S_CHOOSE_PRINTERS), nullptr);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
-        lv_obj_t* name = lv_label_create(row);
-        lv_label_set_text(name, printers[i].name.c_str());
-        lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
-        lv_obj_set_flex_grow(name, 1);
-        lv_obj_set_style_text_font(name, &font_ui_14, 0);
+    lv_obj_t* list = lv_obj_create(body);
+    lv_obj_remove_style_all(list);
+    lv_obj_set_width(list, LV_PCT(100));
+    // An explicit height, NOT flex-grow.
+    //
+    // Grow only hands out space that is left over, and thirteen rows leave
+    // none: the list kept its content height, overflowed a body that clips,
+    // and so had nothing to scroll - no scrollbar, and no scrolling either.
+    // The height the list may have is what the screen has minus the header,
+    // the button, and the padding around them; that is a number, so it is
+    // written as one.
+    lv_obj_set_height(list, theme::SCREEN_H - theme::HEADER_H
+                            - 2 * theme::PAD - theme::BUTTON_H - theme::GAP - 8);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(list, theme::GAP, 0);
+    lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    theme::scrollbar(list);
 
-        // The switch is the control, and the whole row is its target: a 40 px
-        // switch on a 240 px row is a small thing to aim at when the row it
-        // sits in is already the obvious place to press.
-        lv_obj_t* sw = lv_switch_create(row);
-        lv_obj_set_size(sw, 44, 24);
-        lv_obj_clear_flag(sw, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_style_bg_color(sw, lv_color_hex(0x2A313B), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(sw, lv_color_hex(theme::ACCENT),
-                                  LV_PART_INDICATOR | LV_STATE_CHECKED);
-        if (printers[i].visible) lv_obj_add_state(sw, LV_STATE_CHECKED);
-
-        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(row, onToggle, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+    if (syncing) {
+        lv_obj_t* sp = lv_spinner_create(list, 900, 60);
+        lv_obj_set_size(sp, 40, 40);
+        lv_obj_set_style_arc_width(sp, 4, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(sp, 4, LV_PART_INDICATOR);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::LINE), LV_PART_MAIN);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
+        lv_obj_set_style_pad_top(sp, 24, 0);
+    } else {
+        printerRows(list, printers, count);
     }
 
-    if (!shown) frame::caption(i18n::T(S_NO_PRINTERS), theme::TEXT_DIM);
+    lv_obj_t* ok = frame::button(body, i18n::T(S_CONFIRM), 1,
+                                 []() { s_chosen = true; });
+    lv_obj_set_style_pad_top(ok, 8, 0);
+    // The button is the last thing on the screen; without this it sits on
+    // the bezel.
+    lv_obj_set_style_pad_bottom(ok, 6, 0);
 }
 
 int takeToggled() { int v = s_toggled; s_toggled = -1; return v; }
+bool takeChosen()  { bool v = s_chosen; s_chosen = false; return v; }
 
 }  // namespace screen_settings
 
@@ -633,7 +715,11 @@ void showUpdate(const char* version, const char* channel,
         lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_style_arc_width(ring, 10, LV_PART_MAIN);
         lv_obj_set_style_arc_width(ring, 10, LV_PART_INDICATOR);
-        lv_obj_set_style_arc_color(ring, lv_color_hex(theme::SURFACE), LV_PART_MAIN);
+        // The unfilled part of the ring, in the outline grey rather than in
+        // SURFACE: SURFACE is the screen's black now, and a track painted in
+        // it is a track nobody can see - a progress ring with no circle to
+        // fill, only an arc floating in the dark.
+        lv_obj_set_style_arc_color(ring, lv_color_hex(theme::LINE), LV_PART_MAIN);
         lv_obj_set_style_arc_color(ring,
             lv_color_hex(otaState == ota::DONE ? theme::OK : theme::ACCENT),
             LV_PART_INDICATOR);
