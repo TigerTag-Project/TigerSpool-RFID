@@ -747,3 +747,14 @@ Measured on hardware: six printers connect unattended and hold, heap flat at
 66 KB for six minutes, no restart, interface answering in 2 s. Separately, the
 RFID reader was cleared of suspicion for the weak Wi-Fi - 38 samples with the
 field active read 2.3 dB BETTER than 30 with it idle.
+
+## 2026-09-09 - the heap had room, just not in one piece
+
+### Fixed
+
+- HTTPS failed outright with several printers connected: 66 KB free but a
+  largest contiguous block of 29 KB, against the ~40 KB a TLS session needs in
+  one piece. The update screen said "manifest HTTP -1" and the account refresh
+  failed the same way. Background links now stand down for the duration of a
+  TLS operation and come straight back; the selected printer keeps its link,
+  and nothing new is opened while the handshake needs the room.

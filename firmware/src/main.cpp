@@ -941,6 +941,49 @@ static void tickLink(Link& l) {
     Serial.printf("[link] attempt %u/%u to %s\n", l.tries, l.budget, p.name.c_str());
 }
 
+// Background links stand down while the device needs a TLS session.
+//
+// WHY THIS IS NOT ABOUT FREE MEMORY. With six printers connected this device
+// reports 66 KB free and its LARGEST CONTIGUOUS BLOCK is 29 KB. A TLS session
+// needs about 40 KB in one piece, so every HTTPS request failed instantly -
+// the account refresh, and the update check, which put "manifest HTTP -1" on
+// the update screen. The total said there was room; the shape of the heap said
+// otherwise, and the shape is what an allocator has to satisfy.
+//
+// Admission cannot fix this by holding a reserve: a reserve big enough for TLS
+// is most of what the links are using, and it would be held permanently for
+// something that happens every few minutes for two seconds. So the links give
+// the room back when it is actually needed, and take it again afterwards. A
+// device that cannot update itself is not a trade worth making for a dot.
+//
+// The selected printer keeps its link: that is the screen someone is looking
+// at, and one connection is not what stands between the heap and a handshake.
+static bool needsTheNetwork() {
+    const ota::State o = ota::state();
+    return ttcloud::asyncBusy() || o == ota::CHECKING || o == ota::DOWNLOADING;
+}
+
+static void standDownForTls() {
+    static bool wasQuiet = false;
+    const bool quiet = needsTheNetwork();
+    if (quiet && !wasQuiet) {
+        int freed = 0;
+        for (int i = 0; i < MAX_LINKS; i++)
+            if (links[i].printer >= 0 && links[i].printer != selectedPrinter) {
+                dropLink(links[i]);          // no deferral: they come straight back
+                freed++;
+            }
+        if (freed)
+            Serial.printf("[link] %d link(s) stood down for a TLS session"
+                          " (largest block was %u)\n",
+                          freed, (unsigned)ESP.getMaxAllocHeap());
+    }
+    if (!quiet && wasQuiet)
+        Serial.printf("[link] network free again, largest block %u\n",
+                      (unsigned)ESP.getMaxAllocHeap());
+    wasQuiet = quiet;
+}
+
 static void linkTick() {
     if (!WiFi.isConnected()) return;
 
@@ -954,7 +997,9 @@ static void linkTick() {
             s_dialer = -1;
     }
 
-    assignLinks();
+    standDownForTls();
+    // Nothing is opened while a handshake needs the room.
+    if (!needsTheNetwork()) assignLinks();
     for (int i = 0; i < MAX_LINKS; i++)
         if (links[i].printer >= 0) tickLink(links[i]);
 
