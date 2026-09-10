@@ -962,7 +962,7 @@ ten, not by memory.
   Apache-2.0 and promises licence and NOTICE files that are not there. Flagged,
   not fixed here.
 
-## 2026-09-10 - a printer is what it is, not where it sits
+## 2026-09-10 - a printer is what it is, not where it sits (released in 1.47.1)
 
 ### Fixed
 
