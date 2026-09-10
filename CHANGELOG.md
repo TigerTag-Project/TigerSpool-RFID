@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.1] - 2026-09-10
+
+### Changed
+
+- **The update page is one page now.** Opening it shows your version and a
+  turning ring while it checks - the check has always started on arrival, but
+  nothing on screen said so. If something newer exists, the offer appears under
+  your version instead of replacing it: the download icon, the version you are
+  on and the one on offer, and Install at the bottom of the screen.
+- The card is labelled "Version" rather than "Installed version".
+
+
 ## [1.45.0] - 2026-09-10
 
 ### Changed

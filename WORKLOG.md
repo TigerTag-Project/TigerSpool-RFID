@@ -837,7 +837,7 @@ Verified on hardware throughout, on a real R3D spool.
   before. A `session lost, state N` line stays in each MQTT backend so
   PubSubClient says why rather than leaving it to be guessed.
 
-## 2026-09-10 - the update page, as one page
+## 2026-09-10 - the update page, as one page (released in 1.45.1)
 
 ### Changed
 
