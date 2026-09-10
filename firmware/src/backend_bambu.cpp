@@ -1,6 +1,7 @@
 #include "backend_bambu.h"
 #include "i18n.h"
 #include "tigertag_cloud.h"
+#include "bambu_cloud.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -10,7 +11,6 @@ namespace {
     // An empty slot name means the external spool (vt_tray) - the one label
     // that is a word rather than a position, so it is translated at draw time
     // rather than stored in the map.
-    const char* BAMBU_CLOUD_HOST = ".mqtt.bambulab.com";
     // A pushall from an X1 with four AMS units reaches about 50 KB, and a
     // message that does not fit is dropped whole, so the foreground printer -
     // the only one whose slots are ever drawn - gets room for that worst case.
@@ -104,10 +104,17 @@ void BambuBackend::applyTray(int ams, int trayId, JsonObjectConst t) {
     SlotState& s = slots_[si];
     const char* tt = t["tray_type"] | "";
     const char* tc = t["tray_color"] | "";
-    s.type  = tt;
-    s.known = strlen(tt) > 0;
     uint8_t r = 90, g = 90, b = 90;
     parseCol(tc, r, g, b);
+    // A change, named by the printer that received it. With one session
+    // carrying several printers' reports this is the line that proves each
+    // one landed on the right machine - a slot changed on one printer must
+    // appear under that printer's serial and no other.
+    if (s.type != tt || s.r != r || s.g != g || s.b != b)
+        Serial.printf("[bambu] %s %s: %s #%02X%02X%02X\n", sn_.c_str(),
+                      map_[si].name[0] ? map_[si].name : "Ext", *tt ? tt : "-", r, g, b);
+    s.type  = tt;
+    s.known = strlen(tt) > 0;
     s.r = r; s.g = g; s.b = b;
 }
 
@@ -151,8 +158,9 @@ void BambuBackend::onMqtt(uint8_t* payload, unsigned int len) {
 }
 
 void BambuBackend::pubRequest(const String& body) {
-    Serial.printf("[bambu] -> %s\n", body.c_str());
-    mqtt_.publish(topRequest_.c_str(), body.c_str());
+    Serial.printf("[bambu] %s -> %s\n", sn_.c_str(), body.c_str());
+    if (cloud_) bambu_cloud::publish(sn_, body);
+    else        mqtt_.publish(topRequest_.c_str(), body.c_str());
 }
 
 void BambuBackend::begin(const PrinterCfg& cfg) {
@@ -167,25 +175,21 @@ void BambuBackend::begin(const PrinterCfg& cfg) {
     // What differs is where it connects and who it says it is: Bambu's own
     // regional broker, with a session the DESKTOP obtained and wrote into the
     // account. This device never signs in to Bambu.
-    if (cloud_) {
-        String user, token, region;
-        if (!ttcloud::bambuCloud(user, token, region)) {
-            status_ = "Bambu: no cloud session";
-            Serial.println("[bambu] no cloud session in the account - "
-                           "sign in to Bambu in Tiger Studio");
-            host_ = "";
-            return;
-        }
-        host_ = region + BAMBU_CLOUD_HOST;
-        user_ = user;
-        cc_   = token;
-    }
     setDefaultMap();                     // assumed until the first pushall
     for (int i = 0; i < BMAX; i++) slots_[i] = SlotState{};
     connected_ = false;
     status_ = "Bambu: connecting...";
     topReport_  = String("device/") + sn_ + "/report";
     topRequest_ = String("device/") + sn_ + "/request";
+
+    // A cloud printer does not open a connection of its own. It joins the one
+    // session every cloud printer on the account shares - see bambu_cloud.h -
+    // and receives the reports on its own topic through it. That is the whole
+    // difference between two cloud Bambus costing two TLS sessions and one.
+    if (cloud_) {
+        bambu_cloud::attach(sn_, [this](uint8_t* p, unsigned l) { onMqtt(p, l); });
+        return;
+    }
 
     // setInsecure() is correct here and must stay. The printer is on the local
     // network and presents a self-signed certificate: there is no authority to
@@ -216,6 +220,20 @@ void BambuBackend::begin(const PrinterCfg& cfg) {
 }
 
 void BambuBackend::loop() {
+    if (cloud_) {
+        bambu_cloud::loop();
+        const bool up = bambu_cloud::connected(sn_);
+        if (up && !connected_) {
+            connected_ = true;
+            status_ = "Bambu: cloud";
+            Serial.printf("[bambu] %s up on the shared cloud session\n", sn_.c_str());
+            refresh();                        // its state, once, on arrival
+        } else if (!up) {
+            connected_ = false;
+        }
+        if (connected_ && millis() - lastPush_ > 300000) { lastPush_ = millis(); refresh(); }
+        return;
+    }
     if (!mqtt_.connected()) {
         // Why the session ended, in PubSubClient's own words. -4 is its read
         // timeout, which is SELF-INFLICTED: setSocketTimeout bounds every read,
@@ -270,6 +288,10 @@ void BambuBackend::loop() {
 void BambuBackend::setForeground(bool on) {
     if (on == foreground_) return;
     foreground_ = on;
+    // The shared session has one buffer, sized for the largest report, and it
+    // is not this printer's to resize. Coming to the front still earns a fresh
+    // state: that is the screen somebody is about to read.
+    if (cloud_) { if (on) refresh(); return; }
     // Resize on the spot. PubSubClient reallocates, which is safe between
     // messages, and this is called from the link tick and never from a
     // callback.
@@ -277,6 +299,9 @@ void BambuBackend::setForeground(bool on) {
 }
 
 void BambuBackend::stop() {
+    // Leaving the shared session closes it only if this was the last printer
+    // on it; the others keep receiving.
+    if (cloud_) { bambu_cloud::detach(sn_); connected_ = false; status_ = "Bambu: stopped"; return; }
     mqtt_.disconnect();
     connected_ = false;
     status_ = "Bambu: parado";

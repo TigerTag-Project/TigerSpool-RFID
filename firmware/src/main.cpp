@@ -33,6 +33,8 @@
 #include "backend_anycubic.h"
 #include "webcfg.h"
 #include "net/ota.h"
+#include "bambu_cloud.h"
+#include <esp_task_wdt.h>
 #include "imu.h"
 #include "tigertag_cloud.h"
 #include "ui/lvgl_port.h"
@@ -791,8 +793,17 @@ static bool deferred(int pi) {
 }
 static void defer(int pi) { linkDeferUntil[pi] = millis() + LINK_DEFER_MS; }
 
-static bool roomFor(PrinterType t, bool foreground) {
-    return ESP.getFreeHeap() > LINK_HEAP_HARD + linkCost(t, foreground);
+// The price of opening THIS printer's link, which for a cloud Bambu depends on
+// whether a cloud session is already open. The first one pays for the TLS
+// session; every later one only adds a subscription to it - a few hundred
+// bytes of table and nothing else. Charging each the full 56 KB would refuse
+// printers the shared session was built to let in.
+static uint32_t priceOf(const PrinterCfg& p, bool foreground) {
+    if (p.type == PT_BAMBU && p.cloud && bambu_cloud::active()) return 4000;
+    return linkCost(p.type, foreground);
+}
+static bool roomFor(const PrinterCfg& p, bool foreground) {
+    return ESP.getFreeHeap() > LINK_HEAP_HARD + priceOf(p, foreground);
 }
 static bool s_heapWarned = false;
 
@@ -856,7 +867,7 @@ static void assignLinks() {
         if (linkFor(pi)) continue;
         if (pi != selectedPrinter && deferred(pi)) continue;
 
-        if (!roomFor(p.type, pi == selectedPrinter)) {
+        if (!roomFor(p, pi == selectedPrinter)) {
             // The selected printer does not queue behind a background one: it
             // takes the room from the last link that nobody is looking at.
             if (pi == selectedPrinter) {
@@ -871,12 +882,12 @@ static void assignLinks() {
                         break;
                     }
             }
-            if (!roomFor(p.type, pi == selectedPrinter)) {
+            if (!roomFor(p, pi == selectedPrinter)) {
                 if (!s_heapWarned) {
                     s_heapWarned = true;
                     Serial.printf("[link] heap %u, '%s' needs %u - stays closed\n",
                                   (unsigned)ESP.getFreeHeap(), p.name.c_str(),
-                                  (unsigned)linkCost(p.type, pi == selectedPrinter));
+                                  (unsigned)priceOf(p, pi == selectedPrinter));
                 }
                 if (pi != selectedPrinter) defer(pi);
                 continue;
@@ -990,12 +1001,21 @@ static void standDownForTls() {
     static bool wasQuiet = false;
     const bool quiet = needsTheNetwork();
     if (quiet && !wasQuiet) {
+        // A cloud Bambu frees nothing by leaving while the shared session stays
+        // open - and it stays open as long as the selected printer is a cloud
+        // Bambu too. Closing one then cost an unsubscribe, a resubscribe and a
+        // full pushall for zero bytes returned: seen in the log as the same
+        // printer republishing its whole state after every account sync.
+        const PrinterCfg* sel = (selectedPrinter >= 0) ? &printers[selectedPrinter] : nullptr;
+        const bool sessionStays = sel && sel->type == PT_BAMBU && sel->cloud;
         int freed = 0;
-        for (int i = 0; i < MAX_LINKS; i++)
-            if (links[i].printer >= 0 && links[i].printer != selectedPrinter) {
-                dropLink(links[i]);          // no deferral: they come straight back
-                freed++;
-            }
+        for (int i = 0; i < MAX_LINKS; i++) {
+            if (links[i].printer < 0 || links[i].printer == selectedPrinter) continue;
+            const PrinterCfg& p = printers[links[i].printer];
+            if (sessionStays && p.type == PT_BAMBU && p.cloud) continue;
+            dropLink(links[i]);              // no deferral: they come straight back
+            freed++;
+        }
         if (freed)
             Serial.printf("[link] %d link(s) stood down for a TLS session"
                           " (largest block was %u)\n",
