@@ -51,7 +51,22 @@ funnelled through one owner, or the tasks stop writing storage and hand a result
 back for the loop to commit. Both change how the account import works, and
 choosing between them is not a Phase 3 question.
 
-### 2. A printer's identity is its array index — deferred
+### 2. A printer's identity is its array index — FIXED 2026-09-10, without a migration
+
+> **What happened.** The failure scenario below happened on the bench: Tiger
+> Studio added a second AD5X document, every Bambu after it moved down one
+> position, and X1C Home (Lan) took the A1's address and access code - rc=5
+> until the device was reflashed - while the AD5X kept an address it had left.
+>
+> **The fix keeps the positional keys** and changes how the import uses them:
+> every imported printer is matched to the stored entry that is the same
+> machine (`samePrinter()`: type, serial, then address or mode), wherever it
+> sat, and the switch and a discovered host move with it; `printerIdx` follows
+> its printer. The account now wins for everything it owns, and for the host
+> whenever it gives a new one (`p{i}a` remembers the last). Links reconnect
+> when their printer's settings change under them (`cfgSig()`). No storage
+> migration: a device on the old layout is matched on its first sync. What
+> stays open is finding 1, the unsynchronised NVS access.
 
 **Where:** `main.cpp` — `loadCfg()`, `saveCfg` paths, `savePrinterVisible()`;
 `tigertag_cloud.cpp` — the import merge.
@@ -76,7 +91,7 @@ overwrites the FlashForge's host and access code with the Creality's, and the
 hand-corrected address is gone and the wrong printer is the only one on screen.
 No error is reported; the sync did what it was written to do.
 
-**Why deferred.** Fixing it means introducing a stable key and a migration for
+**Why deferred (at the time).** Fixing it means introducing a stable key and a migration for
 devices that already store the positional form, which is exactly the kind of
 storage change that has to be settled deliberately. It is also entangled with
 finding 1: both are about who owns the printer list.
@@ -132,6 +147,13 @@ that becomes permanent when it leaves the building.**
 
 **They share one deadline, and the deadline is the first public release, not a
 sprint boundary.** Nothing forces the date. The release does.
+
+> **Annotation, 2026-09-10.** The deadline passed with finding 2 open - public
+> releases shipped from 1.x - and the fix turned out not to need the storage
+> change this section feared. The keys stayed positional; what changed is that
+> the import recognises each printer by its serial and moves its stored
+> settings with it. A device on the old layout is matched on its first sync
+> after updating, so nobody re-pairs. See finding 2.
 
 At v0.1.0, with nothing published, all three are still free.
 

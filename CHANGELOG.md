@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A printer that moves to a new address is followed.** When your TigerTag
+  account gives a printer a new IP, the device now uses it. Before, the address
+  the device already held always won, so a printer that had moved stayed
+  unreachable on TigerSpool for good while Tiger Studio talked to it fine - an
+  AD5X did exactly that.
+- **Printers no longer swap addresses and access codes when the account
+  changes.** Adding or removing a printer in Tiger Studio shifted the device's
+  list by one, and every printer after that point took its neighbour's address
+  and code - a Bambu Lab would then refuse the connection with an access-code
+  error, and a switched-on printer could turn into a different one. Each
+  printer is now recognised by its serial number, wherever it sits in the list,
+  and keeps its own settings and its own switch.
+- **Two entries in the account for the same printer become one.** An old entry
+  left at a previous address beside the current one used to show up as two
+  printers, the stale one first. The newer entry wins.
+- **A printer whose settings change reconnects straight away**, instead of
+  staying on the old connection until something else closed it.
+
+### Changed
+
+- A printer newly added to your account arrives on the device switched off, as
+  on first start, so it does not take room you did not choose to give it.
+
 ## [1.47.0] - 2026-09-10
 
 ### Added

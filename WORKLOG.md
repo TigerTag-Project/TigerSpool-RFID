@@ -961,3 +961,50 @@ ten, not by memory.
 - The vendored PN532 driver's files say BSD, THIRD_PARTY_LICENSES says
   Apache-2.0 and promises licence and NOTICE files that are not there. Flagged,
   not fixed here.
+
+## 2026-09-10 - a printer is what it is, not where it sits
+
+### Fixed
+
+- The AD5X HOME never connected: the device dialled 192.168.20.131, an address
+  the printer had left; the account said 192.168.40.105. Two causes. The import
+  merged by POSITION with the stored host and access code winning whenever the
+  brand matched, so a new address from the account never landed; and two
+  account documents for the same AD5X (old address, new address) were both
+  imported because duplicates were only recognised at the same address. The
+  printer itself was fine - measured from the Mac: /checkCode answers Success at
+  the new address, and it authenticates on the check code alone (any serial
+  passes, a wrong code is refused with a misleading "SN is different").
+- The same positional merge made X1C Home (Lan) dial the A1's address with the
+  A1's code after the second AD5X document shifted the list - rc=5 for ever.
+  That is finding 2 of the 2026-09-03 review, deferred then, happening now.
+- Fix, without a storage migration: `samePrinter()` (type; serial, with
+  FlashForge's optional "SN" prefix dropped; then same address or same mode)
+  decides both duplicates and which stored entry an imported printer is. The
+  switch and a discovered host move with the printer; `printerIdx` follows it.
+  The account owns name, serial, access code and the Anycubic fields; the host
+  is taken from the account whenever it differs from what the account gave last
+  time (new key `p{i}a`), so a K2 address found by LAN discovery still stands
+  until the account changes. A printer new to the device arrives switched off.
+- `updatedAt` stored as a Firestore timestamp read as no date, so the rewritten
+  AD5X document would have counted as the oldest of the two. `fsMillis()` reads
+  integer, double and timestamp; date math checked against the account's own
+  value (2026-09-10T21:20:06.421Z = 1789075206421).
+- A link now carries `cfgSig()` of the settings it was opened with and
+  reconnects when a sync changes them; before, an open link kept talking to the
+  old address under the new name.
+- The "probe says unreachable" log line names the address it probed.
+
+### Verified on hardware
+
+- Flashed onto the bench: first sync wrote the account's addresses, the AD5X
+  link logged "settings changed - reconnecting", then `/checkCode` Success, four
+  slots read (1A PLA #F82D29, 1B PLA #871787, 1C PLA 2981E6, 1D PLA #F82D29),
+  link up. A1, X1C, Centauri Carbon 2 and Kobra X up beside it. The stale AD5X
+  document had already been deleted from the account by then, so the duplicate
+  merge and the timestamp reading are compiled and unit-checked, not yet seen
+  against a live duplicate.
+- U1-showroom was found switched off. No position moved in this sync, so the
+  new code wrote no switch; it was shuffled by the old positional merge before
+  the flash.
+

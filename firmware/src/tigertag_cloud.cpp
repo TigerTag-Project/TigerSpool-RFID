@@ -1,4 +1,6 @@
 #include "tigertag_cloud.h"
+
+#include <memory>
 #include "printer.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -80,6 +82,38 @@ namespace {
         if (v["doubleValue"].is<float>())        return String((double)v["doubleValue"], 0);
         if (v["booleanValue"].is<bool>())        return v["booleanValue"].as<bool>() ? "true" : "false";
         return "";
+    }
+    // A time field as milliseconds since 1970, whichever way it was stored.
+    //
+    // Most documents carry updatedAt as an integer of milliseconds, and some as
+    // a Firestore timestamp - "2026-09-10T21:20:06.421Z". The AD5X document
+    // Tiger Studio rewrote on the bench read as no date at all, which made it
+    // the OLDEST of two documents for one printer: the stale one at the old
+    // address would have won. 0 when there is nothing readable.
+    int64_t fsMillis(JsonObjectConst f, const char* k) {
+        JsonVariantConst v = f[k];
+        if (v["integerValue"].is<const char*>())
+            return strtoll((const char*)v["integerValue"], nullptr, 10);
+        if (v["doubleValue"].is<double>()) return (int64_t)v["doubleValue"].as<double>();
+        const char* ts = v["timestampValue"] | "";
+        int Y, M, D, h, m, sec;
+        if (sscanf(ts, "%4d-%2d-%2dT%2d:%2d:%2d", &Y, &M, &D, &h, &m, &sec) != 6) return 0;
+        int ms = 0;
+        if (const char* dot = strchr(ts, '.')) {
+            int digits = 0;
+            for (const char* c = dot + 1; *c >= '0' && *c <= '9' && digits < 3; c++, digits++)
+                ms = ms * 10 + (*c - '0');
+            while (digits++ < 3) ms *= 10;
+        }
+        // Days from 1970-01-01 to Y-M-D, proleptic Gregorian (Howard Hinnant's
+        // days_from_civil). Firestore always writes UTC, with a Z.
+        Y -= M <= 2;
+        const int era = (Y >= 0 ? Y : Y - 399) / 400;
+        const unsigned yoe = (unsigned)(Y - era * 400);
+        const unsigned doy = (153 * (M + (M > 2 ? -3 : 9)) + 2) / 5 + D - 1;
+        const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        const int64_t days = (int64_t)era * 146097 + (int64_t)doe - 719468;
+        return ((days * 24 + h) * 60 + m) * 60000LL + sec * 1000LL + ms;
     }
     // First non-empty field from a list of possible names
     String fsAny(JsonObjectConst f, std::initializer_list<const char*> keys) {
@@ -384,6 +418,40 @@ bool ttcloud::due() {
     return (millis() - g_lastSync > SYNC_INTERVAL_MS);
 }
 
+// The serial a printer is recognised by, across documents and across syncs.
+//
+// Tiger Studio writes a FlashForge serial with and without the "SN" the
+// printer's own screen prints in front of it: the same Creator 5 Pro arrived as
+// SNMUPF9511513 in one sync and MUPF9511513 in the next, and the same AD5X is
+// MQQE9501368 in one document and SNMQQE9501368 in another. The printer takes
+// either (measured: its /checkCode ignores the serial altogether), so the two
+// spellings are one machine. No other brand's serials start that way.
+static String idSerial(const PrinterCfg& p) {
+    if (p.type == PT_FF_C5 && p.sn.startsWith("SN")) return p.sn.substring(2);
+    return p.sn;
+}
+
+// Two records describe the same machine.
+//
+// With a serial: the same serial, and either the same address or the same
+// mode. The address covers an A1 whose LAN and cloud documents both carry its
+// own IP; the mode covers a printer that moved - an AD5X whose old document
+// still says 192.168.20.131 beside a new one that says 192.168.40.105. A LAN
+// document and a cloud document at DIFFERENT addresses stay two entries: the
+// X1C is imported both ways on purpose, one to write to and one to read.
+//
+// Without a serial - a Creality K2 whose account holds none - the address is
+// all there is.
+static bool samePrinter(const PrinterCfg& a, const PrinterCfg& b) {
+    if (a.type != b.type) return false;
+    const String sa = idSerial(a), sb = idSerial(b);
+    if (sa.length() || sb.length()) {
+        if (sa != sb) return false;
+        return a.host == b.host || a.cloud == b.cloud;
+    }
+    return a.host.length() && a.host == b.host;
+}
+
 bool ttcloud::syncNow(String& summary) {
     SyncFlight inFlight;
     uint32_t tSync = millis();
@@ -438,6 +506,9 @@ bool ttcloud::syncNow(String& summary) {
     // PrinterCfg: it decides which of two documents for one machine wins, and
     // it is of no use to anything once the import is over.
     int64_t gotUpd[MAX_PRINTERS] = { 0 };
+    // Carried from storage because its brand did not answer: its host is the
+    // device's, not the account's, and must not be recorded as the account's.
+    bool gotKept[MAX_PRINTERS] = { false };
     int n = 0, ignored = 0, noip = 0, okBrands = 0, cloudN = 0, kept = 0;
 
     // What the device already knows, kept open for the whole import.
@@ -486,6 +557,7 @@ bool ttcloud::syncNow(String& summary) {
                 Serial.printf("[account]   kept '%s' (no answer for %s)\n",
                               q.name.c_str(), brand);
                 gotUpd[n] = 0;
+                gotKept[n] = true;
                 n++; kept++;
             }
             continue;
@@ -536,7 +608,8 @@ bool ttcloud::syncNow(String& summary) {
                 else if (transport.startsWith("mqtt-1883")) t = PT_ELEGOO;
                 else if (transport.startsWith("mqtts-9883")) t = PT_ANYCUBIC;
             }
-            const String upd = fsStr(f, "updatedAt");
+            const int64_t updMs = fsMillis(f, "updatedAt");
+            const String upd = updMs ? String((long long)updMs) : String();
             Serial.printf("[account]   dev=%s ip='%s' transport='%s' cloud=%d modelId='%s' upd=%s -> type %d\n",
                           dev.c_str(), ip.c_str(), transport.c_str(), cloud, mid.c_str(),
                           upd.length() ? upd.c_str() : "-", t);
@@ -598,10 +671,10 @@ bool ttcloud::syncNow(String& summary) {
                 }
             }
             // The same printer can appear twice in an account - two FlashForge
-            // documents for one IP and serial, or an old LAN document beside
-            // the cloud one Tiger Studio writes when the printer is switched
-            // over. The second pair looks identical to the first here, because
-            // a cloud document's broker field holds the printer's own address.
+            // documents for one serial, an old one left at the address the
+            // printer had before it moved, or an old LAN document beside the
+            // cloud one Tiger Studio writes when the printer is switched over.
+            // samePrinter() says which pairs are one machine.
             //
             // Keeping the FIRST of the two kept the stale one. An A1 switched
             // to cloud mode stayed "LAN" on this device, with the access code
@@ -609,20 +682,26 @@ bool ttcloud::syncNow(String& summary) {
             // ever, and its slots could not be read at all. updatedAt is the
             // one field that says which document describes the printer as it
             // is now, so the newer one replaces the older, in place: the list
-            // keeps its order and nothing else moves.
-            const int64_t mine = strtoll(upd.c_str(), nullptr, 10);
+            // keeps its order and nothing else moves. A document without one
+            // counts as the oldest.
+            //
+            // Two AD5X documents did exactly that on the bench, one at the old
+            // address and one at the new: both were imported, the stale one
+            // first, and it was the one on screen - dialling an address the
+            // printer had left.
+            const int64_t mine = updMs;
             int dup = -1;
             for (int j = 0; j < n; j++)
-                if (got[j].type == p.type && got[j].host == p.host &&
-                    got[j].sn == p.sn && p.host.length()) { dup = j; break; }
+                if (samePrinter(got[j], p)) { dup = j; break; }
             if (dup >= 0) {
                 if (mine > gotUpd[dup]) {
                     Serial.printf("[account]     newer document for this printer - replaces '%s'\n",
                                   got[dup].name.c_str());
                     got[dup] = p;
                     gotUpd[dup] = mine;
+                    gotKept[dup] = false;
                 } else {
-                    Serial.println("[account]     ignored: duplicate (same IP/serial), older");
+                    Serial.println("[account]     ignored: duplicate of the same printer, older");
                 }
                 ignored++; continue;
             }
@@ -637,22 +716,74 @@ bool ttcloud::syncNow(String& summary) {
 
     kp.end();
 
-    // Write to NVS only if something actually changed: flash has a finite
-    // number of erase cycles and this runs every few minutes.
+    // What the device holds, read in full before a single key is written.
+    //
+    // A printer's stored fields are keyed by POSITION - p3h is "the host of
+    // entry 3" - and the import used to merge by position too: entry i of the
+    // new list against entry i of the old, with the stored host and access code
+    // winning whenever the brand matched. So when the list shifted, every
+    // printer after the shift took its neighbour's address and code. On the
+    // bench a new AD5X document in the account moved every Bambu down by one,
+    // and X1C Home (Lan) dialled the A1's address with the A1's code for as
+    // long as the device ran - rc=5, for ever, and nothing said why. The switch
+    // a user had turned on stayed on the position too, so it moved to another
+    // machine.
+    //
+    // Now each imported printer is matched to the stored one that IS it -
+    // samePrinter(), wherever it sat - and what the device holds of its own
+    // (the switch, a host found by LAN discovery) moves with it. The keys stay
+    // positional, so nothing already stored needs migrating.
+    struct Stored {
+        int t; String n, h, s, c, d, u, m, a; bool k, v;
+        PrinterCfg cfg() const {
+            PrinterCfg p; p.type = (PrinterType)t; p.name = n; p.host = h; p.sn = s;
+            p.cloud = k; return p;
+        }
+    };
+    // On the heap for the length of this function: 24 of these is 3 KB, too
+    // much for the sync task's stack beside got[], and nothing to keep after.
+    std::unique_ptr<Stored[]> old(new Stored[MAX_PRINTERS]);
     Preferences k; k.begin("tigerspool", false);
-    bool diff = false;
     for (int i = 0; i < MAX_PRINTERS; i++) {
         char key[6];
-        int    ct; String cn, ch, cs, cc, cd, cu, cm;
-        snprintf(key, sizeof(key), "p%dt", i); ct = k.getInt(key, 0);
-        snprintf(key, sizeof(key), "p%dn", i); cn = k.getString(key, "");
-        snprintf(key, sizeof(key), "p%dh", i); ch = k.getString(key, "");
-        snprintf(key, sizeof(key), "p%ds", i); cs = k.getString(key, "");
-        snprintf(key, sizeof(key), "p%dc", i); cc = k.getString(key, "");
-        snprintf(key, sizeof(key), "p%dd", i); cd = k.getString(key, "");
-        snprintf(key, sizeof(key), "p%du", i); cu = k.getString(key, "");
-        snprintf(key, sizeof(key), "p%dm", i); cm = k.getString(key, "");
-        bool ck; snprintf(key, sizeof(key), "p%dk", i); ck = k.getBool(key, false);
+        Stored& o = old[i];
+        snprintf(key, sizeof(key), "p%dt", i); o.t = k.getInt(key, 0);
+        snprintf(key, sizeof(key), "p%dn", i); o.n = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dh", i); o.h = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%ds", i); o.s = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dc", i); o.c = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dd", i); o.d = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%du", i); o.u = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dm", i); o.m = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%da", i); o.a = k.getString(key, "");
+        snprintf(key, sizeof(key), "p%dk", i); o.k = k.getBool(key, false);
+        snprintf(key, sizeof(key), "p%dv", i); o.v = k.getBool(key, true);
+    }
+    const int oldSel = k.getInt("printerIdx", 0);
+
+    // Which stored entry each imported printer is. -1: new to this device.
+    int from[MAX_PRINTERS];
+    bool taken[MAX_PRINTERS] = { false };
+    for (int i = 0; i < n; i++) {
+        from[i] = -1;
+        for (int o = 0; o < MAX_PRINTERS; o++) {
+            if (taken[o] || old[o].t == PT_NONE) continue;
+            if (!samePrinter(old[o].cfg(), got[i])) continue;
+            from[i] = o; taken[o] = true; break;
+        }
+    }
+
+    // Write to NVS only if something actually changed: flash has a finite
+    // number of erase cycles and this runs every few minutes.
+    bool diff = false;
+    int newSel = -1;
+    for (int i = 0; i < MAX_PRINTERS; i++) {
+        char key[6];
+        const Stored& at = old[i];            // what is stored at this position now
+        const int o = (i < n) ? from[i] : -1;
+        const Stored* was = (o >= 0) ? &old[o] : nullptr;   // this printer, as stored
+        if (o >= 0 && o == oldSel) newSel = i;
+
         int    nt = (i < n) ? (int)got[i].type : 0;
         String nn = (i < n) ? got[i].name : String();
         String nh = (i < n) ? got[i].host : String();
@@ -662,27 +793,44 @@ bool ttcloud::syncNow(String& summary) {
         String nu = (i < n) ? got[i].user  : String();
         String nm2 = (i < n) ? got[i].model : String();
         bool   nk  = (i < n) ? got[i].cloud : false;
-        // The import fills gaps, it does not overwrite. A value the user typed by
-        // hand survives a sync that does not know it - which also means a stale
-        // one is not corrected automatically. Clearing the field is how you
-        // force a refresh, and the web form says so.
-        if (i < n && nt == ct) {
-            if (nn.isEmpty()) nn = cn;
-            if (ns.isEmpty()) ns = cs;
-            // IP and check/access code: the LOCAL value wins. It may have been
-            // corrected by LAN discovery or by hand in the portal. Firebase
-            // only fills in when the local field is empty
-            if (ch.length()) nh = ch;
-            if (cc.length()) nc = cc; else if (nc.isEmpty()) nc = cc;
-            // Same rule for the three Anycubic fields: a value already on the
-            // device wins, because it may have been typed in by hand.
-            if (cd.length()) nd = cd;
-            if (cu.length()) nu = cu;
-            if (cm.length()) nm2 = cm;
+        // The address the ACCOUNT gave, remembered so the next sync can tell
+        // "the account moved this printer" from "the account still says what
+        // it said, and the device has since found better".
+        String na  = (i < n) ? (gotKept[i] && was ? was->a : got[i].host) : String();
+        bool   nv  = was ? was->v : false;
+        if (was) {
+            // The account owns a printer's name, serial, access code and the
+            // three Anycubic fields: nothing on the device writes them any
+            // more - the form that did is gone. A field the account left empty
+            // keeps what the device had rather than being blanked by it.
+            if (nn.isEmpty())  nn  = was->n;
+            if (ns.isEmpty())  ns  = was->s;
+            if (nc.isEmpty())  nc  = was->c;
+            if (nd.isEmpty())  nd  = was->d;
+            if (nu.isEmpty())  nu  = was->u;
+            if (nm2.isEmpty()) nm2 = was->m;
+            // The host is the one field the device can also write: LAN
+            // discovery corrects a K2 that moved (main.cpp, reconcile()). That
+            // correction stands while the account keeps saying the same thing;
+            // the moment the account says something NEW, the account wins.
+            // Taking the stored host unconditionally is how a printer that
+            // moved stayed at its old address on this device for good.
+            if (nh.isEmpty() || (was->a.length() && nh == was->a)) {
+                if (was->h.length()) nh = was->h;
+            }
         }
-        if (nt != ct || nn != cn || nh != ch || ns != cs || nc != cc ||
-            nd != cd || nu != cu || nm2 != cm || nk != ck) {
+        // A printer new to this device arrives switched off, as on the first
+        // boot: it would otherwise take load slots nobody chose to spend.
+        if (i < n && !was)
+            Serial.printf("[account]   new on this device: '%s' - arrives switched off\n",
+                          nn.c_str());
+
+        if (nt != at.t || nn != at.n || nh != at.h || ns != at.s || nc != at.c ||
+            nd != at.d || nu != at.u || nm2 != at.m || nk != at.k || na != at.a ||
+            (i < n && nv != at.v)) {
             diff = true;
+            if (i < n && o != i)
+                Serial.printf("[account]   '%s' now at %d (was %d)\n", nn.c_str(), i, o);
             snprintf(key, sizeof(key), "p%dt", i); k.putInt(key, nt);
             snprintf(key, sizeof(key), "p%dn", i); k.putString(key, nn);
             snprintf(key, sizeof(key), "p%dh", i); k.putString(key, nh);
@@ -691,8 +839,20 @@ bool ttcloud::syncNow(String& summary) {
             snprintf(key, sizeof(key), "p%dd", i); k.putString(key, nd);
             snprintf(key, sizeof(key), "p%du", i); k.putString(key, nu);
             snprintf(key, sizeof(key), "p%dm", i); k.putString(key, nm2);
+            snprintf(key, sizeof(key), "p%da", i); k.putString(key, na);
             snprintf(key, sizeof(key), "p%dk", i); k.putBool(key, nk);
+            // The switch is written only when it belongs to a different
+            // printer than before. Rewriting it every time would undo a switch
+            // the user flipped during the fifteen seconds this import runs.
+            if (i < n && nv != at.v && o != i) {
+                snprintf(key, sizeof(key), "p%dv", i); k.putBool(key, nv);
+            }
         }
+    }
+    // The selected printer follows its printer, not its position.
+    if (newSel >= 0 && newSel != oldSel) {
+        k.putInt("printerIdx", newSel);
+        diff = true;
     }
     k.end();
 

@@ -198,22 +198,32 @@ Response:
 
 ## Importing printers
 
-Once signed in, the device reads the account's printers and writes them to NVS as
-`p0…p7`.
+Once signed in, the device reads the account's printers and writes them to NVS
+as `p0`, `p1`, … - up to `MAX_PRINTERS`, 24.
 
-**Local network only.** The account distinguishes printers discovered on a LAN
-from cloud-only ones, and TigerSpool imports the ones it can actually reach.
-A printer that only exists in the cloud is not silently imported as if it were
-on the network.
+**What it can reach.** Printers on the LAN are imported, and so are Bambu Lab
+printers in cloud mode, read-only: the device reads their slots through Bambu's
+broker but cannot write to them. A cloud-only printer of any other brand is
+skipped, with the reason in the log, rather than imported as if it were on the
+network.
 
-**Sync is periodic and non-blocking.** The device re-reads the account
-occasionally, and only while it is idle on the printer-selection screen — never
-mid-scan, and never in a way that freezes the UI.
+**Sync is periodic and non-blocking.** The account is re-read every few minutes
+on a background task, whatever screen is up. The result is applied only on the
+printer screens - never mid-scan, and never under the slot grid someone is
+using.
 
-**Merging preserves manual corrections.** A value a user fixed by hand on the web
-form is not overwritten by the next sync. That means a stale value the account
-believes is also not corrected automatically; clearing the field first is how a
-user forces a refresh, and the web UI has to say so.
+**The account is the source of truth for what it holds.** Name, serial, access
+code and address are taken from the account at every sync, so a printer that
+moves or gets a new code in Tiger Studio is followed. Two exceptions, both
+deliberate: a field the account leaves empty keeps the device's value rather
+than being blanked, and a K2 address found by LAN discovery stands while the
+account keeps giving the address it gave before. What the account does not
+hold - which printers are switched on - belongs to the device.
+
+**A printer is recognised by its serial, not its position.** Adding or removing
+a printer in the account does not hand anyone else's address, code or switch to
+the printers after it, and two documents for one printer are merged, the newer
+winning. The rules are `samePrinter()` in `tigertag_cloud.cpp`.
 
 ---
 

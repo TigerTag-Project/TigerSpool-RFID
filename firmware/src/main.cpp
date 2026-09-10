@@ -463,7 +463,7 @@ static void loadCfg() {
     String oldK2 = nvs.getString("k2ip", "");
     nvs.end();
 
-    // Printer records are nine NVS entries each, and the partition is fixed at
+    // Printer records are eleven NVS keys each, and the partition is fixed at
     // 20 KB and frozen - it cannot grow over the air. With MAX_PRINTERS raised
     // this is the number that decides whether the limit is really gone, so it
     // is printed rather than assumed.
@@ -670,7 +670,25 @@ struct Link {
     // the AD5X's session. The device was not wrong about the connection; it was
     // wrong about whose it was.
     bool            dialled = false;
+    // The printer's settings this link was opened with. An account sync can
+    // change them under a link that is up - a new address, a new access code,
+    // or another machine altogether at this position - and a link does not
+    // re-read them until it dials again, which an open link never does.
+    uint32_t        cfg     = 0;
 };
+
+// Everything a backend is begun with, folded into one number.
+static uint32_t cfgSig(const PrinterCfg& p) {
+    uint32_t h = 2166136261u;                         // FNV-1a
+    auto mix = [&h](const String& s) {
+        for (size_t i = 0; i < s.length(); i++) { h ^= (uint8_t)s[i]; h *= 16777619u; }
+        h ^= 0xff; h *= 16777619u;                    // field separator
+    };
+    h ^= (uint32_t)p.type; h *= 16777619u;
+    h ^= p.cloud ? 1u : 0u; h *= 16777619u;
+    mix(p.host); mix(p.sn); mix(p.cc); mix(p.devId); mix(p.user); mix(p.model);
+    return h;
+}
 // No longer one per brand: one per PRINTER, up to what the heap allows.
 static const int MAX_LINKS = 10;
 static Link links[MAX_LINKS];
@@ -843,7 +861,11 @@ static void assignLinks() {
         Link& l = links[i];
         if (l.printer < 0) continue;
         const PrinterCfg& p = printers[l.printer];
-        if (p.type == PT_NONE || (!p.visible && l.printer != selectedPrinter)) dropLink(l);
+        if (p.type == PT_NONE || (!p.visible && l.printer != selectedPrinter)) { dropLink(l); continue; }
+        if (l.cfg != cfgSig(p)) {
+            Serial.printf("[link] %s: settings changed - reconnecting\n", p.name.c_str());
+            dropLink(l);
+        }
     }
 
     // ONE new link per pass. Not one per settled link - one per pass.
@@ -902,6 +924,7 @@ static void assignLinks() {
             links[i] = Link{};
             links[i].printer = pi;
             links[i].be = newBackend(p.type);
+            links[i].cfg = cfgSig(p);
             s_heapWarned = false;
             return;                      // let this one settle before the next
         }
@@ -962,8 +985,8 @@ static void tickLink(Link& l) {
     if (!p.cloud && pProbed[l.printer] && !isOnline(l.printer)) {
         if (l.be) l.be->stop();
         l.tries++; l.startAt = millis(); l.state = LINK_TRYING;
-        Serial.printf("[link] attempt %u/%u to %s - probe says unreachable,"
-                      " not dialling\n", l.tries, l.budget, p.name.c_str());
+        Serial.printf("[link] attempt %u/%u to %s (%s) - probe says unreachable,"
+                      " not dialling\n", l.tries, l.budget, p.name.c_str(), p.host.c_str());
         return;
     }
 
@@ -1133,6 +1156,7 @@ static void memtestTick() {
             links[i] = Link{};
             links[i].printer = pi;
             links[i].be = newBackend(p.type);
+            links[i].cfg = cfgSig(p);
             s_mtLink = i; s_mtSince = millis(); s_mtUpAt = 0;
             return;
         }
