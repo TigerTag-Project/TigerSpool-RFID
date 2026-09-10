@@ -7,6 +7,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The device tells you how full it is before a printer stops connecting.**
+  Settings > Printers, and the Choose printers step at first start, show a
+  **Load** bar with a percentage. Some printers take far more of the device's
+  memory than others - a Bambu Lab or an Anycubic about ten times an Elegoo,
+  a FlashForge or a Creality - so the limit is not a number of printers but how
+  much they load it. A printer that would not fit is refused when you switch it
+  on: the switch does not move, the bar turns red and says **Not enough room**.
+  Switching a printer off always works. How it is counted, and every
+  measurement behind it, is in docs/CONNECTION-BUDGET.md.
+
+### Changed
+
+- **The documentation says what the firmware does today.** Elegoo and Anycubic
+  were still listed as not implemented; both read slots on real printers. A
+  Bambu Lab in cloud mode is now documented as read only, which it is. The
+  firmware README no longer says nothing builds, and the web installer's page
+  shows the manifest that is actually published.
+
 ## [1.46.0] - 2026-09-10
 
 ### Changed

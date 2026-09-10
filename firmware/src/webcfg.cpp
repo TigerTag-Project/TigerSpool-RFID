@@ -23,6 +23,7 @@
 #include "net/ota.h"
 #include <ArduinoJson.h>
 #include "printer.h"
+#include "printer_budget.h"
 #include "tigertag_cloud.h"
 #include "i18n.h"
 
@@ -401,10 +402,12 @@ namespace {
         else if (preview == "notice") screen_settings::showUpdateNotice("1.41.0", TIGERSPOOL_FW_VERSION);
         else if (preview == "setrestart") screen_settings::showRestart();
         else if (preview == "setfactory") screen_settings::showFactory();
-        else if (preview == "pick")      screen_settings::showPrinters(printers, MAX_PRINTERS, false);
+        else if (preview == "pick")      screen_settings::showPrinters(printers, MAX_PRINTERS, false,
+                                             budget::used(printers, MAX_PRINTERS, -1), false);
         else if (preview == "cloudslot") screen_slots::showCloudNotice("B2");
-        else if (preview == "choose")    screen_settings::showChoosePrinters(printers, MAX_PRINTERS, false);
-        else if (preview == "choosing")  screen_settings::showChoosePrinters(nullptr, 0, true);
+        else if (preview == "choose")    screen_settings::showChoosePrinters(printers, MAX_PRINTERS, false,
+                                             budget::used(printers, MAX_PRINTERS, -1), false);
+        else if (preview == "choosing")  screen_settings::showChoosePrinters(nullptr, 0, true, 0, false);
         else if (preview == "greys")     previewGreys();
         else if (preview == "icons")     previewIcons();
 

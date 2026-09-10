@@ -18,6 +18,8 @@ repeated here.
 | `main.cpp` | Owns the state machine and the only writable copy of device state — and also owns the display device itself (`lcd`, and the PSRAM `canvas` sprite that exists solely so `/screen.bmp` has something to serialise). It draws no widgets, and must not start: screens render from state passed in. It also carries an inline Creality LAN scanner, which is not where anyone looks for it. |
 | `webcfg.cpp` | Serves **two** web interfaces — the captive portal for setup, and a separate legacy configuration page over the LAN once provisioned — and has **two** independent Wi-Fi scanners, one async and JSON for the portal, one blocking and HTML for the legacy page. "Change the web page" or "fix the scan" usually means changing the wrong one. |
 | `tt_db.cpp` | The TigerTag reference tables exist **twice**, and every lookup goes through here rather than through `tigertag_db.h`. The compiled tables are the floor - what a brand-new box knows offline - and the downloaded ones in LittleFS are preferred when they parse. The fallback is per table, not all-or-nothing, so a corrupt brand file does not throw away a good material file. Calling `tt_material()` directly bypasses the whole mechanism and looks identical until a spool from last month reads as `brand#48804`. |
+| `printer_budget.h` | Decides whether a printer may be **switched on**, in *load slots* - one is a kilobyte of internal RAM. It never sees memory: the prices are constants taken from `/api/memtest`, and `docs/CONNECTION-BUDGET.md` holds the measurements they must stay equal to. A new brand with no entry in `loadSlotsFor()` costs 0 and is never refused. "Load slot", never plain "slot" - a slot is a spool tray everywhere else in this code. |
+| `bambu_cloud.cpp` | One MQTT/TLS session shared by **every** cloud Bambu on the account; `backend_bambu.cpp` attaches and detaches, ref-counted. Reports are routed by the serial in the topic and nothing else - a report is never handed to a printer it did not name. So one cloud printer's "connected" is the session's, and closing one printer does not close the session while another is attached. LAN Bambus do not use it. |
 | `tigertag_cloud.cpp` | Its network calls are on a **mixed** regime, not a uniform one. The sync and the pairing start run on their own FreeRTOS tasks; `pairPoll()` and `signInWithCustomToken()` are called straight from the main loop and stall it for about a second each. Neither pattern is the rule, so check which one a call is on before adding another. |
 
 ### One board, three TLS talkers - and what it actually costs
@@ -31,19 +33,13 @@ attempt.
 
 **Do not generalise that to printer sessions.** Those three verify against the
 Arduino core's root CA bundle, and parsing it is most of what they cost. A
-printer session is `setInsecure()` and is far cheaper. Measured on this board,
-free internal RAM from a 199 936 byte baseline:
-
-| | cost |
-|---|---|
-| plain TCP session (Elegoo MQTT 1883) | ~3 KB, and ~0.6 KB for a second |
-| TLS session, insecure (Anycubic MQTT 9883) | ~38 KB |
-| two plain + one TLS, all open | 158 KB free, largest block 115 KB |
-| **three TLS, all open** | **all three connect** - 79 KB free, largest block 64 KB |
-
-So several printers connected at once is a question of how many are TLS, not a
-wall. Three plain sessions are essentially free; three TLS ones fit and leave
-enough for the UI, though not comfortably alongside an account sync.
+printer session is `setInsecure()` and is cheaper - but a TLS printer still
+takes 40-48 KB of internal RAM against 2-6 KB for any other, and the device
+holds about three TLS sessions before fragmentation stops the fourth. Every
+measurement, and the load budget that enforces it (`printer_budget.h`), is in
+[docs/CONNECTION-BUDGET.md](docs/CONNECTION-BUDGET.md). A one-off TLS request
+beside three printer sessions gets room from the TLS stand-down in `main.cpp`,
+not from the budget.
 
 ## Landmines
 

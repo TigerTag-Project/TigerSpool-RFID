@@ -905,3 +905,59 @@ ten, not by memory.
   same), not modem sleep (off: same), and not this cycle's work at all: the
   published 1.45.2, flashed back for the test, did the same. The radio link is
   at -75 to -88 dBm.
+
+## 2026-09-10 - a load budget, shown as a percentage
+
+### Added
+
+- `printer_budget.h`: a printer is switched on only if its **load slots** fit
+  in a budget of 160 - one load slot is one kilobyte of internal RAM. Prices are
+  the worst of five `/api/memtest` passes rounded up: first cloud Bambu 50,
+  each further one 4, LAN Bambu 50 (assumed - never measured, both were off),
+  Anycubic 41, Creality 6, Snapmaker 5, Elegoo 3, FlashForge 2. The selected
+  printer is counted whether switched on or not, since it is linked either way.
+- A Load gauge above the printer list in Settings > Printers and in the
+  first-boot Choose printers step: a percentage, accent colour, orange from 85%,
+  red with "Not enough room" for 2.5 s when a switch is refused. The refused
+  switch does not move; switching off is never refused. Raw counts go to the
+  console as `[budget] '<printer>' refused: <n> of 160 load slots`.
+  `S_LOAD` and `S_NO_ROOM` in all eight languages.
+- `docs/CONNECTION-BUDGET.md`: the reference for all of it - the measurements,
+  why 160 and not 200 (32 KB survival floor, ~166 usable) and not 166 (a ~6 KB
+  reserve for what the model does not count), per printer and per connection,
+  and what the model does not see (fragmentation, the ten-link cap).
+
+### Changed
+
+- The budget was 150 with a 16 KB reserve; raised to 160 on Benoit's call,
+  trading ten kilobytes of reserve for one more printer. Safe because the budget
+  is not what prevents a crash - the 32 KB floor and the sustained low-memory
+  closer in `main.cpp` are.
+- Load slots are the measured worst case per printer and the margin lives once,
+  in the reserve. An earlier draft claimed each price was "rounded up by a
+  fifth"; three brands were in fact at or above their price, hidden by the
+  first Bambu over-counting.
+- Documentation brought in line with the firmware: README (brand table, a
+  capacity section, known limitations - the "no Elegoo or Anycubic backend" and
+  "no accents" items were false), PRINTER-COMPATIBILITY (Elegoo and Anycubic
+  reading proven, Bambu cloud read only, the Anycubic TLS question answered),
+  firmware/README (it said nothing builds), installer/README (the manifest
+  example had a filesystem image that does not exist), THIRD_PARTY_LICENSES
+  (LVGL was missing), ROADMAP (the shared cloud session is built), CODEMAP and
+  CLAUDE.md.
+
+### Verified on hardware
+
+- Bench account, six printers on: gauge reads 68% (109 of 160). Switching on
+  the P2S (LAN Bambu, 50) is accepted at 159 - it would have been refused at
+  150 - and the bar goes orange at 99%. Then the P1P (a further cloud Bambu, 4)
+  is refused: the switch stays off, the bar turns red with "Plus assez de
+  place", and the console logs `'P1P Office' refused: 163 of 160 load slots`.
+  P2S switched back off, 68% again. The P2S itself was unreachable from this
+  network, so a LAN Bambu is still unmeasured.
+
+### Not verified
+
+- The vendored PN532 driver's files say BSD, THIRD_PARTY_LICENSES says
+  Apache-2.0 and promises licence and NOTICE files that are not there. Flagged,
+  not fixed here.

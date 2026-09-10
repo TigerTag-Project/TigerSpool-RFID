@@ -7,6 +7,7 @@
 #include "frame.h"
 #include "icons.h"
 #include "theme.h"
+#include "../printer_budget.h"
 #include "i18n.h"
 #include "version.h"
 #include "../net/ota.h"
@@ -96,17 +97,25 @@ void onInstall() { ota::applyAsync(); }
 // scrolled list throws away where it was scrolled to - press a toggle six
 // printers down and the view jumped back to the top. The switch is the only
 // thing on the row that changed, so it is the only thing that changes.
+// The tap only ASKS. It used to flip the switch on the spot, which was fine
+// while every request was granted - and wrong the moment one can be refused:
+// a printer that would overflow the load budget stayed off while its switch
+// showed on. The switch now follows the printer's real state, synced on every
+// call to the screen (see syncSwitches), so a refusal is a switch that does
+// not move.
 void onToggle(lv_event_t* e) {
     s_toggled = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_obj_t* row = lv_event_get_target(e);
-    for (uint32_t i = 0; i < lv_obj_get_child_cnt(row); i++) {
-        lv_obj_t* c = lv_obj_get_child(row, i);
-        if (!lv_obj_check_type(c, &lv_switch_class)) continue;
-        if (lv_obj_has_state(c, LV_STATE_CHECKED)) lv_obj_clear_state(c, LV_STATE_CHECKED);
-        else                                       lv_obj_add_state(c, LV_STATE_CHECKED);
-        break;
-    }
 }
+
+// One switch per printer index, filled when the rows are built.
+lv_obj_t* s_sw[MAX_PRINTERS] = { nullptr };
+
+// The load gauge, kept so it can be updated without rebuilding the list - a
+// rebuild throws away the scroll position, which is how toggling a printer
+// used to send the view back to the top.
+lv_obj_t* s_gaugeBar = nullptr;
+lv_obj_t* s_gaugeVal = nullptr;
+lv_obj_t* s_gaugeKey = nullptr;
 
 uint32_t hashOf(const char* s, uint32_t h = 2166136261u) {
     for (; s && *s; s++) h = h * 16777619u ^ (uint8_t)*s;
@@ -118,6 +127,8 @@ namespace screen_settings {
 
 void invalidate() {
     s_menuSig = 0; s_pickSig = 0; s_chooseSig = 0;
+    s_gaugeBar = s_gaugeVal = s_gaugeKey = nullptr;
+    for (int i = 0; i < MAX_PRINTERS; i++) s_sw[i] = nullptr;
     // And drop the ownership claim. Leaving a screen means its widgets are
     // about to be destroyed, so no later call has any business writing into
     // the pointers it cached - clearing the owner is what makes that true
@@ -223,9 +234,85 @@ bool  takeBack()  { bool v = s_back; s_back = false; return v; }
 bool  takeReload(){ bool v = s_reload; s_reload = false; return v; }
 bool  takeHex()   { bool v = s_hex;    s_hex = false;    return v; }
 
+// Height of the load gauge block: a label line and the bar under it.
+static const lv_coord_t GAUGE_H = 30;
+
+// The load gauge: how much of the connection budget the switched-on printers
+// take, as a bar that fills. See printer_budget.h for what a load slot is.
+static void gauge(lv_obj_t* parent) {
+    lv_obj_t* box = lv_obj_create(parent);
+    lv_obj_remove_style_all(box);
+    lv_obj_set_size(box, LV_PCT(100), GAUGE_H);
+    lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(box, 4, 0);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* line = lv_obj_create(box);
+    lv_obj_remove_style_all(line);
+    lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(line, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(line, LV_OBJ_FLAG_SCROLLABLE);
+    s_gaugeKey = lv_label_create(line);
+    lv_obj_set_style_text_font(s_gaugeKey, &font_ui_12, 0);
+    s_gaugeVal = lv_label_create(line);
+    lv_obj_set_style_text_font(s_gaugeVal, &font_ui_12, 0);
+
+    s_gaugeBar = lv_bar_create(box);
+    lv_obj_set_size(s_gaugeBar, LV_PCT(100), 8);
+    lv_bar_set_range(s_gaugeBar, 0, budget::LOAD_SLOTS);
+    lv_obj_set_style_radius(s_gaugeBar, 4, LV_PART_MAIN);
+    lv_obj_set_style_radius(s_gaugeBar, 4, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_gaugeBar, lv_color_hex(theme::LINE), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_gaugeBar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_gaugeBar, LV_OPA_COVER, LV_PART_INDICATOR);
+}
+
+// Written in place on every call. The colour says how close it is: the accent
+// while there is room, orange from 85%, red for the moment after a switch was
+// refused - with the reason in words, because a bar turning red on its own
+// explains nothing to somebody who only pressed a switch.
+static void updateGauge(uint16_t used, bool refused) {
+    if (!s_gaugeBar) return;
+    const uint16_t shown = used > budget::LOAD_SLOTS ? budget::LOAD_SLOTS : used;
+    lv_bar_set_value(s_gaugeBar, shown, LV_ANIM_OFF);
+    uint32_t col = theme::ACCENT;
+    if (used * 100 >= budget::LOAD_SLOTS * 85) col = theme::WARN;
+    if (refused) col = theme::DANGER;
+    lv_obj_set_style_bg_color(s_gaugeBar, lv_color_hex(col), LV_PART_INDICATOR);
+
+    lv_label_set_text(s_gaugeKey, i18n::T(refused ? S_NO_ROOM : S_LOAD));
+    lv_obj_set_style_text_color(s_gaugeKey, lv_color_hex(refused ? theme::DANGER : theme::TEXT_DIM), 0);
+    // A percentage to the user, not "109 / 150". Load slots are how the
+    // device counts; what a person needs is how full it is, and a percentage
+    // says that without asking them to know what the 150 is. The slot counts
+    // stay in the log and in docs/CONNECTION-BUDGET.md.
+    char b[16];
+    snprintf(b, sizeof(b), "%u%%",
+             (unsigned)((used * 100 + budget::LOAD_SLOTS / 2) / budget::LOAD_SLOTS));
+    lv_label_set_text(s_gaugeVal, b);
+    lv_obj_set_style_text_color(s_gaugeVal, lv_color_hex(refused ? theme::DANGER : theme::TEXT), 0);
+}
+
+// The switches follow the printers, every call. Cheap - a dozen state checks -
+// and it is what makes a refused toggle a switch that simply does not move.
+static void syncSwitches(const PrinterCfg* printers, int count) {
+    for (int i = 0; i < count && i < MAX_PRINTERS; i++) {
+        lv_obj_t* sw = s_sw[i];
+        if (!sw) continue;
+        const bool on = printers[i].visible;
+        if (on != lv_obj_has_state(sw, LV_STATE_CHECKED)) {
+            if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+            else    lv_obj_clear_state(sw, LV_STATE_CHECKED);
+        }
+    }
+}
+
 // The list itself, shared by the settings view and the setup chooser: same
 // rows, same switches, same target area. Only the frame around it differs.
 static void printerRows(lv_obj_t* body, const PrinterCfg* printers, int count) {
+    for (int i = 0; i < MAX_PRINTERS; i++) s_sw[i] = nullptr;
     int shown = 0;
     for (int i = 0; i < count; i++) {
         if (printers[i].type == PT_NONE) continue;
@@ -257,6 +344,7 @@ static void printerRows(lv_obj_t* body, const PrinterCfg* printers, int count) {
         lv_obj_set_style_bg_color(sw, lv_color_hex(theme::ACCENT),
                                   LV_PART_INDICATOR | LV_STATE_CHECKED);
         if (printers[i].visible) lv_obj_add_state(sw, LV_STATE_CHECKED);
+        s_sw[i] = sw;
 
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(row, onToggle, LV_EVENT_CLICKED, (void*)(intptr_t)i);
@@ -271,7 +359,8 @@ static void printerRows(lv_obj_t* body, const PrinterCfg* printers, int count) {
     }
 }
 
-void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
+void showPrinters(const PrinterCfg* printers, int count, bool syncing,
+                  uint16_t used, bool refused) {
     // Deliberately NOT hashing `visible`. It changes on every toggle, and a
     // changed signature means a rebuilt screen, and a rebuilt list has lost
     // its scroll position - which is how pressing a switch sent the view back
@@ -284,10 +373,12 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
         sig = hashOf(printers[i].name.c_str(), sig);
     }
     if (sig == s_pickSig) {
-        // The one thing that changes without a rebuild. The button is its own
+        // The things that change without a rebuild. The button is its own
         // progress indicator: a control that does something invisible for
         // fifteen seconds gets pressed again, and again.
         setReloadBusy(syncing);
+        syncSwitches(printers, count);
+        updateGauge(used, refused);
         return;
     }
     s_pickSig = sig;
@@ -329,11 +420,30 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
 
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(body, LV_DIR_VER);
-    theme::scrollbar(body);
+    lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
-    printerRows(body, printers, count);
+    // The gauge stays put and the list scrolls under it: a budget you can only
+    // see at the top of a long list is one you cannot see at the moment you
+    // flip the switch at the bottom of it.
+    gauge(body);
+    gap(body, 6);
+
+    lv_obj_t* list = lv_obj_create(body);
+    lv_obj_remove_style_all(list);
+    lv_obj_set_width(list, LV_PCT(100));
+    lv_obj_set_height(list, theme::SCREEN_H - theme::HEADER_H - 2 * theme::PAD
+                            - GAUGE_H - 6);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(list, theme::GAP, 0);
+    lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    theme::scrollbar(list);
+
+    printerRows(list, printers, count);
+    syncSwitches(printers, count);
+    updateGauge(used, refused);
 }
 
 // The setup step: which printers does this box talk to?
@@ -346,13 +456,18 @@ void showPrinters(const PrinterCfg* printers, int count, bool syncing) {
 // The list scrolls and the button does not. A "confirm" that has to be scrolled
 // to is one a person does not know is there, and this screen is the only thing
 // between them and a device that works.
-void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing) {
+void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing,
+                        uint16_t used, bool refused) {
     uint32_t sig = 2166136261u ^ (syncing ? 0x5AA5u : 0u);
     for (int i = 0; i < count; i++) {
         if (printers[i].type == PT_NONE) continue;
         sig = hashOf(printers[i].name.c_str(), sig);
     }
-    if (sig == s_chooseSig) return;
+    if (sig == s_chooseSig) {
+        syncSwitches(printers, count);
+        updateGauge(used, refused);
+        return;
+    }
     s_chooseSig = sig;
 
     // No back chevron: this is a step, not a place, and the button below is
@@ -361,6 +476,10 @@ void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing) {
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+
+    // The budget is part of the choice being made here, so it sits above it.
+    gauge(body);
+    gap(body, 6);
 
     lv_obj_t* list = lv_obj_create(body);
     lv_obj_remove_style_all(list);
@@ -374,7 +493,8 @@ void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing) {
     // the button, and the padding around them; that is a number, so it is
     // written as one.
     lv_obj_set_height(list, theme::SCREEN_H - theme::HEADER_H
-                            - 2 * theme::PAD - theme::BUTTON_H - theme::GAP - 8);
+                            - 2 * theme::PAD - theme::BUTTON_H - theme::GAP - 8
+                            - GAUGE_H - 6);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -397,6 +517,8 @@ void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing) {
 
     gap(body, 8);
     frame::button(body, i18n::T(S_CONFIRM), 1, []() { s_chosen = true; });
+    syncSwitches(printers, count);
+    updateGauge(used, refused);
     // The button is the last thing on the screen; without this it sits on the
     // bezel.
     gap(body, 6);

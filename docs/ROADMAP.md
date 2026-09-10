@@ -100,6 +100,11 @@ See [PRINTER-COMPATIBILITY.md](PRINTER-COMPATIBILITY.md).
 
 ## More TLS printers at once
 
+How many printers fit today, and every number behind that, is in
+[CONNECTION-BUDGET.md](CONNECTION-BUDGET.md): the device refuses a printer that
+would overflow a budget of 160 load slots, and a TLS printer takes 41-50 of
+them. This entry is about raising that ceiling.
+
 **Measured, and it overturns what this entry used to say.** It was titled
 "Move the MQTT buffers to PSRAM" and proposed vendoring PubSubClient to do it.
 They are already there. This framework is built with `CONFIG_SPIRAM_USE_MALLOC`
@@ -139,14 +144,12 @@ stops the fourth, and it stops it before the total would.
    the limit to whatever the ten-link cap allows. PSRAM is slower, and a TLS
    handshake is CPU-bound, so connects would get slower; how much is a
    measurement to make, not a guess.
-2. **Share one TLS session between Bambu printers on the same cloud broker.**
-   Every Bambu in cloud mode on one account talks to the same host with the
-   same credentials; the topics are per serial, and nothing in MQTT requires a
-   connection per device. One session could carry them all, which on this
-   bench is two printers for the price of one. It cuts against "one connection
-   per printer", which was built deliberately, so it is a design decision
-   before it is code. LAN-mode Bambus each have their own broker and cannot
-   share.
+2. ~~**Share one TLS session between Bambu printers on the same cloud
+   broker.**~~ **Built in 1.46.0** (`bambu_cloud.cpp`): every cloud Bambu on
+   an account rides one session, routed by the serial in each report's topic,
+   and a further one costs 3.6 KB instead of ~48. LAN-mode Bambus each have
+   their own broker and cannot share, and neither can Anycubic, so option 1 is
+   what remains for those.
 
 **What this entry no longer proposes:** vendoring PubSubClient, shrinking the
 Bambu buffer after connect, or sizing it by role for the sake of internal RAM.

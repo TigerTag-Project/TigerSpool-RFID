@@ -198,15 +198,47 @@ which grades each on three levels — ✅ automatic, ⚙️ one setup step,
 |---|---|---|
 | **Creality** | ✅ implemented, proven on hardware | WebSocket |
 | **FlashForge** | ✅ implemented, proven on hardware | HTTP |
-| **Bambu Lab** | ✅ implemented, proven on hardware | MQTT over TLS |
+| **Bambu Lab** | ✅ implemented, proven on hardware - LAN and cloud mode | MQTT over TLS |
 | **Snapmaker** | ✅ implemented, proven on hardware | Moonraker over WebSocket |
-| **Elegoo** | ✗ not implemented | protocol documented in Tiger Studio |
-| **Anycubic** | ✗ not implemented | protocol documented in Tiger Studio |
+| **Elegoo** | ✅ implemented, reading proven on hardware | MQTT |
+| **Anycubic** | ✅ implemented, reading proven on hardware - LAN mode | MQTT over TLS |
+
+A Bambu Lab printer in **cloud mode** is read-only: its spools are shown, but a
+tag cannot be written to it - Bambu's cloud does not accept the command. Switch
+the printer to LAN mode to write.
 
 Slot names match the ones the printer and Tiger Studio use — `Ext.` plus
 `1A`–`1D` on Creality and FlashForge, `A1`–`A4` then `B1`–`B4` on Bambu,
-`E1`–`E4` on Snapmaker. The table and its two traps are in the compatibility
-document.
+`E1`–`E4` on Snapmaker, `S1`–`S4` on Elegoo, `A1`–`A4` per ACE unit on
+Anycubic. The table and its two traps are in the compatibility document.
+
+## How many printers at once
+
+**The limit is not a number of printers - it is how much memory their
+connections take.** One TigerSpool has a fixed budget of **160 load slots**,
+where one load slot is one kilobyte of the chip's internal RAM, and each printer
+takes what its connection costs:
+
+| Printer | Load slots |
+|---|---|
+| First Bambu Lab in cloud mode | 50 |
+| Each further Bambu Lab in cloud mode | 4 - they share one connection |
+| Bambu Lab in LAN mode | 50 |
+| Anycubic | 41 |
+| Creality | 6 |
+| Snapmaker | 5 |
+| Elegoo | 3 |
+| FlashForge | 2 |
+
+The difference is encryption: a Bambu or an Anycubic talks over TLS, which is
+what memory goes on; the others do not. So ten Elegoos fit where three LAN
+Bambus do not.
+
+**Settings > Printers** shows how full the budget is as a percentage. A printer
+that would not fit is refused when you switch it on, with the reason on the
+screen, rather than connecting and failing later. The measurements, the reasons
+for 160, and what the budget does not account for are in
+**[docs/CONNECTION-BUDGET.md](docs/CONNECTION-BUDGET.md)**.
 
 ## Documentation
 
@@ -219,6 +251,7 @@ document.
 | [ACCOUNT-DATA.md](docs/ACCOUNT-DATA.md) | The shape a printer arrives in |
 | [OTA.md](docs/OTA.md) | Partitions, the manifest, and what is settled before the first release |
 | [PRINTER-COMPATIBILITY.md](docs/PRINTER-COMPATIBILITY.md) | Per-brand status and slot naming |
+| [CONNECTION-BUDGET.md](docs/CONNECTION-BUDGET.md) | How many printers at once: load slots, every measurement behind them, why 160 |
 | [WIRING.md](docs/WIRING.md) | The four wires |
 | [ROADMAP.md](docs/ROADMAP.md) | What is deliberately not done yet, and what has to be decided first |
 
@@ -233,12 +266,12 @@ Written down rather than discovered.
   root certificate store, so the box knows who it is talking to — but not who
   produced the image. The reasoning and the condition for changing that are in
   [docs/OTA.md](docs/OTA.md).
-- **No Elegoo or Anycubic backend.** Both protocols are documented and working in
-  Tiger Studio; the firmware side is not written.
-- **On-screen text carries no accents.** The compiled font is ASCII plus degree
-  and bullet, so "Francais" is spelled without its cedilla on purpose. Restoring
-  them needs a generated Latin subset font, and Polish needs Latin Extended-A on
-  top of that.
+- **At most three printers that use TLS at once** - Bambu Lab in LAN mode and
+  Anycubic, with every cloud Bambu on an account counting as one. It is the
+  chip's internal RAM, and the load budget enforces it; see
+  [docs/CONNECTION-BUDGET.md](docs/CONNECTION-BUDGET.md). The two ways past it
+  are in [docs/ROADMAP.md](docs/ROADMAP.md).
+- **Anycubic in cloud mode is not supported**, only LAN mode.
 - **A printer is identified by its position in your account's list.** Reordering
   it in Tiger Studio can move a per-printer setting to the wrong machine. Tracked
   in [docs/reviews/](docs/reviews/).

@@ -34,6 +34,7 @@
 #include "webcfg.h"
 #include "net/ota.h"
 #include "bambu_cloud.h"
+#include "printer_budget.h"
 #include <esp_task_wdt.h>
 #include "imu.h"
 #include "tigertag_cloud.h"
@@ -1236,6 +1237,32 @@ static void selectPrinter(int i) {
 }
 
 // ---- setup / loop -----------------------------------------------------
+// A switch asking to turn a printer on is granted only if the load budget has
+// the load slots for it - see printer_budget.h. Turning one OFF is always granted.
+//
+// This is where the device used to say nothing: the printer was switched on,
+// its link was refused later for want of memory, and its dot stayed red with
+// no reason anybody could read. Deciding here, at the switch, means the answer
+// comes while the person is looking at the choice they just made - and the
+// gauge on the same screen says why.
+static uint32_t s_refusedAt = 0;
+static void tryToggle(int t) {
+    if (t < 0 || t >= MAX_PRINTERS) return;
+    const bool turningOn = !printers[t].visible;
+    if (turningOn) {
+        const uint16_t after = budget::used(printers, MAX_PRINTERS, selectedPrinter, t);
+        if (after > budget::LOAD_SLOTS) {
+            s_refusedAt = millis() ? millis() : 1;
+            Serial.printf("[budget] '%s' refused: %u of %u load slots\n",
+                          printers[t].name.c_str(), (unsigned)after, (unsigned)budget::LOAD_SLOTS);
+            return;
+        }
+    }
+    savePrinterVisible(t, turningOn);
+}
+static bool justRefused() { return s_refusedAt && millis() - s_refusedAt < 2500; }
+static uint16_t loadSlotsUsed() { return budget::used(printers, MAX_PRINTERS, selectedPrinter); }
+
 // A loop that stops must not stay stopped.
 //
 // It happened: the panel lit, every printer frozen on screen, no reply on the
@@ -1912,7 +1939,8 @@ void loop() {
     }
 
     case ST_PICK: {
-        screen_settings::showPrinters(printers, MAX_PRINTERS, ttcloud::asyncBusy());
+        screen_settings::showPrinters(printers, MAX_PRINTERS, ttcloud::asyncBusy(),
+                                      loadSlotsUsed(), justRefused());
         lvgl_port::loop();
 
         if (screen_settings::takeReload()) {
@@ -1923,7 +1951,7 @@ void loop() {
         }
 
         int t = screen_settings::takeToggled();
-        if (t >= 0) savePrinterVisible(t, !printers[t].visible);
+        if (t >= 0) tryToggle(t);
 
         if (screen_settings::takeBack()) {
             screen_settings::invalidate();
@@ -2178,11 +2206,12 @@ void loop() {
         }
 
         screen_settings::showChoosePrinters(printers, MAX_PRINTERS,
-                                            ttcloud::asyncBusy());
+                                            ttcloud::asyncBusy(),
+                                            loadSlotsUsed(), justRefused());
         lvgl_port::loop();
 
         int t = screen_settings::takeToggled();
-        if (t >= 0) { touched |= (1u << t); savePrinterVisible(t, !printers[t].visible); }
+        if (t >= 0) { touched |= (1u << t); tryToggle(t); }
 
         if (screen_settings::takeChosen()) {
             markPrintersChosen();

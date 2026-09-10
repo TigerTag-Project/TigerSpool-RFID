@@ -6,9 +6,8 @@ Marketing gets one line on the front page; this table gets the rest. If a printe
 is not on it, TigerSpool does not support it. If it is on it at 🧪, that means
 someone has to do work before it does.
 
-> **Status of this page:** the firmware has not been migrated to this repository
-> yet. Everything marked 🟢 *proven* below was proven **in the bench prototype**,
-> on real printers, and is being carried over. Nothing here is claimed on the
+> **Status of this page:** everything marked 🟢 *proven* below was proven with
+> this repository's firmware, on real printers. Nothing here is claimed on the
 > basis of documentation alone.
 
 ---
@@ -31,9 +30,14 @@ someone has to do work before it does.
 | **FlashForge** | Creator 5 / 5 Pro, **AD5X** | ⚙️ | HTTP `:8898` | 🟢 proven on hardware | Serial number **and check code**, both from the printer's network info screen. Imported automatically if the printer is in your TigerTag account. |
 | **Bambu Lab** | A1, A1 mini, A2L | ⚙️ | MQTT/TLS `:8883` | 🟢 proven on hardware | **LAN mode on**, plus the serial and the 8-character access code from the printer screen. Imported automatically from your account. |
 | **Snapmaker** | Artisan, J1, J1s, U1 | ⚙️ | Moonraker WebSocket `:7125` | 🟢 proven on hardware | Nothing — Moonraker needs no authentication on the LAN. The printer's IP is all it takes. |
-| **Bambu Lab (cloud)** | X1, P1, and any printer not on your LAN | 🧪 | MQTT/TLS to Bambu's broker | 🟡 partly implemented | Depends on a Bambu session token that **Tiger Studio** obtains and stores in your account; the device never signs in to Bambu itself. The token expires roughly every three months and has to be renewed in Studio. Not a finished experience. |
-| **Elegoo** | Centauri Carbon 2 and others | 🧪 | MQTT `:1883` (plain TCP) | 🟡 backend written, **never run against a printer** | Serial number and the MQTT password (an "Access Code" on the printer). Imported automatically from your account. |
+| **Bambu Lab (cloud)** | X1, P1, and any printer not on your LAN | 🧪 | MQTT/TLS to Bambu's broker, one session shared by every cloud printer on the account | 🟢 **reading** proven on hardware (A1, X1C) · writing not supported | **Read only**: slots are shown, a tag cannot be written - Bambu's cloud does not take the command. Depends on a Bambu session token that **Tiger Studio** obtains and stores in your account; the device never signs in to Bambu itself. The token expires roughly every three months and has to be renewed in Studio. |
+| **Elegoo** | Centauri Carbon 2 and others | ⚙️ | MQTT `:1883` (plain TCP) | 🟢 **reading** proven on hardware (Centauri Carbon 2) · writing not yet confirmed on a printer | Serial number and the MQTT password (an "Access Code" on the printer). Imported automatically from your account. |
+| **Anycubic** | Kobra 3 V2, Kobra X, ACE units | ⚙️ | MQTT/TLS `:9883` | 🟢 **reading** proven on hardware (Kobra X) · writing not yet confirmed on a printer | **LAN mode**, and **the printer must be paired in AnycubicSlicerNext at least once** — its broker credentials exist nowhere else. Tiger Studio reads them from there into your account. |
 | **Anycubic (cloud)** | any Anycubic not in LAN mode | 🧪 | signed REST + MQTT to Anycubic's cloud | 🔵 protocol documented, firmware not written | Nothing on the printer — but it is a **second, heavier code path** than LAN, and whether it belongs in v1 is undecided. |
+
+**How many at once** depends on which: a Bambu or an Anycubic takes far more of
+the device's memory than the others, so the limit is a load budget rather than a
+count - see [CONNECTION-BUDGET.md](CONNECTION-BUDGET.md).
 
 > **Anycubic TLS — the supposed blocker does not exist.** Tiger Studio's protocol
 > notes say the broker must be pinned to TLS 1.2 because it requests an optional
@@ -47,11 +51,11 @@ someone has to do work before it does.
 >
 > This may vary by model or firmware, so it is recorded as an observation rather
 > than a rule. But on this hardware the ESP32 will handshake, and the largest
-> stated risk for the Anycubic backend is not present.
-| **Anycubic** | Kobra 3 V2, Kobra X, ACE units | 🧪 | MQTT/TLS `:9883` | 🟡 backend written, **never run against a printer** | **The printer must be paired in AnycubicSlicerNext at least once** — its broker credentials exist nowhere else. Tiger Studio reads them from there into your account. |
+> stated risk for the Anycubic backend is not present. The device's own mbedTLS
+> has since completed it too.
 
-**Legend for implementation status:** 🟢 implemented in the firmware prototype
-and verified against a physical printer · 🟡 implemented, not fully verified ·
+**Legend for implementation status:** 🟢 implemented in this firmware and
+verified against a physical printer · 🟡 implemented, not fully verified ·
 🔵 protocol fully documented and proven on real hardware **elsewhere**
 ([Tiger Studio](https://github.com/TigerTag-Project/TigerTag-Studio-Manager)), but
 no firmware backend written yet · 🔴 nothing at all.
@@ -60,18 +64,16 @@ no firmware backend written yet · 🔴 nothing at all.
 
 ## Elegoo and Anycubic
 
-Both are **targeted for v1**. Neither has a firmware backend yet — but unlike
-every other protocol in this project, **neither needs to be reverse-engineered
-either.** Both are already documented and working in
+Both have a firmware backend, over the LAN, and both read slots on real
+printers. Unlike every other protocol in this project, **neither had to be
+reverse-engineered**: both were already documented and working in
 [Tiger Studio](https://github.com/TigerTag-Project/TigerTag-Studio-Manager), from
 live captures of the vendors' own slicers against real printers:
 
 - `renderer/printers/elegoo/PROTOCOL.md`
 - `renderer/printers/anycubic/PROTOCOL.md`
 
-That turns v1 support from open-ended research into a porting job. What remains is
-real work — a JavaScript desktop client and an ESP32 firmware backend are not the
-same thing — but the unknowns are now specific rather than total.
+That turned support from open-ended research into a porting job.
 
 ### Proven from this repository, on Benoit's own printers
 
@@ -87,15 +89,19 @@ payloads the firmware backends send:
 | Shape | matches the backend's parser | matches the backend's parser |
 
 So the transports, the credentials, the topics and the payload shapes are all
-correct. **What blocks the device is account data, not firmware:** the TigerTag
-account carries no access code for the Elegoo, and neither `username` nor
-`acuModelId` for the Anycubic. All three exist - the first in Tiger Studio's
-own form, the other two in `AnycubicSlicerNext.conf` - they simply never
-reached the account.
+correct. The device then read both printers itself (1.36.0): the Centauri
+Carbon 2's four trays and the Kobra X's four slots, the same the printers report
+to Tiger Studio. The credentials the device seemed to lack - the Elegoo access
+code, the Anycubic `username` and `acuModelId` - were in the account all along;
+the import was discarding them.
 
-One thing is still unproven and can only be proven on the device: whether
-**mbedTLS on the ESP32** completes the Anycubic handshake. Python's TLS does.
-Until the two missing fields reach the account, the firmware cannot try.
+**mbedTLS on the ESP32 completes the Anycubic handshake** - TLS 1.2,
+self-signed, no client certificate. That was the biggest open question in the
+protocol notes.
+
+Not yet confirmed on a printer: **writing** a slot, on either brand. The
+commands are the ones Tiger Studio sends (below), but a write has not been read
+back from the printer after the device sent it.
 
 ### What is already known
 
@@ -113,11 +119,10 @@ Elegoo is in some ways **simpler than Bambu Lab** — no TLS at all.
 
 ### The two things that will bite
 
-**Anycubic's broker demands TLS 1.2.** It requests an *optional* client
-certificate, and a TLS 1.3 stack aborts the handshake when none is offered. The
-version has to be pinned. Whether the ESP32's TLS stack negotiates this correctly
-is the single biggest open question for this backend, and it can only be answered
-on hardware.
+**Anycubic's TLS.** Tiger Studio's notes say the broker demands TLS 1.2 and
+requests an optional client certificate that a TLS 1.3 stack aborts on. The Kobra
+X did neither (see the note under the matrix), and the ESP32 handshakes with it.
+Another model or firmware may still behave as the notes say.
 
 **Anycubic credentials cannot be obtained from the printer.** The `/info`
 endpoint does not expose them and they cannot be derived from what it does expose
@@ -147,14 +152,14 @@ pattern already in this firmware: **Tiger Studio holds the session and the
 account carries a token the device presents.** Nothing in the firmware can be
 built until that is decided, because it determines what the account has to store.
 
-The same question already exists for Bambu Lab, whose cloud path is partly
-implemented in the prototype.
+Bambu Lab's cloud path is that pattern, and it is built: Tiger Studio holds the
+session, the account carries the token, and the device reads slots with it.
 
 ### Still useful from the community
 
 - **Other models.** The captures come from specific printers. A protocol that
   holds across a brand's range is worth far more than one that fits one machine.
-- **Testing** once the backends exist.
+- **Testing** on other models, and a confirmed slot write on each brand.
 
 ## Slot names
 

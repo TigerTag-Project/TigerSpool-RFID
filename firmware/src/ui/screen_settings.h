@@ -49,10 +49,14 @@ void  invalidate();
 // synced; it simply does not crowd a 2.0" screen belonging to someone who owns
 // three machines and cares about one of them today.
 // `syncing` colours the header's refresh button while an account sync runs.
-void showPrinters(const PrinterCfg* printers, int count, bool syncing);
+// `used` is the load budget taken by the switched-on printers (see
+// printer_budget.h); `refused` is true just after a switch was declined.
+void showPrinters(const PrinterCfg* printers, int count, bool syncing,
+                  uint16_t used, bool refused);
 // The same list as a setup step: nothing selected, and a Confirm button
 // pinned below it instead of a back chevron above.
-void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing);
+void showChoosePrinters(const PrinterCfg* printers, int count, bool syncing,
+                        uint16_t used, bool refused);
 bool takeChosen();
 // That button: ask the account for the printer list now, rather than waiting
 // out the five-minute cycle.

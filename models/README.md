@@ -59,10 +59,10 @@ models/
 └── anycubic/     mounts to an Anycubic
 ```
 
-**A directory here is about physical mounting, not firmware support.** `elegoo/`
-and `anycubic/` exist because a case can be designed for a printer whose network
-protocol is not implemented yet — those two are 🧪 in
-[../docs/PRINTER-COMPATIBILITY.md](../docs/PRINTER-COMPATIBILITY.md), which is the
+**A directory here is about physical mounting, not firmware support.** A case
+can be designed for a printer before its network protocol works, so a directory
+existing says nothing about whether the device talks to that printer.
+[../docs/PRINTER-COMPATIBILITY.md](../docs/PRINTER-COMPATIBILITY.md) is the
 authority on what actually works.
 
 ### What goes in a model directory

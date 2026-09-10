@@ -171,6 +171,8 @@ static const Row STR[S_COUNT] = {
 /* S_NT_INVALID     */ {{ "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID" }},
 /* S_NT_NONE        */ {{ "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE" }},
 /* S_NT_NOKEY       */ {{ "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY", "NO KEY" }},
+/* S_LOAD           */ {{ "Load", "Charge", "Auslastung", "Carga", "Carico", "Obciążenie", "Carga", "Carga" }},
+/* S_NO_ROOM        */ {{ "Not enough room", "Plus assez de place", "Kein Platz mehr", "No queda espacio", "Spazio esaurito", "Brak miejsca", "Sem espaço", "Sem espaço" }},
 };
 
 // A mismatch here is silent at runtime and reads as garbled text on screen, so

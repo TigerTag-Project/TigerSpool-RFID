@@ -12,7 +12,7 @@ are settled. This file adds what a Claude session needs on top of it.
 | Touch | CST816S capacitive, on the same board |
 | Reader | PN532 over HSU (UART1) at 115200 — **GPIO44 RX, GPIO43 TX** |
 | UI | LVGL 8 over LovyanGFX. DMA draw buffers in internal RAM, LVGL heap in PSRAM |
-| Printers | One backend per brand behind `printer.h`; Bambu MQTT, Creality/Snapmaker WebSocket, FlashForge HTTP |
+| Printers | One backend object per printer behind `printer.h`; Bambu MQTT/TLS (cloud Bambus share one session, `bambu_cloud.cpp`), Anycubic MQTT/TLS, Elegoo MQTT, Creality/Snapmaker WebSocket, FlashForge HTTP. How many at once: `printer_budget.h`, `docs/CONNECTION-BUDGET.md` |
 | Account | TigerTag Firebase — email/password, or code-and-QR pairing for Google |
 | Build | PlatformIO, one environment: `tigerspool`. `cd firmware && pio run -e tigerspool` |
 | Flash | Two 4 MB OTA slots, NVS at `0x9000` — `firmware/partitions.csv` |
@@ -88,7 +88,7 @@ the one action no later edit undoes.
 | Anything, on any branch | **guards** — `verify.sh --quick`, about 40 s — and **build firmware**, about 2 min. Both, every time. |
 | A pull request to `main` | The same two. Nothing extra. |
 | A `v*` tag | **release** — verifies the tag against the version macro, builds from the tagged source, publishes the binaries and `SHA256SUMS.txt`. |
-| `installer/` | Nothing yet. `pages.yml` is a placeholder that fails on purpose and only runs by hand. |
+| `installer/` | Nothing on its own. The site - installer page and OTA manifest - is deployed by `pages.yml`, which only the release workflow calls (or a manual run). |
 
 There is no path filtering, deliberately: the firmware job costs two minutes and
 skipping it on a documentation change would mean maintaining a list of paths

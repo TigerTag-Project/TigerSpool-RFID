@@ -168,6 +168,8 @@ enum StrId : uint8_t {
     S_NT_INVALID,
     S_NT_NONE,
     S_NT_NOKEY,
+    S_LOAD,
+    S_NO_ROOM,
     S_COUNT
 };
 
