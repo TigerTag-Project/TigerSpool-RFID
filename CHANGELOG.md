@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.46.0] - 2026-09-10
+
+### Changed
+
+- **More printers can be connected at once if you use Bambu Lab in cloud
+  mode.** Every Bambu Lab printer on your account now shares a single secure
+  connection instead of opening one each. That connection is the most
+  memory-hungry thing the device does, so a second cloud printer now costs
+  about a fifteenth of what it did, and there is room left for others. Each
+  printer still shows its own spools and its own status; only the connection
+  behind them is shared. Printers in LAN mode are unaffected.
+- The device answers faster on the network: Wi-Fi power saving is off, which is
+  the right choice for something that runs from a wall socket.
+
+### Fixed
+
+- **The device can no longer freeze indefinitely.** If its main program ever
+  stops responding, it now restarts itself within thirty seconds and records
+  why, instead of staying frozen until it is unplugged.
+
+
 ## [1.45.2] - 2026-09-10
 
 ### Fixed

@@ -877,7 +877,7 @@ third, and the largest free block had already fallen to 18 KB in one run - a
 new session needs a piece that size); non-TLS printers are capped by the code at
 ten, not by memory.
 
-## 2026-09-10 - one session for the cloud, and a loop that cannot stay stuck
+## 2026-09-10 - one session for the cloud, and a loop that cannot stay stuck (released in 1.46.0)
 
 ### Changed
 
