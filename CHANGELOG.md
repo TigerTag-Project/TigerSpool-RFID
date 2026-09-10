@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.2] - 2026-09-10
+
+### Fixed
+
+- **The printer you are looking at connects more readily.** The device was
+  reserving far more memory than a Bambu Lab printer on screen actually uses -
+  its large receive buffer lives in a separate memory the device has plenty of,
+  and was being counted against the scarce one. Connection limits now use costs
+  measured on real hardware, printer by printer.
+
+
 ## [1.45.1] - 2026-09-10
 
 ### Changed

@@ -850,7 +850,7 @@ Verified on hardware throughout, on a real R3D spool.
 - The card's label is "Version", not "Installed version". The number beside it
   is the device's own; nothing else on the page could be meant.
 
-## 2026-09-10 - what a printer actually costs
+## 2026-09-10 - what a printer actually costs (released in 1.45.2)
 
 ### Added
 
