@@ -810,7 +810,7 @@ field active read 2.3 dB BETTER than 30 with it idle.
 
 Verified on hardware throughout, on a real R3D spool.
 
-## 2026-09-10 - the pushall nobody needed
+## 2026-09-10 - the pushall nobody needed (released in 1.45.0)
 
 ### Changed
 

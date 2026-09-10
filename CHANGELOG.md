@@ -7,6 +7,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.45.0] - 2026-09-10
+
+### Changed
+
+- **Bambu Lab printers are no longer polled.** The device asked each one for
+  its entire state every eight seconds - about 81 KB a minute for two printers,
+  for spools that had not moved. The printer already announces a spool change
+  by itself, in a message five times smaller, so the device now listens instead
+  of asking. Your screen updates exactly as before; the Wi-Fi does a fraction
+  of the work.
+- The update page puts **Install at the bottom of the screen**, and scrollbars
+  appear only when a page actually has more to show.
+
+### Fixed
+
+- **Printer connections stopped dropping and reconnecting.** A four-second
+  read limit added to keep the interface responsive was also cutting off large
+  replies, so the device hung up on printers that were answering perfectly -
+  once every poll. Four minutes of observation now show none at all, where
+  there were four reconnections in two and a half minutes before.
+
+
 ## [1.44.0] - 2026-09-10
 
 ### Fixed
