@@ -824,20 +824,36 @@ void showUpdate(const char* version, const char* channel,
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
     theme::scrollbar(body);
 
-    // Not when there is an update to offer: the step line below carries the
-    // installed version already, and printing it twice on one screen reads as
-    // two different facts.
-    if (otaState != ota::AVAILABLE)
-        frame::row(body, i18n::T(S_INSTALLED), vbuf, false, nullptr, nullptr);
+    // ALWAYS. The installed version is the fact this page is about, and it is
+    // what somebody opening it came to see - whether or not there is anything
+    // newer. It was hidden when an update was on offer, on the grounds that the
+    // step line below repeats the number; but the card is a statement about the
+    // device and the step line is a statement about what would happen, and a
+    // page that removes the first the moment the second appears has nothing
+    // steady on it.
+    frame::row(body, i18n::T(S_INSTALLED), vbuf, false, nullptr, nullptr);
 
     lv_obj_t* spacer = lv_obj_create(body);
     lv_obj_remove_style_all(spacer);
     lv_obj_set_size(spacer, 1, 12);
 
     switch (otaState) {
-    case ota::CHECKING:
+    case ota::CHECKING: {
+        // Something that MOVES while the network is being asked. A line of text
+        // saying "checking" is indistinguishable from a line of text that is
+        // stuck, and this wait is a TLS handshake plus a fetch - seconds, on a
+        // weak link. The ring turns, so the page is visibly doing the thing it
+        // said it would do on arrival.
+        lv_obj_t* sp = lv_spinner_create(body, 900, 60);
+        lv_obj_set_size(sp, 44, 44);
+        lv_obj_set_style_arc_width(sp, 4, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(sp, 4, LV_PART_INDICATOR);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::LINE), LV_PART_MAIN);
+        lv_obj_set_style_arc_color(sp, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
+        gap(body, 10);
         frame::caption(i18n::T(S_CHECKING), theme::TEXT_DIM);
         break;
+    }
 
     case ota::UP_TO_DATE:
         badge(body, LV_SYMBOL_OK, theme::OK);

@@ -836,3 +836,16 @@ Verified on hardware throughout, on a real R3D spool.
   observation, zero sessions lost, against four reconnections in 150 seconds
   before. A `session lost, state N` line stays in each MQTT backend so
   PubSubClient says why rather than leaving it to be guessed.
+
+## 2026-09-10 - the update page, as one page
+
+### Changed
+
+- The update page keeps the version card on screen in every state, and shows
+  what it is doing under it: a turning ring while it checks, a tick when there
+  is nothing newer, and the download icon with `from > to` and Install when
+  there is. The card used to be hidden the moment an update appeared - the card
+  is a statement about the device and the step line is a projection, and a page
+  that removes the first when the second arrives has nothing steady on it.
+- The card's label is "Version", not "Installed version". The number beside it
+  is the device's own; nothing else on the page could be meant.

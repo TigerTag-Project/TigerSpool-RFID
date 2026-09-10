@@ -79,7 +79,7 @@ static const Row STR[S_COUNT] = {
 /* S_BRIGHTNESS     */ {{ "Brightness", "Luminosité", "Helligkeit", "Brillo", "Luminosita", "Jasnosc", "Brilho", "Brilho" }},
 /* S_SLEEP_AFTER    */ {{ "Sleep after", "Veille après", "Ruhe nach", "Reposo tras", "Standby dopo", "Uspij po", "Suspender apos", "Suspender apos" }},
 /* S_NEVER          */ {{ "Never", "Jamais", "Nie", "Nunca", "Mai", "Nigdy", "Nunca", "Nunca" }},
-/* S_INSTALLED      */ {{ "Installed version", "Version installée", "Installierte Version", "Version instalada", "Versione installata", "Zainstalowana wersja", "Versao instalada", "Versao instalada" }},
+/* S_INSTALLED      */ {{ "Version", "Version", "Version", "Version", "Versione", "Wersja", "Versao", "Versao" }},
 /* S_OTA_OFF        */ {{ "Over-the-air updates are not enabled on this build.", "Les mises à jour par le réseau ne sont pas activées.", "Updates uber Funk sind in diesem Build nicht aktiv.", "Las actualizaciones por red no estan activas.", "Gli aggiornamenti via rete non sono attivi.", "Aktualizacje przez siec nie sa wlaczone.", "As atualizacoes pela rede nao estao ativas.", "As atualizacoes pela rede nao estao ativas." }},
 /* S_RESTART_Q      */ {{ "Restart the TigerSpool?", "Redémarrer la TigerSpool ?", "TigerSpool neu starten?", "Reiniciar la TigerSpool?", "Riavviare la TigerSpool?", "Uruchomic ponownie TigerSpool?", "Reiniciar o TigerSpool?", "Reiniciar o TigerSpool?" }},
 /* S_RESTORE        */ {{ "Restore", "Restaurer", "Wiederherstellen", "Restaurar", "Ripristina", "Przywroc", "Restaurar", "Restaurar" }},
