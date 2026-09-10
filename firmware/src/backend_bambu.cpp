@@ -17,8 +17,10 @@ namespace {
     //
     // A background link is asked for one thing only: whether it is connected,
     // which is the dot in the list. That answer comes from the MQTT session and
-    // not from the report, so 8 KB is enough for it, and the 43 KB saved per
-    // printer is the difference between three Bambus open at once and one.
+    // not from the report, so 8 KB is enough for it. The 43 KB saved is PSRAM,
+    // not internal RAM - see linkCost() in main.cpp, which was wrong about this
+    // until it was measured. What limits how many Bambus can be open is the TLS
+    // session, and this buffer has nothing to do with it.
     const uint16_t BAMBU_BUF_FULL = 51200;
     const uint16_t BAMBU_BUF_BG   = 8192;
 }

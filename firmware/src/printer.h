@@ -95,12 +95,13 @@ public:
     virtual void stop() {}                          // close connections, free heap
     // Is this the printer the user is looking at?
     //
-    // Only one backend needs to be sized for the worst case at a time. A Bambu
-    // receive buffer holds a whole pushall - up to 50 KB on an X1 with four AMS
-    // units - and three of those at once is more internal RAM than this chip
-    // has. The foreground link gets the full buffer; the others get one large
-    // enough for the machines that answer in less, and say so in the log if a
-    // report does not fit. Backends with nothing to size ignore this.
+    // Only the foreground backend needs a buffer sized for the worst case: a
+    // Bambu pushall runs to about 50 KB on an X1 with four AMS units, and only
+    // the printer on screen has its slots drawn. Background links get a small
+    // one. Measured, the saving is in PSRAM rather than internal RAM - buffers
+    // over 4 KB are placed there by the framework - so it matters far less than
+    // it was first thought to; it stays because 42 KB of PSRAM per printer is
+    // still 42 KB. Backends with nothing to size ignore this.
     virtual void setForeground(bool) {}
     virtual bool connected() = 0;
 

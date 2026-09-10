@@ -98,79 +98,70 @@ See [PRINTER-COMPATIBILITY.md](PRINTER-COMPATIBILITY.md).
 
 ---
 
-## Move the MQTT buffers to PSRAM
+## More TLS printers at once
 
-**The internal heap is the bottleneck; 8 MB of PSRAM sits idle.** Measured on
-hardware, on a device holding six printers:
+**Measured, and it overturns what this entry used to say.** It was titled
+"Move the MQTT buffers to PSRAM" and proposed vendoring PubSubClient to do it.
+They are already there. This framework is built with `CONFIG_SPIRAM_USE_MALLOC`
+and `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL 4096`, so every allocation over 4 KB -
+the 50 KB Bambu buffer, the 16 KB Anycubic one - goes to PSRAM without being
+asked. `/api/memtest` shows it directly: the buffer lands in the PSRAM column.
+
+What sits in internal RAM is **mbedTLS**, which the same config pins there
+(`CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC`). `/api/memtest`, every link closed, the
+account sync held off, printers opened one at a time and read after ten settled
+seconds:
 
 ```
-[heap] 65916 free, 53236 largest, psram 8158611/8380983 free, 6 link(s) up
+baseline, 0 links   free 202124   largest 61428
+creality            3856  internal       0 psram
+bambu (background) 43940  internal    8208 psram
+bambu (on screen)  47756  internal   51216 psram
+snapmaker           4884  internal       0 psram
+elegoo              2128  internal    8208 psram
+anycubic           39432  internal   16400 psram
+done, 6 links       free  60128   largest 18420   psram 8.1 MB free
 ```
 
-Sixty-five kilobytes of internal RAM decide how many printers this device can
-hold, while 8.16 MB of the 8.38 MB of PSRAM is untouched. Only LVGL lives
-there.
+**So a printer costs one thing: whether it speaks TLS.** A WebSocket or plain
+MQTT printer is 2 to 5 KB and ten of them fit comfortably. A TLS printer - Bambu,
+Anycubic - is 40 to 48 KB, and the device holds about **three**. Not by total
+memory alone: the largest free block falls from 61 KB to 18 KB across those
+three, and a new TLS session needs one piece that size. Fragmentation is what
+stops the fourth, and it stops it before the total would.
 
-**What a connection costs**, measured one link at a time by reading the free
-heap either side of each:
+**The two ways past it, neither small:**
 
-| Brand | Cost | What it is |
-|---|---|---|
-| Bambu, on screen | ~88 KB | TLS, plus 50 KB of MQTT buffer |
-| Bambu, background | ~46 KB | the same TLS, 8 KB of buffer |
-| Anycubic | ~37 KB | TLS, 16 KB buffer |
-| Snapmaker | ~11 KB | WebSocket and its frame buffer |
-| Creality | ~8 KB | WebSocket |
-| Elegoo | ~3 KB | plain MQTT, no TLS at all |
-| FlashForge | ~1 KB | HTTP; nothing held between requests |
+1. **Put mbedTLS in PSRAM.** `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`. It is an
+   sdkconfig option, and the Arduino core here is precompiled with its sdkconfig
+   fixed - so it means building Arduino as an ESP-IDF component, a change of
+   build system. It would take TLS from 40 KB internal to near nothing and lift
+   the limit to whatever the ten-link cap allows. PSRAM is slower, and a TLS
+   handshake is CPU-bound, so connects would get slower; how much is a
+   measurement to make, not a guess.
+2. **Share one TLS session between Bambu printers on the same cloud broker.**
+   Every Bambu in cloud mode on one account talks to the same host with the
+   same credentials; the topics are per serial, and nothing in MQTT requires a
+   connection per device. One session could carry them all, which on this
+   bench is two printers for the price of one. It cuts against "one connection
+   per printer", which was built deliberately, so it is a design decision
+   before it is code. LAN-mode Bambus each have their own broker and cannot
+   share.
 
-Bambu is dearest for one reason nothing else shares: a `pushall` from an X1
-with four AMS units arrives as a SINGLE MQTT message of about 50 KB, and
-PubSubClient has no streaming API - the message fits in the buffer whole or it
-is dropped, and the topology is then never learned.
+**What this entry no longer proposes:** vendoring PubSubClient, shrinking the
+Bambu buffer after connect, or sizing it by role for the sake of internal RAM.
+All three would move PSRAM around, of which 8 MB is idle.
 
-**The move.** PubSubClient allocates that buffer with `realloc()`, so it lands
-in internal RAM, and its `buffer` member is private - a subclass cannot reach
-it. The change is to vendor a copy of the library whose allocation is
-`heap_caps_realloc(..., MALLOC_CAP_SPIRAM)`, three lines, plus a PSRAM
-allocator for the ArduinoJson documents that parse those reports. PSRAM's lower
-speed does not matter for a buffer walked once every eight seconds.
+### The 24-AMS case is simpler than it looked
 
-**Expected: a Bambu on screen falls from ~88 KB to ~40 KB**, and the device
-goes from about two simultaneous Bambus to four, or from six printers to nine
-or ten on a mixed account.
+A Bambu can chain up to 24 AMS units - 96 trays plus the external spool. Rare.
+It is not a memory problem, because the report buffer is in PSRAM and PSRAM is
+not short. It is a data-model problem: `BMAX` is 17, labels run A to D, and a
+report that size would exceed the 50 KB buffer and be dropped whole, so the
+screen would show nothing rather than something wrong. The fix is a buffer
+sized for it (in PSRAM, free) and a slot array sized from the topology the
+first report describes - "A1" to "X4" is twenty-four letters, exactly the
+alphabet's usable run.
 
-**What is NOT in scope, deliberately.** The ~40 KB TLS session stays where it
-is. Moving it needs `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`, which means an
-sdkconfig this build does not own - the Arduino core here is precompiled - and
-therefore a move to Arduino-as-an-IDF-component. That is a change of build
-system for a third of the win. LVGL's draw buffers stay in internal RAM too;
-they are DMA targets.
-
-**Decided, not forgotten:** to be done, in a release of its own rather than
-folded into a batch of interface work, so that a regression in the MQTT path
-has one obvious cause.
-
-### And the same work carries the 24-AMS case
-
-A Bambu printer can chain **up to 24 AMS units** - 96 trays plus the external
-spool. It is rare, and it is exactly the shape this firmware currently cannot
-take: `BMAX` is 17, the labels run A to D, and a pushall from a machine like
-that would be several times the 50 KB buffer and be dropped whole, so the
-device would show nothing at all rather than something wrong.
-
-It belongs to this entry rather than to one of its own, because the answer is
-the same answer. In internal RAM, 97 slots and a buffer that could hold their
-report is not affordable on a device that also wants to talk to five other
-printers; in PSRAM, with 8 MB idle, it is free. Moving the buffers is what
-makes the case possible at all.
-
-What it needs beyond the move: the slot array sized from the topology the first
-report describes rather than declared at its maximum, and labels that keep
-working past four units - "A1" to "X4" is twenty-four letters, which is exactly
-the alphabet's usable run before it needs a second character.
-
-The traffic argument is already settled: the periodic pushall is gone (measured
-at 81 KB a minute for trays that had not moved), so a 24-unit machine costs one
-large report at connect and incremental ones after it, not one every eight
-seconds.
+The periodic pushall is gone (81 KB a minute for trays that had not moved), so
+such a machine costs one large report at connect and 1.2 KB increments after.

@@ -731,31 +731,37 @@ static void dropLink(Link& l) {
 // then landed during the handshake, took the heap under the safety floor, and
 // the link was closed again seconds later. Deciding with the price in hand is
 // what makes a link that is opened a link that stays.
-// Measured on hardware, one link at a time, reading the free heap either side
-// of each connection - not estimated. The margin over the measurement is about
-// a quarter, which covers the difference between a printer with one AMS unit
-// and one with four.
+// What one connection costs in INTERNAL RAM, measured by /api/memtest: every
+// link closed, the account sync held off, printers opened one at a time and
+// each read after ten settled seconds. On this bench, 2026-09-10:
 //
-//   Bambu, on screen      88 KB   TLS, plus a 50 KB buffer for a full pushall
-//   Bambu, background     46 KB   the same TLS with an 8 KB buffer
-//   Anycubic              37 KB   TLS, 16 KB buffer
-//   Snapmaker             11 KB   WebSocket and its frame buffer
-//   Creality               8 KB   WebSocket
-//   Elegoo                 3 KB   plain MQTT, no TLS at all
-//   FlashForge            ~1 KB   HTTP; nothing is held between requests
+//   brand        internal    psram    what the internal part is
+//   Bambu fg     47.8 KB     51.2 KB  a TLS session
+//   Bambu bg     43.9 KB      8.2 KB  the same TLS session
+//   Anycubic     39.4 KB     16.4 KB  a TLS session
+//   Snapmaker     4.9 KB      0       a WebSocket
+//   Creality      3.9 KB      0       a WebSocket
+//   Elegoo        2.1 KB      8.2 KB  plain MQTT, no TLS
+//   FlashForge   ~1   KB      0       HTTP, nothing held between requests
 //
-// The spread is the point: one Bambu costs as much as fifteen Elegoos. A limit
-// expressed as a NUMBER of printers would be wrong for almost every account -
-// too mean for a workshop of FlashForges, too generous for a rack of Bambus.
-// The limit is a budget, and this is the price list.
+// The MQTT buffers are NOT in that column, and the first version of this table
+// was built on the belief that they were. This framework is compiled with
+// CONFIG_SPIRAM_USE_MALLOC and a 4 KB internal threshold, so any buffer larger
+// than that is placed in PSRAM without being asked - the 50 KB Bambu buffer
+// included. What does land in internal RAM is mbedTLS, which the same config
+// pins there (CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC). So the price of a printer is,
+// to within a few kilobytes, whether it speaks TLS.
+//
+// The margin over each measurement is about a fifth.
 static uint32_t linkCost(PrinterType t, bool foreground) {
+    (void)foreground;              // the buffer that differs is in PSRAM
     switch (t) {
-        case PT_BAMBU:     return foreground ? 96000 : 52000;
-        case PT_ANYCUBIC:  return 44000;
-        case PT_SNAPMAKER: return 14000;
-        case PT_CREALITY:  return 10000;
-        case PT_ELEGOO:    return 6000;
-        case PT_FF_C5:     return 4000;
+        case PT_BAMBU:     return 56000;
+        case PT_ANYCUBIC:  return 48000;
+        case PT_SNAPMAKER: return 8000;
+        case PT_CREALITY:  return 6000;
+        case PT_ELEGOO:    return 4000;
+        case PT_FF_C5:     return 3000;
         default:           return 16000;
     }
 }
@@ -1001,6 +1007,124 @@ static void standDownForTls() {
     wasQuiet = quiet;
 }
 
+// ---------------------------------------------------------------------------
+//  Memory test: what one printer connection actually costs.
+//
+//  Started from /api/memtest and reported on the serial console. It exists
+//  because every number measured in normal running was polluted: links opened
+//  several at a time, an account sync allocated a TLS session in the middle,
+//  and the sum of per-link deltas came to 193 KB against 135 KB measured on the
+//  whole - so neither was a fact about a printer.
+//
+//  Here nothing else is allowed to move. Every link is closed, the account
+//  sync is held off, and printers are opened ONE at a time in list order: each
+//  must reach "up" and then sit for ten seconds before its cost is read, so a
+//  reading is the settled price of that one connection and nothing else. The
+//  selected printer is left selected, so a Bambu among them pays the full-size
+//  buffer and the others the small one, exactly as in service.
+//
+//  It stops on its own before the heap reaches the survival floor, and hands
+//  the links back to normal management when it is done.
+// ---------------------------------------------------------------------------
+volatile bool g_memtestRequested = false;      // set by webcfg's /api/memtest
+// ?all=1 - include printers switched off in Settings, to find the ceiling
+// rather than just price the current set. Nothing is saved; the switches
+// are not touched.
+volatile bool g_memtestAll = false;
+static bool     s_memtest = false;
+static int      s_mtNext = 0;                  // next printer index to try
+static int      s_mtLink = -1;                 // link slot being measured
+static uint32_t s_mtSince = 0;                 // when the current step began
+static uint32_t s_mtUpAt = 0;                  // when the current link came up
+static uint32_t s_mtFree = 0, s_mtBlock = 0, s_mtPsram = 0;
+
+static const char* brandName(PrinterType t) {
+    switch (t) {
+        case PT_BAMBU:     return "bambu";
+        case PT_ANYCUBIC:  return "anycubic";
+        case PT_SNAPMAKER: return "snapmaker";
+        case PT_CREALITY:  return "creality";
+        case PT_ELEGOO:    return "elegoo";
+        case PT_FF_C5:     return "flashforge";
+        default:           return "?";
+    }
+}
+
+static void mtSnapshot() {
+    s_mtFree  = ESP.getFreeHeap();
+    s_mtBlock = ESP.getMaxAllocHeap();
+    s_mtPsram = ESP.getFreePsram();
+}
+
+static void memtestTick() {
+    if (g_memtestRequested) {
+        g_memtestRequested = false;
+        for (int i = 0; i < MAX_LINKS; i++) if (links[i].printer >= 0) dropLink(links[i]);
+        s_memtest = true; s_mtNext = 0; s_mtLink = -1; s_mtSince = millis();
+        Serial.println("[memtest] started: every link closed, account sync held off");
+        return;
+    }
+    if (!s_memtest) return;
+
+    // Let the heap come to rest after closing everything before the baseline.
+    if (s_mtLink < 0 && s_mtNext == 0) {
+        if (millis() - s_mtSince < 8000) return;
+        mtSnapshot();
+        Serial.printf("[memtest] baseline, 0 links: free %u  largest %u  psram %u\n",
+                      (unsigned)s_mtFree, (unsigned)s_mtBlock, (unsigned)s_mtPsram);
+    }
+
+    // A link is being measured: wait for it to come up, then to settle.
+    if (s_mtLink >= 0) {
+        Link& l = links[s_mtLink];
+        const bool up = l.be && l.state == LINK_UP;
+        if (up && !s_mtUpAt) s_mtUpAt = millis();
+        const bool timedOut = millis() - s_mtSince > 30000;
+        if (!(up && millis() - s_mtUpAt > 10000) && !timedOut) return;
+
+        const PrinterCfg& p = printers[l.printer];
+        const uint32_t f = ESP.getFreeHeap(), bl = ESP.getMaxAllocHeap(), ps = ESP.getFreePsram();
+        Serial.printf("[memtest] %-10s %-22s %s  cost %6ld  psram %6ld  ->  free %u  largest %u\n",
+                      brandName(p.type), p.name.c_str(),
+                      up ? (l.printer == selectedPrinter ? "UP fg" : "UP bg") : "DOWN ",
+                      (long)s_mtFree - (long)f, (long)s_mtPsram - (long)ps,
+                      (unsigned)f, (unsigned)bl);
+        s_mtFree = f; s_mtBlock = bl; s_mtPsram = ps;
+        s_mtLink = -1;
+    }
+
+    // Next printer - or stop, before the survival floor gets close.
+    while (s_mtNext < MAX_PRINTERS) {
+        const int pi = s_mtNext++;
+        const PrinterCfg& p = printers[pi];
+        if (p.type == PT_NONE) continue;
+        if (!g_memtestAll && !p.visible && pi != selectedPrinter) continue;
+        if (ESP.getFreeHeap() < LINK_HEAP_HARD + 16000) {
+            Serial.printf("[memtest] stopped: %u free, too close to the floor for another\n",
+                          (unsigned)ESP.getFreeHeap());
+            s_mtNext = MAX_PRINTERS;
+            break;
+        }
+        for (int i = 0; i < MAX_LINKS; i++) {
+            if (links[i].printer >= 0) continue;
+            links[i] = Link{};
+            links[i].printer = pi;
+            links[i].be = newBackend(p.type);
+            s_mtLink = i; s_mtSince = millis(); s_mtUpAt = 0;
+            return;
+        }
+        Serial.println("[memtest] stopped: no free link slot");
+        s_mtNext = MAX_PRINTERS;
+    }
+
+    int up = 0;
+    for (int i = 0; i < MAX_LINKS; i++) if (links[i].state == LINK_UP) up++;
+    Serial.printf("[memtest] done: %d link(s) up, free %u  largest %u  psram %u\n",
+                  up, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                  (unsigned)ESP.getFreePsram());
+    s_memtest = false;
+}
+
 static void linkTick() {
     if (!WiFi.isConnected()) return;
 
@@ -1014,9 +1138,12 @@ static void linkTick() {
             s_dialer = -1;
     }
 
-    standDownForTls();
-    // Nothing is opened while a handshake needs the room.
-    if (!needsTheNetwork()) assignLinks();
+    memtestTick();
+    if (!s_memtest) {
+        standDownForTls();
+        // Nothing is opened while a handshake needs the room.
+        if (!needsTheNetwork()) assignLinks();
+    }
     for (int i = 0; i < MAX_LINKS; i++)
         if (links[i].printer >= 0) tickLink(links[i]);
 
@@ -1260,7 +1387,7 @@ void loop() {
     // The account is kept fresh from here rather than from one screen, so the
     // freshness the header reports is a fact about the network and not about
     // where the user happens to be standing.
-    if (ttcloud::due() && !ttcloud::asyncBusy()) ttcloud::startAsyncSync();
+    if (!s_memtest && ttcloud::due() && !ttcloud::asyncBusy()) ttcloud::startAsyncSync();
 
     // Every open link, not only the selected one. A connection nobody is
     // looking at still has to be pumped or it drops, and the whole point of

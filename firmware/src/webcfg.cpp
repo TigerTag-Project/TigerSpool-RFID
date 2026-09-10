@@ -33,6 +33,9 @@
 // seen: an empty one says nothing about how rows and the button share the
 // screen, which is the whole question on this one.
 extern PrinterCfg printers[];
+// Owned by main.cpp; this only asks. See memtestTick() for what it does.
+extern volatile bool g_memtestRequested;
+extern volatile bool g_memtestAll;
 extern LGFX_Sprite canvas;
 extern bool        canvasReady;
 
@@ -1176,6 +1179,13 @@ namespace {
         server.on("/api/join", HTTP_POST, handleApiJoin);
         server.on("/api/lang", handleApiLang);
         server.on("/api/tap",  handleApiTap);
+        // Diagnostic: measure what each printer connection costs. The
+        // report goes to the serial console; this only starts it.
+        server.on("/api/memtest", []() {
+            g_memtestAll = server.hasArg("all");
+            g_memtestRequested = true;
+            server.send(200, "text/plain", "memtest started - see the serial console");
+        });
         server.on("/login",    handleLogin);
         server.on("/tiger-icon.svg", handleIcon);
         server.on("/screen.bmp", handleShot);      // raw panel capture

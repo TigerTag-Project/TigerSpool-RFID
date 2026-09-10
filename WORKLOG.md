@@ -849,3 +849,30 @@ Verified on hardware throughout, on a real R3D spool.
   that removes the first when the second arrives has nothing steady on it.
 - The card's label is "Version", not "Installed version". The number beside it
   is the device's own; nothing else on the page could be meant.
+
+## 2026-09-10 - what a printer actually costs
+
+### Added
+
+- `/api/memtest` (and `?all=1` for every printer on the account): closes every
+  link, holds the account sync off, opens printers one at a time and reports
+  each one's settled cost in internal RAM and PSRAM to the serial console.
+  Written because every number taken in normal running was polluted - the sum
+  of per-link deltas came to 193 KB against 135 KB measured on the whole.
+
+### Changed
+
+- `linkCost()` uses the measured prices. The MQTT buffers were being counted
+  as internal RAM and they are not: the framework is built with
+  CONFIG_SPIRAM_USE_MALLOC and a 4 KB threshold, so every buffer over that -
+  the 50 KB Bambu one included - is in PSRAM already. What is internal is
+  mbedTLS, pinned there by CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC. A printer's cost
+  is whether it speaks TLS: 40-48 KB if it does, 2-5 KB if it does not.
+- The roadmap entry that proposed moving the MQTT buffers to PSRAM is rewritten:
+  they are there. It now names the two real ways past three TLS printers -
+  mbedTLS in PSRAM, or one TLS session shared by every Bambu on a cloud account.
+
+Measured: three TLS printers fit and a fourth does not (47.9 KB free after the
+third, and the largest free block had already fallen to 18 KB in one run - a
+new session needs a piece that size); non-TLS printers are capped by the code at
+ten, not by memory.
