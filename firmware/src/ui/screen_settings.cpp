@@ -844,11 +844,27 @@ void showUpdate(const char* version, const char* channel,
         frame::caption(i18n::T(S_UP_TO_DATE), theme::OK);
         break;
 
-    case ota::AVAILABLE:
+    case ota::AVAILABLE: {
         badge(body, LV_SYMBOL_DOWNLOAD, theme::WARN);
         versionStep(body, version, latest);
+        // The button goes to the BOTTOM of the screen, not under the text.
+        //
+        // A growing spacer rather than an alignment: this body is a scrolling
+        // flex column, so pinning the button to the bottom edge would have it
+        // sit over the list on a screen whose content does overflow. Given the
+        // leftover height the spacer takes it and the button lands at the foot;
+        // given none, it takes none and the button follows the content, which
+        // is where it belongs then.
+        lv_obj_t* push = lv_obj_create(body);
+        lv_obj_remove_style_all(push);
+        lv_obj_set_width(push, 1);
+        lv_obj_set_flex_grow(push, 1);
+        lv_obj_clear_flag(push, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(push, LV_OBJ_FLAG_CLICKABLE);
+
         frame::button(body, i18n::T(S_INSTALL), 1, onInstall);
         break;
+    }
 
     case ota::FAILED:
         badge(body, LV_SYMBOL_WARNING, theme::DANGER);

@@ -150,3 +150,27 @@ they are DMA targets.
 **Decided, not forgotten:** to be done, in a release of its own rather than
 folded into a batch of interface work, so that a regression in the MQTT path
 has one obvious cause.
+
+### And the same work carries the 24-AMS case
+
+A Bambu printer can chain **up to 24 AMS units** - 96 trays plus the external
+spool. It is rare, and it is exactly the shape this firmware currently cannot
+take: `BMAX` is 17, the labels run A to D, and a pushall from a machine like
+that would be several times the 50 KB buffer and be dropped whole, so the
+device would show nothing at all rather than something wrong.
+
+It belongs to this entry rather than to one of its own, because the answer is
+the same answer. In internal RAM, 97 slots and a buffer that could hold their
+report is not affordable on a device that also wants to talk to five other
+printers; in PSRAM, with 8 MB idle, it is free. Moving the buffers is what
+makes the case possible at all.
+
+What it needs beyond the move: the slot array sized from the topology the first
+report describes rather than declared at its maximum, and labels that keep
+working past four units - "A1" to "X4" is twenty-four letters, which is exactly
+the alphabet's usable run before it needs a second character.
+
+The traffic argument is already settled: the periodic pushall is gone (measured
+at 81 KB a minute for trays that had not moved), so a 24-unit machine costs one
+large report at connect and incremental ones after it, not one every eight
+seconds.

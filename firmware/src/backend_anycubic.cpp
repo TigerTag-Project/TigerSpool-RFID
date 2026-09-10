@@ -139,6 +139,8 @@ void AnycubicBackend::begin(const PrinterCfg& cfg) {
 void AnycubicBackend::loop() {
     if (!ready_) return;                       // nothing to connect to
     if (!mqtt_.connected()) {
+        if (connected_)
+            Serial.printf("[anycubic] session lost, state %d\n", mqtt_.state());
         connected_ = false;
         if (millis() - lastTry_ < 4000) return;
         lastTry_ = millis();

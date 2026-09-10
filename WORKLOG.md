@@ -809,3 +809,30 @@ field active read 2.3 dB BETTER than 30 with it idle.
   longer pushes the header's rule off the screen.
 
 Verified on hardware throughout, on a real R3D spool.
+
+## 2026-09-10 - the pushall nobody needed
+
+### Changed
+
+- The Bambu backend no longer asks for a `pushall` every eight seconds. The
+  printer publishes an AMS report by itself when a spool changes, and that
+  report is 1.2 KB against the 5.9 KB of a full dump. Measured: two printers
+  answering 40 pushalls in 150 seconds - 81 KB a minute - for trays that had
+  not moved. A slot changed by hand arrived on its own 164 seconds after the
+  last request we made. What is left is one pushall at connect, one every five
+  minutes as a backstop, and one when a printer's screen is opened.
+- The update page puts Install at the foot of the screen, and scrollbars are
+  back to appearing only when the content overflows - the mode was only ever
+  forced because `lv_obj_remove_style_all` had taken the theme's scrollbar
+  style with it, which the explicit style now replaces.
+
+### Fixed
+
+- MQTT sessions stopped dropping. `setSocketTimeout(4)` - added this morning to
+  stop the interface freezing - bounds every READ, not only the connect, and a
+  5.9 KB report over a -80 dBm link sometimes takes longer than four seconds.
+  The client was hanging up on printers that were answering perfectly, once per
+  poll. With the poll gone the only large read is at connect: four minutes of
+  observation, zero sessions lost, against four reconnections in 150 seconds
+  before. A `session lost, state N` line stays in each MQTT backend so
+  PubSubClient says why rather than leaving it to be guessed.

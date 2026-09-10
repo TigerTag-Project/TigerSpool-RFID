@@ -169,6 +169,8 @@ void ElegooBackend::begin(const PrinterCfg& cfg) {
 
 void ElegooBackend::loop() {
     if (!mqtt_.connected()) {
+        if (connected_)
+            Serial.printf("[elegoo] session lost, state %d\n", mqtt_.state());
         connected_ = false;
         if (millis() - lastTry_ < 4000) return;
         lastTry_ = millis();

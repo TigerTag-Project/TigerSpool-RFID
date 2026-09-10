@@ -110,6 +110,7 @@ void BambuBackend::applyTray(int ams, int trayId, JsonObjectConst t) {
 }
 
 void BambuBackend::onMqtt(uint8_t* payload, unsigned int len) {
+
     // Filter: the slot fields only. A full pushall runs past 50 KB.
     JsonDocument filter;
     {
@@ -214,6 +215,12 @@ void BambuBackend::begin(const PrinterCfg& cfg) {
 
 void BambuBackend::loop() {
     if (!mqtt_.connected()) {
+        // Why the session ended, in PubSubClient's own words. -4 is its read
+        // timeout, which is SELF-INFLICTED: setSocketTimeout bounds every read,
+        // not just the connect, so a large report over a weak link makes the
+        // client hang up on a printer that was answering perfectly.
+        if (connected_)
+            Serial.printf("[bambu] session lost, state %d\n", mqtt_.state());
         connected_ = false;
         if (millis() - lastTry_ < 4000) return;
         lastTry_ = millis();
@@ -241,7 +248,21 @@ void BambuBackend::loop() {
         return;
     }
     mqtt_.loop();
-    if (millis() - lastPush_ > 8000) { lastPush_ = millis(); refresh(); }
+    // NOT every eight seconds. Once at connect, and then only as a safety net.
+    //
+    // Measured on two printers over 150 seconds: forty pushall answers, 4.9 KB
+    // each, 81 KB a minute in total - for trays that had not moved. The whole
+    // machine state, re-sent, to learn that nothing changed.
+    //
+    // It buys nothing, because the printer PUBLISHES an AMS report by itself
+    // the moment a spool changes; between those it sends 70-byte telemetry and
+    // nothing else. So the state is current without asking, and asking is
+    // 81 KB a minute of a Wi-Fi link that is not always strong.
+    //
+    // Five minutes is the backstop: a report missed while the socket was down
+    // must not leave a wrong grid on screen for ever. Opening a printer's
+    // screen also forces one - see setForeground().
+    if (millis() - lastPush_ > 300000) { lastPush_ = millis(); refresh(); }
 }
 
 void BambuBackend::setForeground(bool on) {

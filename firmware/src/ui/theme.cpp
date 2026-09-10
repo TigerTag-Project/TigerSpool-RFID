@@ -108,5 +108,12 @@ void theme::scrollbar(lv_obj_t* obj) {
     // position of the list. 2 + 6 + 6: the bar's own margin, the bar, and the
     // gap between it and whatever it is scrolling.
     lv_obj_set_style_pad_right(obj, 2 + SCROLLBAR_W + theme::GAP, LV_PART_MAIN);
-    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_ON);
+    // AUTO, not ON: shown when the content actually overflows, and absent when
+    // it does not. ON was right while the bar was invisible for another reason
+    // - the lists call lv_obj_remove_style_all, which took the theme's
+    // scrollbar style with it, so AUTO drew nothing and the mode looked like
+    // the problem. The style is set here now, so AUTO can do its job: a bar
+    // down the side of a page that fits is furniture pretending to be
+    // information.
+    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_AUTO);
 }
