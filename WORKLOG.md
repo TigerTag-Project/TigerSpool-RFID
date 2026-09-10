@@ -906,7 +906,7 @@ ten, not by memory.
   published 1.45.2, flashed back for the test, did the same. The radio link is
   at -75 to -88 dBm.
 
-## 2026-09-10 - a load budget, shown as a percentage
+## 2026-09-10 - a load budget, shown as a percentage (released in 1.47.0)
 
 ### Added
 

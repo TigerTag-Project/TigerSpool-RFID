@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.47.0] - 2026-09-10
+
 ### Added
 
 - **The device tells you how full it is before a printer stops connecting.**
