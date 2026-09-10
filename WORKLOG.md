@@ -876,3 +876,32 @@ Measured: three TLS printers fit and a fourth does not (47.9 KB free after the
 third, and the largest free block had already fallen to 18 KB in one run - a
 new session needs a piece that size); non-TLS printers are capped by the code at
 ten, not by memory.
+
+## 2026-09-10 - one session for the cloud, and a loop that cannot stay stuck
+
+### Changed
+
+- Every Bambu printer on a cloud account shares one TLS session
+  (`bambu_cloud.cpp`): the second one costs 3.2 KB instead of 47.8 KB, six
+  links leave 99 KB free instead of 60, and the largest free block holds at
+  50 KB instead of falling to 18. Reports are routed strictly by the serial in
+  their topic; proved on a real slot change on the X1C. LAN printers untouched.
+- The TLS stand-down no longer closes cloud printers when the selected printer
+  keeps the session open - that freed nothing and cost each a resubscribe and a
+  full pushall at every account sync.
+- Wi-Fi modem sleep is off on station connections, as it already was in the
+  setup portal: pings ranged from 18 ms to a full second with it on.
+
+### Fixed
+
+- The main loop is under the task watchdog, 30 s. It froze once with no line
+  on the console and would have stayed frozen until the power was cut; a stuck
+  pass now panics with a backtrace and the device reboots.
+
+### Not a firmware fault
+
+- The device went unreachable from the network - pings lost at 97% - while its
+  printer connections carried on. Not the shared session (disabled entirely:
+  same), not modem sleep (off: same), and not this cycle's work at all: the
+  published 1.45.2, flashed back for the test, did the same. The radio link is
+  at -75 to -88 dBm.

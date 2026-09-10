@@ -96,6 +96,7 @@ static const uint32_t LINK_ATTEMPT_MS = 8000;
 // How long a link that has run out of attempts waits before starting over.
 static const uint32_t LINK_GIVEUP_RETRY_MS = 60000;
 bool webStarted = false;
+static void staNoSleep();          // defined beside LOOP_WDT_S
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
@@ -551,6 +552,7 @@ static bool wifiConnect() {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+    staNoSleep();
     // Pump LVGL at full rate and touch the screen only when the countdown
     // actually ticks. This loop used to redraw the screen and then sleep for
     // 250 ms, which gave the spinner four frames a second - and since the
@@ -1234,9 +1236,44 @@ static void selectPrinter(int i) {
 }
 
 // ---- setup / loop -----------------------------------------------------
+// A loop that stops must not stay stopped.
+//
+// It happened: the panel lit, every printer frozen on screen, no reply on the
+// network, no line on the console - and no way back but the power switch,
+// because nothing was watching the main loop. The task watchdog only watched
+// the idle task. Now it watches this loop too, and a pass that does not come
+// back within LOOP_WDT_S seconds panics - which prints a backtrace of exactly
+// where it was stuck, and reboots the device into a working state. A frozen
+// box that nobody can explain becomes a restart that says why.
+//
+// Thirty seconds, not the framework's five. The longest legitimate thing this
+// loop does is a TLS connect - a five second handshake plus a six second read
+// limit - and a watchdog that fires on a slow printer would be a new fault,
+// not a guard against one.
+static const uint32_t LOOP_WDT_S = 30;
+
+// Modem sleep OFF, on every station connection.
+//
+// Arduino leaves it on by default: the radio sleeps between the access point's
+// beacons and the access point holds inbound packets until it wakes. That is
+// the right trade on a battery and the wrong one here - this device runs from a
+// wall socket and its whole job is answering: the web page, the screen capture,
+// the printers' own pushes. Measured with it on, pings to the device ranged
+// from 18 ms to a full second, which is that sleep's signature.
+//
+// What it did NOT cause, and this was tested rather than assumed: the device
+// going unreachable from the network altogether, pings lost at 97% while its
+// own printer connections carried on. That persisted with sleep off, with no
+// cloud session at all, and on the published 1.45.2 flashed back for the
+// purpose - so it is the radio link, at -75 to -88 dBm, not this firmware.
+// The setup portal already turned sleep off, for the reasons above.
+static void staNoSleep() { WiFi.setSleep(false); }
+
+
 void setup() {
     Serial.begin(115200);
     delay(150);
+    esp_task_wdt_init(LOOP_WDT_S, true);     // reconfigures the running TWDT
     lcd.init();
     lcd.setRotation(SCR_ROTATION);
     lcd.setBrightness(200);
@@ -1295,6 +1332,7 @@ void setup() {
         if (!wifiSsid.isEmpty()) {
             WiFi.mode(WIFI_STA);
             WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+            staNoSleep();
             Serial.printf("[wifi] associating to '%s' behind the language screen\n",
                           wifiSsid.c_str());
         }
@@ -1309,6 +1347,13 @@ void setup() {
 }
 
 void loop() {
+    // Joined on the FIRST pass, not in setup(): setup() waits on Wi-Fi at
+    // boot, which is slow on a weak link and entirely legitimate, and a
+    // watchdog that fired there would turn a slow start into a boot loop.
+    static bool watched = false;
+    if (!watched) { esp_task_wdt_add(nullptr); watched = true; }
+    esp_task_wdt_reset();                    // one feed per pass - see LOOP_WDT_S
+
     // The config page belongs to the network, not to a screen: as soon as there
     // is an address, http://tigerspool.local answers. That also means the setup
     // screens are reachable for a remote screenshot, which is how this UI gets
@@ -1341,6 +1386,7 @@ void loop() {
                 WiFi.disconnect();
                 WiFi.mode(WIFI_STA);
                 WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+                staNoSleep();
             }
         }
     }

@@ -709,6 +709,7 @@ namespace {
 
         WiFi.mode(WIFI_AP_STA);
         WiFi.begin(ssid.c_str(), pass.c_str());
+        WiFi.setSleep(false);   // see staNoSleep() in main.cpp
         uint32_t t0 = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - t0 < 18000) delay(120);
 
