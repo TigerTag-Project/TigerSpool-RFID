@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.48.1] - 2026-09-11
+
 ### Changed
 
 - **A new device starts at full brightness**, instead of 80%. Lower it any

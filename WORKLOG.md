@@ -1087,7 +1087,7 @@ ten, not by memory.
   the TigerScale's arithmetic, kept identical on purpose; the two products now
   differ, knowingly. The portal's `bars()` moved with it.
 
-## 2026-09-11 - full brightness out of the box
+## 2026-09-11 - full brightness out of the box (released in 1.48.1)
 
 ### Changed
 
