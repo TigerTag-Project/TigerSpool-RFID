@@ -98,6 +98,7 @@ static const uint32_t LINK_ATTEMPT_MS = 8000;
 static const uint32_t LINK_GIVEUP_RETRY_MS = 60000;
 bool webStarted = false;
 static void staNoSleep();          // defined beside LOOP_WDT_S
+static void staBegin();            // likewise
 
 enum State { ST_LANG, ST_WIFI, ST_AP, ST_ACCOUNT, ST_SETTINGS, ST_PICK, ST_SET_WIFI, ST_SET_ACCOUNT, ST_SET_SCREEN,
              ST_SET_UPDATE, ST_SET_RESTART, ST_SET_FACTORY, ST_PRINTER, ST_GRID, ST_SCAN, ST_REVIEW, ST_RESULT,
@@ -550,10 +551,7 @@ static const uint32_t WIFI_TIMEOUT_MS = 30000;   // 30 s por tentativa; se falha
 
 static bool wifiConnect() {
     if (wifiSsid.isEmpty()) return false;      // no network saved -> setup portal
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect(true);
-    WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-    staNoSleep();
+    staBegin();
     // Pump LVGL at full rate and touch the screen only when the countdown
     // actually ticks. This loop used to redraw the screen and then sleep for
     // 250 ms, which gave the spinner four frames a second - and since the
@@ -578,7 +576,10 @@ static bool wifiConnect() {
         lvgl_port::loop();
         return false;
     }
-    Serial.printf("[wifi] OK %s\n", WiFi.localIP().toString().c_str());
+    // Which radio, and how well: on a network with several access points the
+    // address alone does not say which one the device chose.
+    Serial.printf("[wifi] OK %s  %d dBm  bssid %s  ch %d\n", WiFi.localIP().toString().c_str(),
+                  WiFi.RSSI(), WiFi.BSSIDstr().c_str(), WiFi.channel());
     return true;
 }
 static void onWifiUp() {
@@ -1316,9 +1317,36 @@ static const uint32_t LOOP_WDT_S = 30;
 // going unreachable from the network altogether, pings lost at 97% while its
 // own printer connections carried on. That persisted with sleep off, with no
 // cloud session at all, and on the published 1.45.2 flashed back for the
-// purpose - so it is the radio link, at -75 to -88 dBm, not this firmware.
+// purpose. It was the radio link, at -75 to -88 dBm - and the link was that
+// weak because of the choice staBegin() now makes differently, below.
 // The setup portal already turned sleep off, for the reasons above.
 static void staNoSleep() { WiFi.setSleep(false); }
+
+// Associate to the NEAREST access point that advertises the network.
+//
+// The driver's default is WIFI_FAST_SCAN: it stops at the first access point
+// it hears with the right name and never compares signals, and it caches that
+// radio's BSSID and returns to it on every reconnect, reboot included. On a
+// network with several access points under one name - a mesh, or one router
+// broadcasting sibling networks - that pins the device to whichever radio it
+// happened to hear first. Measured on the bench: associated at -79 dBm while
+// its own scan heard the same network at -47. The TigerScale beside it showed
+// full signal on the same network; it had found and fixed the same thing
+// (-79 against -35 one metre away), and this is its fix: erase the cached
+// association, sweep every channel, connect by signal. One full scan per
+// connect, a second or two, against 30 dB.
+//
+// The scan and sort methods also go into the driver's configuration, so its
+// own automatic reconnects after a drop choose the same way.
+static void staBegin() {
+    WiFi.disconnect(true, true);   // drop the association, erase the cached AP
+    delay(50);
+    WiFi.mode(WIFI_STA);
+    WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+    WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+    WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+    staNoSleep();
+}
 
 
 void setup() {
@@ -1381,9 +1409,7 @@ void setup() {
         // On a genuinely new device there are no credentials and this does
         // nothing, which is the correct outcome too.
         if (!wifiSsid.isEmpty()) {
-            WiFi.mode(WIFI_STA);
-            WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-            staNoSleep();
+            staBegin();
             Serial.printf("[wifi] associating to '%s' behind the language screen\n",
                           wifiSsid.c_str());
         }
@@ -1434,10 +1460,7 @@ void loop() {
                 Serial.printf("[wifi] down for %lus - associating to '%s' again\n",
                               (unsigned long)((now - downSince) / 1000),
                               wifiSsid.c_str());
-                WiFi.disconnect();
-                WiFi.mode(WIFI_STA);
-                WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-                staNoSleep();
+                staBegin();
             }
         }
     }

@@ -197,9 +197,9 @@ var WARN='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="cu
 '<path d="M12 3.6 22 20.4H2z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></svg>';
 /* Wi-Fi is arcs, not bars: bars are the GSM symbol. Lit arcs are green, the
    state colour the device's own screens use for "reachable".
-   The level is the device's own arithmetic - icons::wifiLevelFromRssi, which
-   the TigerScale uses too - shifted up by one because this drawing counts the
-   dot as its first step. One signal, one number, three places. */
+   The level is the device's own arithmetic - icons::wifiLevelFromRssi -
+   shifted up by one because this drawing counts the dot as its first step.
+   One signal, one number, two places here. */
 function sig(n){var o="var(--ok)",f="currentColor";
 function a(d,l){return '<path d="'+d+'" fill="none" stroke="'+(l?o:f)+'" stroke-width="2.1" '+
 'stroke-linecap="round" opacity="'+(l?1:.22)+'"/>'}
@@ -207,7 +207,7 @@ return '<span class="sig"><svg viewBox="0 0 24 24" width="19" height="19">'+
 a("M2.8 8.9a14.6 14.6 0 0 1 18.4 0",n>=4)+a("M6.1 12.7a9.9 9.9 0 0 1 11.8 0",n>=3)+
 a("M9.3 16.4a5 5 0 0 1 5.4 0",n>=2)+'<circle cx="12" cy="19.8" r="1.35" fill="'+(n>=1?o:f)+
 '" opacity="'+(n>=1?1:.22)+'"/></svg></span>'}
-function bars(r){r=r>-40?-40:(r<-100?-100:r);var l=Math.trunc((r+100)*3/60);return (l<0?0:(l>3?3:l))+1}
+function bars(r){return (r>=-60?3:r>=-70?2:r>=-80?1:0)+1}
 function paintL(){LB.innerHTML="<span>"+e(N[st.lang])+"</span>"+CH;LM.innerHTML="";
 Object.keys(N).forEach(function(k){var b=document.createElement("button");b.type="button";
 b.setAttribute("aria-selected",String(k===st.lang));b.textContent=N[k];

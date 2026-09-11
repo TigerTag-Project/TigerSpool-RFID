@@ -1008,3 +1008,82 @@ ten, not by memory.
   new code wrote no switch; it was shuffled by the old positional merge before
   the flash.
 
+## 2026-09-11 - the home header's three icons, one height
+
+### Changed
+
+- Measured on /screen.bmp first: bust 21 px of ink, gear 21, Wi-Fi wave 14 -
+  and 9 px then 20 px between them. Now all three occupy rows 12-32 (the gear
+  10-33, see below), with 11 px of black between one icon's ink and the next.
+- The wave moved to font_ui_24 (30 x 23 box, 22 rows of ink). Its signal-level
+  clips were re-cut from the glyph bitmap in font_ui_24.c, not scaled from the
+  16 px numbers: one level is the bottom 7 rows (row 16 is the empty gap above
+  the dot), two levels are the bottom 14 rows but only 22 columns wide,
+  because the outer arc's tips reach row 9 beside the inner arc's top. The
+  label is dropped 5 px so the glyph fills its box exactly (font_ui_24 leaves 5
+  empty rows under it).
+- All three open Settings: the gear's button now spans the icon group, x 126
+  to 240, the whole header height. The bust and the wave are not clickable, so
+  a tap on either lands on it. The longest title ("Imprimantes",
+  "Impressoras") ends at x 117, outside it.
+- The gear moved to font_ui_24 too. At 20 it matched the others' ink height
+  exactly and still read as the small one - Benoit saw it straight away. A
+  gear is mostly gaps; it needs a few more pixels to weigh the same.
+
+### Verified on hardware
+
+- Bench, after four flashes: ink at x 134-150, 162-191, 203-224; gaps 11 and
+  11; bust and wave rows 12-32, gear 10-33. Seen at signal level 1 only (the
+  bench sits at -79 dBm); levels 2 and 3 are checked against the bitmap, not
+  yet seen on the panel.
+- Taps at x 128, 142, 176, 198, 213 and 232 (y 22) all open Settings; x 120,
+  on the title, does not. One capture at x 176 was taken before the screen
+  had switched and read as a miss; three repeats with a second's settle all
+  opened Settings.
+
+## 2026-09-11 - the nearest access point, not the first
+
+### Fixed
+
+- Benoit: the Wi-Fi icon is low on every TigerSpool, while the TigerScale next
+  to it shows full reception. Not a measurement error - the formula is the
+  scale's own - and not the antenna: the device's own scan heard the network
+  at -47 dBm while it was associated at -79. It was on another access point.
+  The driver's default WIFI_FAST_SCAN takes the first radio it hears with the
+  right name, and the cached BSSID brings it back there on every reconnect and
+  reboot. The TigerScale had found exactly this (-79 on CC:BA:BD:83:47:90
+  against -35 on 10:5A:95:74:DE:50, the same two radios) and fixed it with an
+  erased config plus WIFI_ALL_CHANNEL_SCAN and WIFI_CONNECT_AP_BY_SIGNAL. Ported
+  as `staBegin()`, used at all three station connects; the portal's join sets
+  the scan and sort without erasing anything.
+- The "unreachable device, 97% pings lost" of 2026-09-10 was put down to "the
+  radio link at -75 to -88 dBm, not this firmware". The link was that weak
+  because of this; the comment says so now.
+
+### Added
+
+- `[wifi] OK` logs the signal, BSSID and channel. `/api/scan?all=1` lists every
+  radio the device hears - SSID, BSSID, RSSI, channel, security - from a fresh
+  scan.
+
+### Verified on hardware
+
+- First boot with the fix: still CC:BA:BD:83:47:90 at -72 - the one miss. Every
+  boot after it, four of them: 10:5A:95:74:DE:50, ch 11, -45 to -54 dBm.
+  The full scan shows why the choice matters: that network is on three radios
+  here, at -46 (ch 11), -72 (ch 6) and -84 (ch 1).
+- Pings once settled: 0/60 lost, 16 ms average, 99 max - against 20% lost and
+  545 ms average on the far radio.
+- The header's Wi-Fi icon at -45 to -50 dBm shows two arcs of three: full needs
+  -40 or better, the same thresholds as the TigerScale. The level-2 clip is
+  therefore now seen on the panel too, outer arc's tips unlit.
+
+## 2026-09-11 - full signal from -60 dBm
+
+### Changed
+
+- `wifiLevelFromRssi()`: 3 from -60 dBm, 2 from -70, 1 from -80, else 0 -
+  Benoit's call, after the bench at -45 dBm showed two arcs of three. It was
+  the TigerScale's arithmetic, kept identical on purpose; the two products now
+  differ, knowingly. The portal's `bars()` moved with it.
+

@@ -658,6 +658,31 @@ namespace {
     }
 
     void handleApiScan() {
+        // ?all=1: every access point, one row each - BSSID, channel, security -
+        // from a fresh scan. The list below is one row per network NAME and is
+        // cached, which is right for a picker and useless for the question
+        // "which of this network's radios can the device hear, and how well".
+        if (server.hasArg("all")) {
+            WiFi.scanDelete();
+            const int n = WiFi.scanNetworks(false, true);
+            JsonDocument d;
+            d["connected"]["bssid"] = WiFi.BSSIDstr();
+            d["connected"]["rssi"]  = WiFi.RSSI();
+            d["connected"]["ch"]    = WiFi.channel();
+            JsonArray a = d["aps"].to<JsonArray>();
+            for (int i = 0; i < n; i++) {
+                JsonObject o = a.add<JsonObject>();
+                o["s"]    = WiFi.SSID(i);
+                o["b"]    = WiFi.BSSIDstr(i);
+                o["r"]    = WiFi.RSSI(i);
+                o["ch"]   = WiFi.channel(i);
+                o["auth"] = (int)WiFi.encryptionType(i);
+            }
+            WiFi.scanDelete();
+            String out; serializeJson(d, out);
+            server.send(200, "application/json", out);
+            return;
+        }
         harvestScan();
 
         // A scan already in flight is worth a short wait: the page has just
@@ -711,6 +736,11 @@ namespace {
         if (ssid.isEmpty()) { server.send(400, "application/json", "{\"ok\":false}"); return; }
 
         WiFi.mode(WIFI_AP_STA);
+        // Nearest access point, not the first one heard - see staBegin() in
+        // main.cpp. Without erasing anything: the phone is on this device's own
+        // access point right now, and dropping the radio would drop it.
+        WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+        WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
         WiFi.begin(ssid.c_str(), pass.c_str());
         WiFi.setSleep(false);   // see staNoSleep() in main.cpp
         uint32_t t0 = millis();

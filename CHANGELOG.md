@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The device connects to the nearest Wi-Fi access point, not the first one
+  it hears.** On a home network with several access points under one name, it
+  could stay attached to a distant one for good - through reboots - and show a
+  weak signal while a TigerScale beside it showed full bars. On the bench it
+  went from -79 dBm to -46 dBm, and from one ping in five lost to none.
+
+### Changed
+
+- **The three icons at the top of the home screen line up.** Account, Wi-Fi
+  and settings are now the same height, on the same line, evenly spaced. The
+  Wi-Fi wave was a third smaller than the other two, and the gaps between them
+  were uneven.
+- **Tapping the account or the Wi-Fi icon opens Settings**, like the gear.
+  Only the gear used to answer.
+- **The Wi-Fi icon shows full signal from -60 dBm**, then two arcs from -70
+  and one from -80, the thresholds phones use. Full used to need -40 or
+  better, so an excellent connection showed two arcs of three. The setup
+  page's network list uses the same thresholds.
+
 ## [1.47.1] - 2026-09-11
 
 ### Fixed

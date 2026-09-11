@@ -81,11 +81,14 @@ lv_obj_t* wifiWave(lv_obj_t* parent);
 // zero bars. Written into the labels already on screen.
 void setSignal(lv_obj_t* box, int level, bool connected);
 
-// 0..3 from dBm. Integer truncation on purpose - it is what fixes the bands 20
-// dBm apart. Taken verbatim from the TigerScale so that one network is
-// described identically by both products; changing it here alone would have
-// two devices on the same shelf reporting different strengths, which is worse
-// than two different drawings.
+// 0..3 from dBm: full from -60, then -70, then -80, 10 dB apart.
+//
+// It was the TigerScale's arithmetic - 20 dB bands, full only from -40 - kept
+// identical so one network read the same on both. It read too low: an
+// excellent -45 dBm link showed two arcs of three. Changed on Benoit's call
+// (2026-09-11) to the thresholds phones use, knowing the TigerScale still has
+// the old ones; `bars()` in net/portal_page.h is the third copy and moved with
+// this one.
 int wifiLevelFromRssi(int rssi);
 
 constexpr lv_coord_t BOX = 22;

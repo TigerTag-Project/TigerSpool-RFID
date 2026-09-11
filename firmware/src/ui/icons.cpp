@@ -115,20 +115,33 @@ lv_obj_t* symbol(lv_obj_t* parent, const char* glyph, uint32_t colour,
 
 }  // namespace
 
-// The box is 20x21 and the glyph is bottom-anchored inside it. Both numbers
-// are measured against a panel, not derived: the clip heights below fall in
-// the GAPS between the glyph's three pieces - outer arc, inner arc, dot -
-// rather than across one of them. A five-level scale was tried on the
-// TigerScale first and it cut through the outer arc, leaving its apex dim
-// while its shoulders were lit; the wave read as chopped off at the top.
-static const int WIFI_W = 20, WIFI_H = 21;
-static const uint8_t WIFI_CLIP_H[4] = { 0, 5, 10, WIFI_H };
+// The wave at 24 px, not 16: beside the account bust and the gear, both 21 px
+// tall on the panel, a 16 px wave was 14 px - a third smaller, and the three
+// read as two icons and a leftover. At 24 its ink is 22 rows.
+//
+// The box is the glyph's own box, 30 x 23, and the glyph fills it exactly:
+// font_ui_24 draws this glyph from row 3 of a 31-row line and leaves 5 empty
+// rows under it, so the label is dropped 5 px below the box's bottom edge.
+//
+// The clip boxes are cut in the GAPS of that bitmap, read from font_ui_24.c
+// row by row rather than guessed:
+//   rows 17-22        the dot            row 16 is empty
+//   rows  9-15        the inner arc      columns 5-24
+//   rows  1-9         the outer arc      its tips reach row 9, at columns 1-3
+//                                        and 26-28 - beside the inner arc's top
+// So one level is the bottom 7 rows, and two levels are the bottom 14 rows but
+// only 22 columns wide: the width is what keeps the outer arc's tips out. A
+// five-level scale was tried on the TigerScale and cut through an arc; this
+// one never crosses ink.
+static const int WIFI_W = 30, WIFI_H = 23, WIFI_DROP = 5;
+static const uint8_t WIFI_CLIP_H[4] = { 0, 7, 14, WIFI_H };
+static const uint8_t WIFI_CLIP_W = 22;
 
 int wifiLevelFromRssi(int rssi) {
-    if (rssi > -40)  rssi = -40;
-    if (rssi < -100) rssi = -100;
-    int lv = (rssi + 100) * 3 / 60;
-    return (lv < 0) ? 0 : (lv > 3 ? 3 : lv);
+    if (rssi >= -60) return 3;
+    if (rssi >= -70) return 2;
+    if (rssi >= -80) return 1;
+    return 0;
 }
 
 lv_obj_t* wifiWave(lv_obj_t* parent) {
@@ -136,20 +149,20 @@ lv_obj_t* wifiWave(lv_obj_t* parent) {
 
     lv_obj_t* dim = lv_label_create(wrap);          // child 0
     lv_label_set_text(dim, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_font(dim, &font_ui_16, 0);
-    lv_obj_align(dim, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_text_font(dim, &font_ui_24, 0);
+    lv_obj_align(dim, LV_ALIGN_BOTTOM_MID, 0, WIFI_DROP);
 
     lv_obj_t* clip = lv_obj_create(wrap);           // child 1
     lv_obj_remove_style_all(clip);
-    lv_obj_set_size(clip, WIFI_W, WIFI_H);
+    lv_obj_set_size(clip, WIFI_CLIP_W, WIFI_H);
     lv_obj_align(clip, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_clear_flag(clip, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(clip, LV_OBJ_FLAG_CLICKABLE);
 
     lv_obj_t* lit = lv_label_create(clip);
     lv_label_set_text(lit, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_font(lit, &font_ui_16, 0);
-    lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_text_font(lit, &font_ui_24, 0);
+    lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, WIFI_DROP);
     return wrap;
 }
 
@@ -196,7 +209,7 @@ void setSignal(lv_obj_t* box, int level, bool connected) {
     // waves a few pixels apart, visible, ugly, and a symptom that looks nothing
     // like its cause.
     lv_obj_align(clip, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(lit, LV_ALIGN_BOTTOM_MID, 0, WIFI_DROP);
 }
 
 void tint(lv_obj_t* box, uint32_t colour) {

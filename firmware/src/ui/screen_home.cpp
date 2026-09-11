@@ -14,9 +14,8 @@ lv_obj_t* s_list     = nullptr;
 lv_obj_t* s_account  = nullptr;
 lv_obj_t* s_wifi     = nullptr;
 
-// The level lives in icons::wifiLevelFromRssi now - the TigerScale's own
-// arithmetic, so one network is described identically by both products. The
-// portal's picker was moved onto it too; see `bars()` in net/portal_page.h.
+// The level lives in icons::wifiLevelFromRssi. The portal's picker uses the
+// same thresholds; see `bars()` in net/portal_page.h.
 bool      s_active   = false;
 int       s_tapped   = -1;
 bool      s_settings = false;
@@ -62,24 +61,49 @@ void buildScreen() {
     // and cannot show you otherwise: the printers come from the account, and
     // they are reached over Wi-Fi. The same person glyph the Account row in
     // Settings uses, so the two are recognisably the same subject.
+    //
+    // Side by side at one height - 21 px of ink each, rows 12 to 32 - with
+    // 11 px of black between one icon's ink and the next. The offsets place INK, not boxes:
+    // the gear's glyph sits centred in the header's right-hand 52 px (ink
+    // from x 203),
+    // the wave's ink fills its 30 px box, and the bust's ink ends 3 px inside
+    // its 22 px one. Measured on /screen.bmp; the boxes alone would have
+    // spaced them 9 and 20 px apart, which is what this replaced.
     s_account = icons::build(header, icons::USER, theme::OK);
-    lv_obj_align(s_account, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 32, 0);
+    lv_obj_align(s_account, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 33, 0);
 
     s_wifi = icons::wifiWave(header);
-    lv_obj_align(s_wifi, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W - 4, 0);
+    lv_obj_align(s_wifi, LV_ALIGN_RIGHT_MID, -theme::ICON_HIT_W + 5, -1);
 
-    // The gear's hit area is 52 x 44 (6.6 x 5.6 mm) even though the glyph is
-    // small. Sizing a target to its icon is how a 2 mm button happens.
+    // ONE target for all three, and it opens Settings. The account and the
+    // Wi-Fi are both rows there, so a finger that lands on the bust or the
+    // wave is asking for the same place the gear goes - and three icons that
+    // look alike and only one of which answers read as a broken screen.
+    //
+    // It starts at x 126, 8 px left of the bust's box, which leaves the
+    // longest title - the French and the Portuguese one, ending at x 117 -
+    // outside it. 114 x 44 px, the whole header height: sizing a target to its icon is
+    // how a 2 mm button happens. The bust and the wave are not clickable
+    // (icons::piece clears the flag), and this is created after them, so it
+    // is the one a tap on either finds.
+    static const lv_coord_t ICONS_X = 126;
+    const lv_coord_t hitW = theme::SCREEN_W - ICONS_X;
     lv_obj_t* gear = lv_btn_create(header);
     lv_obj_remove_style_all(gear);
-    lv_obj_set_size(gear, theme::ICON_HIT_W, theme::HEADER_H);
+    lv_obj_set_size(gear, hitW, theme::HEADER_H);
     lv_obj_align(gear, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_add_event_cb(gear, onSettings, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* gearIcon = lv_label_create(gear);
     lv_label_set_text(gearIcon, LV_SYMBOL_SETTINGS);
-    lv_obj_set_style_text_font(gearIcon, &font_ui_20, 0);
+    // 24 px, a size up from the row icons. At 20 its ink was exactly as tall as
+    // the bust's and the wave's and it still read as the small one: a gear is
+    // mostly gaps - six teeth and a hole - where the other two are solid
+    // shapes, so matching the numbers undersized it to the eye.
+    lv_obj_set_style_text_font(gearIcon, &font_ui_24, 0);
     lv_obj_set_style_text_color(gearIcon, lv_color_hex(theme::TEXT), 0);
-    lv_obj_center(gearIcon);
+    // Where it was when its target was the right-hand 52 px: centred there, one
+    // pixel right, 11 px from the wave like the bust.
+    lv_obj_align(gearIcon, LV_ALIGN_CENTER, hitW / 2 - theme::ICON_HIT_W / 2 + 1, 0);
 
     // ---- the list ------------------------------------------------------------
     // A flex column inside a scrollable container: LVGL handles the drag, the
