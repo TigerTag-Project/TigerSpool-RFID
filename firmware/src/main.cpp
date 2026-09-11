@@ -497,14 +497,19 @@ static void loadCfg() {
 // back on screen that someone deliberately hid.
 // Screen preferences. Both are the user's and both survive a reboot: a device
 // that forgets it was dimmed is a device that blinds someone every morning.
-uint8_t screenBrightness = 80;
+// Full brightness until the user says otherwise. The first thing a new owner
+// sees is the setup screens, often in a lit room, and a dimmed panel there
+// reads as a dull product; lowering it is one row under Display. A device that
+// has stored a brightness keeps it - this is only the value with none saved.
+static const uint8_t BRIGHTNESS_DEFAULT = 100;
+uint8_t screenBrightness = BRIGHTNESS_DEFAULT;
 int     screenSleepSec   = 60;
 int     screenRotation   = SCR_ROTATION;
 bool    screenAutoRot    = false;
 
 static void loadScreenPrefs() {
     nvs.begin("tigerspool", true);
-    screenBrightness = (uint8_t)nvs.getInt("bright", 80);
+    screenBrightness = (uint8_t)nvs.getInt("bright", BRIGHTNESS_DEFAULT);
     screenSleepSec   = nvs.getInt("sleep", 60);
     // A device that has never been told which way up it is asks the
     // accelerometer, once. Anything the user does afterwards - the button on

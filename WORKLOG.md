@@ -1087,3 +1087,14 @@ ten, not by memory.
   the TigerScale's arithmetic, kept identical on purpose; the two products now
   differ, knowingly. The portal's `bars()` moved with it.
 
+## 2026-09-11 - full brightness out of the box
+
+### Changed
+
+- Brightness with nothing stored is 100%, not 80% (`BRIGHTNESS_DEFAULT` in
+  main.cpp) - Benoit's call: the setup screens are the first impression, and
+  lowering it is one row under Display. The key `bright` is written by any
+  Display change and by the rotate button on the first-boot language screen,
+  so a device that has done either keeps its value; one that never did gets
+  100% after updating.
+

@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **A new device starts at full brightness**, instead of 80%. Lower it any
+  time under Settings > Display. A device that already has a brightness saved
+  keeps it.
+
 ## [1.48.0] - 2026-09-11
 
 ### Fixed
