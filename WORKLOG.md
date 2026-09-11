@@ -1008,7 +1008,7 @@ ten, not by memory.
   new code wrote no switch; it was shuffled by the old positional merge before
   the flash.
 
-## 2026-09-11 - the home header's three icons, one height
+## 2026-09-11 - the home header's three icons, one height (released in 1.48.0)
 
 ### Changed
 
@@ -1041,7 +1041,7 @@ ten, not by memory.
   had switched and read as a miss; three repeats with a second's settle all
   opened Settings.
 
-## 2026-09-11 - the nearest access point, not the first
+## 2026-09-11 - the nearest access point, not the first (released in 1.48.0)
 
 ### Fixed
 
@@ -1078,7 +1078,7 @@ ten, not by memory.
   -40 or better, the same thresholds as the TigerScale. The level-2 clip is
   therefore now seen on the panel too, outer arc's tips unlit.
 
-## 2026-09-11 - full signal from -60 dBm
+## 2026-09-11 - full signal from -60 dBm (released in 1.48.0)
 
 ### Changed
 

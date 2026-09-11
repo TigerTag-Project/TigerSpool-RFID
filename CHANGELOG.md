@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.48.0] - 2026-09-11
+
 ### Fixed
 
 - **The device connects to the nearest Wi-Fi access point, not the first one
