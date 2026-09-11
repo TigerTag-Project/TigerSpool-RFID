@@ -423,9 +423,12 @@ bool ttcloud::due() {
 // Tiger Studio writes a FlashForge serial with and without the "SN" the
 // printer's own screen prints in front of it: the same Creator 5 Pro arrived as
 // SNMUPF9511513 in one sync and MUPF9511513 in the next, and the same AD5X is
-// MQQE9501368 in one document and SNMQQE9501368 in another. The printer takes
-// either (measured: its /checkCode ignores the serial altogether), so the two
-// spellings are one machine. No other brand's serials start that way.
+// MQQE9501368 in one document and SNMQQE9501368 in another. The two spellings
+// are one machine; what goes on the wire is backend_ff.cpp's business, and it
+// always sends the "SN" form. That matters: an AD5X ignores the serial
+// altogether, but a Creator 5 Pro on firmware 1.9.9 answers /detail with "SN
+// is different" to MUPF9511513 and only accepts SNMUPF9511513 (measured, both).
+// No other brand's serials start that way.
 static String idSerial(const PrinterCfg& p) {
     if (p.type == PT_FF_C5 && p.sn.startsWith("SN")) return p.sn.substring(2);
     return p.sn;
