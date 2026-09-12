@@ -159,16 +159,15 @@ chip and is how you get a genuine first-boot again.
 One board, one reader, four wires. The electronics are identical for every
 printer brand — only the 3D-printed shell changes.
 
-| Part | Notes |
-|---|---|
-| **Waveshare ESP32-S3 2inch Capacitive Touch Display** development board | 240×320 IPS, ESP32-S3R8, 16 MB flash, 8 MB octal PSRAM. Screen, touch and MCU on one board. |
-| **PN532 NFC module**, V3 with DIP switches | Set to **HSU (UART)** — not I²C, not SPI. Both switches `0` / OFF. |
-| **A USB-C to USB-A cable that carries data** | Powers and flashes the board. A charge-only cable makes a working board look dead — no serial port ever appears. |
-| Four jumper wires | 3V3, GND, TX, RX. **Supplied with the PN532** — nothing to buy. |
-| A 3D-printed case | [models/](models/) — one per printer brand, plus a desktop stand |
+| Qty | Component | |
+|---|---|---|
+| 1 | Waveshare ESP32-S3-Touch-LCD-2 — 240×320 IPS touch, ESP32-S3**R8**, 16 MB flash, 8 MB octal PSRAM | [buy](https://link.amazon/B0c5hr3uf) |
+| 1 | PN532 **V3** NFC module — DIP switches, set to **HSU (UART)**: both switches `0` / OFF | [buy](https://link.amazon/B0dyEfwKa) |
+| 1 | USB-C to USB-A cable that carries data — a charge-only cable makes a working board look dead, no serial port ever appears | [buy](https://link.amazon/B00Xg3WT4) |
+| — | Four jumper wires | ships with the PN532 |
+| 1 | 3D-printed case | [models/](models/) — one per printer brand, plus a desktop stand |
 
-**About 40 €** in total, plus filament. Parts, links and prices:
-**[hardware/BOM.md](hardware/BOM.md)**.
+**About 40 €** in total, plus filament.
 
 Full parts list: **[hardware/BOM.md](hardware/BOM.md)** ·
 Wiring: **[docs/WIRING.md](docs/WIRING.md)** and **[hardware/pinout.md](hardware/pinout.md)**
