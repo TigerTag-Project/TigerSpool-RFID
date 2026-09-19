@@ -137,6 +137,13 @@ failing quietly.
 
 Then hold a tagged spool against the box, tap the slot you want, and confirm.
 
+> [!WARNING]
+> Scanning a TigerTag and confirming a slot on the screen does not load
+> anything — it only tells the printer what the spool *is*. **You still have
+> to physically put the spool in that slot yourself** — the CFS, the AMS, the
+> ACE unit, or whatever that printer calls its own tray. Skip that and the
+> printer reports no filament, because there genuinely is none loaded.
+
 From then on it updates itself over the air.
 
 ### Build it yourself
