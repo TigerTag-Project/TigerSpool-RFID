@@ -237,9 +237,10 @@ static void probeTaskFn(void*) {
 
 static void startProbeTask() {
     if (pProbeTask) return;
-    // 4 KB: a socket, a connect, nothing else. Core 0, because the Arduino
-    // loop and LVGL have core 1 and the whole point is to stay off it.
-    xTaskCreatePinnedToCore(probeTaskFn, "probe", 4096, nullptr, 1, &pProbeTask, 0);
+    // 6 KB: a socket, a connect and, for FlashForge discovery, one small JSON
+    // body. Core 0, because the Arduino loop and LVGL have core 1 and the whole
+    // point is to stay off it.
+    xTaskCreatePinnedToCore(probeTaskFn, "probe", 6144, nullptr, 1, &pProbeTask, 0);
 }
 
 static int onlineCount() {
@@ -254,7 +255,7 @@ static bool printerVisible(int i) {
     return printers[i].type != PT_NONE && printers[i].visible;
 }
 
-// ---- Creality discovery on the LAN (auto-corrects wrong IPs) ------------
+// ---- Creality + FlashForge discovery on the LAN (auto-corrects wrong IPs) --
 // Creality printers do not announce themselves over mDNS, so the only way to
 // find one that moved is to sweep the subnet for port 9999 and complete a
 // WebSocket handshake. Done a few addresses per call so it never blocks:
@@ -266,9 +267,50 @@ namespace disc {
     uint32_t lastRun = 0;
     int      cur = 1;
     IPAddress base;
-    struct Found { uint8_t oct; String sn; };
+    struct Found { uint8_t oct; String sn; PrinterType type; };
     Found  found[10];
     int    nFound = 0;
+
+    // Which of the two protocols this sweep is looking for. A sweep only knocks
+    // on a port when a printer of that brand is actually unreachable.
+    bool   sweepK2 = false, sweepFF = false;
+    // The unreachable FlashForges, copied when the sweep starts: the probe task
+    // reads these while the loop can rewrite printers[].
+    struct FFTarget { String sn, cc; };
+    FFTarget ffT[MAX_PRINTERS];
+    int      nFF = 0;
+
+    // A FlashForge has no way to say who it is without the access code, so it is
+    // asked with the one each unreachable entry holds: /checkCode answers
+    // {"code":0} only when the serial AND the code are its own. That is a match
+    // on the printer itself, not on whatever happens to listen on 8898.
+    // Returns the index into ffT of the entry this address answered for, or -1.
+    int probeFF(IPAddress ip) {
+        WiFiClient c;
+        if (!c.connect(ip, 8898, 150)) { c.stop(); return -1; }
+        c.stop();
+        for (int t = 0; t < nFF; t++) {
+            WiFiClient q;
+            if (!q.connect(ip, 8898, 300)) { q.stop(); return -1; }
+            String sn = ffT[t].sn;
+            if (!sn.startsWith("SN")) sn = "SN" + sn;      // as FlashForgeC5Backend::begin() does
+            JsonDocument d;
+            d["serialNumber"] = sn;
+            d["checkCode"]    = ffT[t].cc;
+            String body; serializeJson(d, body);
+            q.print(String("POST /checkCode HTTP/1.1\r\nHost: ") + ip.toString() +
+                    "\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: " +
+                    body.length() + "\r\n\r\n" + body);
+            String buf; uint32_t t0 = millis();
+            while (millis() - t0 < 800 && buf.length() < 600 && (q.connected() || q.available())) {
+                while (q.available()) buf += (char)q.read();
+                delay(5);
+            }
+            q.stop();
+            if (buf.indexOf("\"code\":0") >= 0) return t;
+        }
+        return -1;
+    }
 
     // Minimal WS handshake, then ask for printerInfo. Returns the deviceSn if
     // this really is a K2.
@@ -308,25 +350,31 @@ namespace disc {
         nvs.begin("tigerspool", false);
         // 1) match on the serial
         for (int i = 0; i < MAX_PRINTERS; i++) {
-            if (printers[i].type != PT_CREALITY || printers[i].sn.isEmpty() || isOnline(i)) continue;
+            if ((printers[i].type != PT_CREALITY && printers[i].type != PT_FF_C5)
+                || printers[i].sn.isEmpty() || isOnline(i)) continue;
             for (int j = 0; j < nFound; j++) {
-                if (used[j] || found[j].sn.isEmpty() || found[j].sn != printers[i].sn) continue;
+                if (used[j] || found[j].type != printers[i].type
+                    || found[j].sn.isEmpty() || found[j].sn != printers[i].sn) continue;
                 IPAddress ip = base; ip[3] = found[j].oct;
                 String s = ip.toString();
                 if (s != printers[i].host) {
                     Serial.printf("[discovery] %s: IP %s -> %s (serial)\n", printers[i].name.c_str(),
                                   printers[i].host.c_str(), s.c_str());
                     printers[i].host = s; char k[6]; snprintf(k, sizeof(k), "p%dh", i);
-                    nvs.putString(k, s); changed = true;
+                    if (!nvs.putString(k, s))
+                        Serial.printf("[discovery] could not store %s - NVS has no room\n", k);
+                    changed = true;
                 }
                 used[j] = true; pLastSeen[i] = 0;
             }
         }
         // 2) match 1:1 (exactly one unmatched offline K2 <-> exactly one found free)
+        // Creality only: a FlashForge is only ever "found" by its own serial.
         int io = -1, jo = -1, no = 0, nj = 0;
         for (int i = 0; i < MAX_PRINTERS; i++)
             if (printers[i].type == PT_CREALITY && !isOnline(i)) { no++; io = i; }
-        for (int j = 0; j < nFound; j++) if (!used[j]) { nj++; jo = j; }
+        for (int j = 0; j < nFound; j++)
+            if (!used[j] && found[j].type == PT_CREALITY) { nj++; jo = j; }
         if (no == 1 && nj == 1) {
             IPAddress ip = base; ip[3] = found[jo].oct;
             String s = ip.toString();
@@ -338,7 +386,7 @@ namespace disc {
             }
         }
         nvs.end();
-        Serial.printf("[discovery] done: %d K2 on the LAN, %s\n", nFound, changed ? "IPs corrected" : "no change");
+        Serial.printf("[discovery] done: %d printer(s) on the LAN, %s\n", nFound, changed ? "IPs corrected" : "no change");
     }
 
     // Split in two on purpose.
@@ -355,13 +403,21 @@ namespace disc {
         if (st == IDLE) {
             if (!WiFi.isConnected()) return;
             if (lastRun && millis() - lastRun < 180000) return;       // no max 1x / 3 min
-            bool anyOff = false;
-            for (int i = 0; i < MAX_PRINTERS; i++)
-                if (printers[i].type == PT_CREALITY && !isOnline(i)) anyOff = true;
-            if (!anyOff) return;
+            sweepK2 = sweepFF = false; nFF = 0;
+            for (int i = 0; i < MAX_PRINTERS; i++) {
+                if (isOnline(i)) continue;
+                if (printers[i].type == PT_CREALITY) sweepK2 = true;
+                else if (printers[i].type == PT_FF_C5 && !printers[i].cloud
+                         && printers[i].sn.length() && printers[i].cc.length()) {
+                    sweepFF = true;
+                    ffT[nFF++] = { printers[i].sn, printers[i].cc };
+                }
+            }
+            if (!sweepK2 && !sweepFF) return;
             base = WiFi.localIP(); nFound = 0; cur = 1; st = SWEEP;
             lastRun = millis();
-            Serial.printf("[discovery] varrer %d.%d.%d.1-254 :9999...\n", base[0], base[1], base[2]);
+            Serial.printf("[discovery] sweeping %d.%d.%d.1-254 :%s%s%s\n", base[0], base[1], base[2],
+                          sweepK2 ? "9999" : "", (sweepK2 && sweepFF) ? " + :" : "", sweepFF ? "8898" : "");
         }
         if (st == SWEEP) {
             // Sixteen at a time now rather than four: off the loop, the only
@@ -371,9 +427,16 @@ namespace disc {
                 IPAddress ip = base; ip[3] = cur;
                 if (ip == WiFi.localIP()) continue;
                 String sn;
-                if (probe(ip, sn) && nFound < 10) {
-                    found[nFound++] = { (uint8_t)cur, sn };
+                if (sweepK2 && probe(ip, sn) && nFound < 10) {
+                    found[nFound++] = { (uint8_t)cur, sn, PT_CREALITY };
                     Serial.printf("[discovery] K2 @ %s sn=%s\n", ip.toString().c_str(), sn.c_str());
+                }
+                if (sweepFF && nFound < 10) {
+                    const int t = probeFF(ip);
+                    if (t >= 0) {
+                        found[nFound++] = { (uint8_t)cur, ffT[t].sn, PT_FF_C5 };
+                        Serial.printf("[discovery] FlashForge @ %s sn=%s\n", ip.toString().c_str(), ffT[t].sn.c_str());
+                    }
                 }
             }
             if (cur > 254) st = RECONCILE;

@@ -121,7 +121,8 @@ void FlashForgeC5Backend::stop() {
 void FlashForgeC5Backend::tryAuth() {
     int code;
     String resp = post("/checkCode", authBody(), code);
-    Serial.printf("[flashforge] /checkCode http=%d resp=%s\n", code, resp.c_str());
+    Serial.printf("[flashforge] /checkCode @%s http=%d rssi=%d maxblk=%u resp=%s\n",
+                  host_.c_str(), code, WiFi.RSSI(), (unsigned)ESP.getMaxAllocHeap(), resp.c_str());
     JsonDocument d;
     if (code == 200 && !deserializeJson(d, resp)) {
         int c = d["code"] | -99;

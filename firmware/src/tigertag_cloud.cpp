@@ -781,6 +781,34 @@ bool ttcloud::syncNow(String& summary) {
     }
     const int oldSel = k.getInt("printerIdx", 0);
 
+    // An empty string is not free in NVS: it costs two entries, a header and a
+    // data cell, exactly like a full one. Eleven keys a printer over 24
+    // positions, most of them empty for a printer that is not an Anycubic (d, u,
+    // m) or has no access code, filled the partition to the last entry of four
+    // pages - 504 of 630, and the fifth is the spare NVS needs to garbage
+    // collect. A full partition cannot UPDATE anything, because an update writes
+    // the new value before it erases the old: putString returned 0, silently, so
+    // a corrected host never stuck and the printer was dialled at its old address
+    // for good. Every reader already takes "" for a missing key, so an empty
+    // field is stored as no key at all.
+    //
+    // Cleaning up what is already there comes first: removing a key needs no
+    // room, and it is what makes the writes below possible.
+    auto putStr = [&k](const char* key, const String& v) {
+        if (v.isEmpty()) { if (k.isKey(key)) k.remove(key); }
+        else k.putString(key, v);
+    };
+    for (int i = 0; i < MAX_PRINTERS; i++) {
+        const Stored& o = old[i];
+        const char sfx[] = { 'n', 'h', 's', 'c', 'd', 'u', 'm', 'a' };
+        const String* val[] = { &o.n, &o.h, &o.s, &o.c, &o.d, &o.u, &o.m, &o.a };
+        for (int f = 0; f < 8; f++) {
+            if (!val[f]->isEmpty()) continue;
+            char key[6]; snprintf(key, sizeof(key), "p%d%c", i, sfx[f]);
+            if (k.isKey(key)) k.remove(key);
+        }
+    }
+
     // Which stored entry each imported printer is. -1: new to this device.
     int from[MAX_PRINTERS];
     bool taken[MAX_PRINTERS] = { false };
@@ -852,14 +880,14 @@ bool ttcloud::syncNow(String& summary) {
             if (i < n && o != i)
                 Serial.printf("[account]   '%s' now at %d (was %d)\n", nn.c_str(), i, o);
             snprintf(key, sizeof(key), "p%dt", i); k.putInt(key, nt);
-            snprintf(key, sizeof(key), "p%dn", i); k.putString(key, nn);
-            snprintf(key, sizeof(key), "p%dh", i); k.putString(key, nh);
-            snprintf(key, sizeof(key), "p%ds", i); k.putString(key, ns);
-            snprintf(key, sizeof(key), "p%dc", i); k.putString(key, nc);
-            snprintf(key, sizeof(key), "p%dd", i); k.putString(key, nd);
-            snprintf(key, sizeof(key), "p%du", i); k.putString(key, nu);
-            snprintf(key, sizeof(key), "p%dm", i); k.putString(key, nm2);
-            snprintf(key, sizeof(key), "p%da", i); k.putString(key, na);
+            snprintf(key, sizeof(key), "p%dn", i); putStr(key, nn);
+            snprintf(key, sizeof(key), "p%dh", i); putStr(key, nh);
+            snprintf(key, sizeof(key), "p%ds", i); putStr(key, ns);
+            snprintf(key, sizeof(key), "p%dc", i); putStr(key, nc);
+            snprintf(key, sizeof(key), "p%dd", i); putStr(key, nd);
+            snprintf(key, sizeof(key), "p%du", i); putStr(key, nu);
+            snprintf(key, sizeof(key), "p%dm", i); putStr(key, nm2);
+            snprintf(key, sizeof(key), "p%da", i); putStr(key, na);
             snprintf(key, sizeof(key), "p%dk", i); k.putBool(key, nk);
             // The switch is written only when it belongs to a different
             // printer than before. Rewriting it every time would undo a switch

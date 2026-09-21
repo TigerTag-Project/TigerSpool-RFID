@@ -7,6 +7,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A FlashForge that changed address was never found again.** LAN discovery
+  existed for Creality alone, so a Creator 5 Pro whose address moved was dialled
+  at the old one for good while Tiger Studio, which finds it by itself, worked
+  fine. It is now swept for on port 8898 and matched by asking each unreachable
+  entry `/checkCode` with its own serial and access code: `{"code":0}` means the
+  address IS that printer, not merely that something listens there.
+- **A corrected printer address did not survive.** NVS was full - eleven keys a
+  printer over 24 positions, and an empty string costs two entries exactly like a
+  full one, so the fields only an Anycubic uses filled four pages to the last
+  entry (504 of 630). A full partition cannot update anything, so `putString`
+  returned 0 in silence and the old address came back on the next load. An empty
+  field is now stored as no key, and the ones already stored are removed at the
+  start of each import: 504 of 630 entries before, 384 after.
+
 ## [1.66.0] - 2026-09-21
 
 ### Changed
