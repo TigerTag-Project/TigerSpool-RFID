@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The first Wi-Fi join now picks the strongest access point.** With several
+  access points under one SSID the driver's own sort-by-signal was seen
+  joining a weak radio first and leaving it only when roamCheck() fired, and
+  that roam drops the link. staBegin() now scans, picks the best RSSI itself
+  and pins it by BSSID and channel. If a pinned attempt does not connect within
+  45 s the next one falls back to the driver's choice, so one refusing radio
+  cannot keep the device offline.
+
 ## [1.66.0] - 2026-09-21
 
 ### Changed

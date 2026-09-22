@@ -1495,6 +1495,39 @@ static void staBegin() {
     // is what this device hears, and TX power only changes what the AP
     // hears - but it is free, so it stays on for the AP's side of the link.
     WiFi.setTxPower(WIFI_POWER_19_5dBm);
+
+    // Pick the strongest access point ourselves and pin it by BSSID and channel.
+    // The driver's sort-by-signal alone was measured joining a weak radio first
+    // and only leaving it after roamCheck() fired, and that roam costs a drop.
+    // If the previous pin never produced a link (a refused or unreachable AP),
+    // do not pin again: fall back to the driver's own choice so one bad radio
+    // cannot keep the device offline.
+    static uint8_t  pinBssid[6];
+    static bool     pinned   = false;
+    static uint32_t pinnedAt = 0;
+    const bool lastPinFailed = pinned && WiFi.status() != WL_CONNECTED &&
+                               millis() - pinnedAt < 45000;
+    pinned = false;
+
+    if (!lastPinFailed) {
+        const int n = WiFi.scanNetworks(false, true);
+        int best = -1;
+        for (int i = 0; i < n; i++) {
+            if (WiFi.SSID(i) != wifiSsid) continue;
+            if (best < 0 || WiFi.RSSI(i) > WiFi.RSSI(best)) best = i;
+        }
+        if (best >= 0) {
+            memcpy(pinBssid, WiFi.BSSID(best), 6);
+            Serial.printf("[wifi] best AP for '%s': %s ch%d at %d dBm (%d heard)\n",
+                          wifiSsid.c_str(), WiFi.BSSIDstr(best).c_str(),
+                          WiFi.channel(best), WiFi.RSSI(best), n);
+            WiFi.begin(wifiSsid.c_str(), wifiPass.c_str(), WiFi.channel(best), pinBssid);
+            pinned = true;
+            pinnedAt = millis();
+        }
+        WiFi.scanDelete();
+        if (pinned) { staNoSleep(); return; }
+    }
     WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
     staNoSleep();
 }
