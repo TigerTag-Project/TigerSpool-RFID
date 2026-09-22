@@ -163,12 +163,24 @@ namespace {
         return false;
     }
 
+    // putString returns 0 when the partition has no room, and says nothing else.
+    // A sign-in on a device whose NVS is full then looked successful and was
+    // forgotten at the next reboot. Report it, and let the end of the sync -
+    // which frees room - try once more.
+    bool g_sessionUnsaved = false;
     void saveSession() {
         pr.begin("tsaccount", false);
-        pr.putString("email", g_email);
-        pr.putString("name", g_name);
-        pr.putString("refresh", g_refresh);
-        pr.putString("uid", g_uid);
+        bool ok = true;
+        auto put = [&](const char* key, const String& v) {
+            if (v.length() && pr.putString(key, v) == 0) ok = false;
+            else if (!v.length()) pr.putString(key, v);
+        };
+        put("email", g_email);
+        put("name", g_name);
+        put("refresh", g_refresh);
+        put("uid", g_uid);
+        g_sessionUnsaved = !ok;
+        if (!ok) Serial.println("[account] session NOT saved - NVS full, will retry after the sync");
         pr.end();
     }
 
@@ -927,6 +939,10 @@ bool ttcloud::syncNow(String& summary) {
     if (g_syncedOk) g_lastOkMs = millis();   // green is a claim about this
     if (diff) g_changed = true;
     Serial.printf("[account] sync total %lu ms\n", (unsigned long)(millis() - tSync));
+    if (g_sessionUnsaved) {
+        saveSession();
+        if (!g_sessionUnsaved) Serial.println("[account] session saved after the sync");
+    }
     if (!g_syncedOk) { summary = g_lastResult = "TigerTag: no answer (TLS/network)"; return false; }
     summary = String("TigerTag: ") + (n - kept) + " LAN" +
               (kept    ? (String(", ") + kept + " kept")      : "") +

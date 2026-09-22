@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A sign-in that could not be saved now says so, and tries again.** With the
+  NVS partition full, putString returned 0 in silence: the sign-in looked
+  successful and the account was gone after the next reboot. The failure is
+  now logged, and the end of the account sync, which is where room is freed,
+  saves the session once more.
+
 ## [1.66.0] - 2026-09-21
 
 ### Changed
