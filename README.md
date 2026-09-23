@@ -139,6 +139,9 @@ failing quietly.
    phone, and the box joins — no reboot, nothing typed on the small screen.
 3. **Sign in.** E-mail and password, or Google through a second QR code.
 4. **Your printers arrive.** From your account, as configured in Tiger Studio.
+   The box's address on your network (`http://tigerspool-xxxx.local/`) shows
+   who is signed in, lists those printers with a switch for each, syncs them
+   again, and signs out - all from a phone.
 
 Then tap the slot you want and hold a tagged spool against the box. It is sent
 to the printer as soon as it is read - there is nothing to confirm - and the

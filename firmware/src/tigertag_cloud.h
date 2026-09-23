@@ -22,6 +22,7 @@ namespace ttcloud {
     // an address is 30 characters that get truncated to "benoit@atom...".
     // Never empty while there is a session.
     String displayName();
+    String photoUrl();                    // the account's picture, or empty
     String lastResult();
 
     // Email and password. Stores the refresh token, never the password.
@@ -65,6 +66,14 @@ namespace ttcloud {
     // back constantly and it must never wait on the network: the list is drawn
     // from NVS immediately, and this updates it underneath.
     bool   startAsyncSync();              // false if one is already running
+    // Makes a sync due now; the loop starts it, on the task, once there is room.
+    // What a web handler calls instead of syncNow(): those run on the loop task,
+    // whose 8 KB stack a TLS handshake nested in a handler overflows.
+    void   requestSync();
+    // For a page waiting on a sync it asked for: finished syncs so far, and
+    // whether the last one changed a list main.cpp has not reloaded yet.
+    uint32_t syncCount();
+    bool     changePending();
     bool   asyncBusy();
     // True while a sync is waiting for internal RAM it cannot get: the task
     // stack is 16 KB and must be contiguous. main.cpp reads this the same way

@@ -37,4 +37,7 @@ namespace webcfg {
     // pairing screen is up, so completing it never depends on a phone browser
     // being awake. Blocking HTTPS, about a second, rate-limited internally.
     void pairTick();
+    // A printer switch flipped on the account page, once. main.cpp applies it:
+    // printers[] is its state, and the load budget is its decision.
+    bool takePrinterSwitch(int& index, bool& on);
 }

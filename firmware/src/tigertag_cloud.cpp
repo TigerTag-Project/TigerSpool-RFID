@@ -30,7 +30,8 @@ namespace {
     const char* PAIR_POLL  = "https://us-central1-tigertag-connect.cloudfunctions.net/pairPoll";
 
     Preferences pr;
-    String   g_email, g_refresh, g_uid, g_idToken, g_name;
+    String   g_email, g_refresh, g_uid, g_idToken, g_name, g_photo;
+    bool     g_profileChecked = false;   // this boot, for this account
     // The printers' document ids in the account, by position, refreshed by
     // every sync - see the note where they are filled.
     String   g_docIds[MAX_PRINTERS];
@@ -167,6 +168,10 @@ namespace {
         pr.begin("tsaccount", false);
         pr.putString("email", g_email);
         pr.putString("name", g_name);
+        // An empty value is removed, not written: an empty string costs NVS as
+        // much as a full one, and most accounts have no picture.
+        if (g_photo.length()) pr.putString("photo", g_photo);
+        else if (pr.isKey("photo")) pr.remove("photo");
         pr.putString("refresh", g_refresh);
         pr.putString("uid", g_uid);
         pr.end();
@@ -203,23 +208,30 @@ namespace {
     // displayName field. Without this, every device already in the field would
     // keep showing an address until its owner happened to sign out and in.
     //
-    // Cheap and idempotent: one POST, only when the name is missing, and a
-    // failure is not an error - displayName() falls back to the address.
-    void fetchProfileName() {
-        if (g_name.length() || g_idToken.isEmpty()) return;
+    // The picture comes from the same answer. It is asked once per boot rather
+    // than only when missing, because most accounts have none and "none" is
+    // not something NVS can remember cheaply - and a changed picture should
+    // show without a sign-out. A failure is not an error: the name falls back
+    // to the address, the picture to an initial.
+    void fetchProfile() {
+        if (g_idToken.isEmpty() || (g_profileChecked && g_name.length())) return;
+        g_profileChecked = true;
         JsonDocument d; d["idToken"] = g_idToken;
         String body; serializeJson(d, body);
         String resp;
         int code = httpsPOST(String("https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=") + API_KEY,
                              body, resp);
-        if (code != 200) return;
+        if (code != 200) { g_profileChecked = false; return; }
         JsonDocument r;
         if (deserializeJson(r, resp)) return;
         String n = String(r["users"][0]["displayName"] | "");
-        if (n.isEmpty()) return;
-        g_name = n;
+        String ph = String(r["users"][0]["photoUrl"] | "");
+        bool dirty = false;
+        if (g_name.isEmpty() && n.length()) { g_name = n; dirty = true; }
+        if (ph != g_photo) { g_photo = ph; dirty = true; }
+        if (!dirty) return;
         saveSession();
-        Serial.printf("[account] display name '%s'\n", g_name.c_str());
+        Serial.printf("[account] profile '%s'%s\n", g_name.c_str(), g_photo.length() ? " with picture" : "");
     }
 
     bool ensureToken() {
@@ -255,6 +267,7 @@ void ttcloud::begin() {
     pr.begin("tsaccount", true);
     g_email   = pr.getString("email", "");
     g_name    = pr.getString("name", "");
+    g_photo   = pr.getString("photo", "");
     g_refresh = pr.getString("refresh", "");
     g_uid     = pr.getString("uid", "");
     pr.end();
@@ -263,10 +276,12 @@ void ttcloud::begin() {
 bool   ttcloud::haveSession() { return g_refresh.length() > 0; }
 String ttcloud::email()       { return g_email; }
 String ttcloud::displayName() { return g_name.length() ? g_name : g_email; }
+String ttcloud::photoUrl()    { return g_photo; }
 String ttcloud::lastResult()  { return g_lastResult; }
 
 void ttcloud::forget() {
     g_email = ""; g_refresh = ""; g_uid = ""; g_idToken = ""; g_name = "";
+    g_photo = ""; g_profileChecked = false;
     pr.begin("tsaccount", false); pr.clear(); pr.end();
 }
 
@@ -293,6 +308,7 @@ bool ttcloud::signIn(const String& mail, const String& pass, String& err) {
     g_uid     = r["localId"] | "";
     g_tokenAt = millis();
     if (g_uid.isEmpty() || g_refresh.isEmpty()) { err = "invalid answer"; return false; }
+    g_photo = ""; g_profileChecked = false;   // a new account's picture is asked again
     saveSession();
     Serial.printf("[account] login OK uid=%s\n", g_uid.c_str());
     return true;
@@ -388,6 +404,7 @@ bool ttcloud::signInWithCustomToken(const String& customToken, const String& ema
     g_email   = emailHint;
     g_tokenAt = millis();
     if (g_uid.isEmpty() || g_refresh.isEmpty()) { err = "invalid answer"; return false; }
+    g_photo = ""; g_profileChecked = false;   // a new account's picture is asked again
     saveSession();
     Serial.printf("[account] login Google OK uid=%s\n", g_uid.c_str());
     return true;
@@ -474,7 +491,7 @@ bool ttcloud::syncNow(String& summary) {
     g_lastSync = millis();
     g_syncedOk = false;
     if (!ensureToken()) { summary = g_lastResult = "TigerTag: sessao invalida"; return false; }
-    fetchProfileName();
+    fetchProfile();
 
     // All six brands are read. Two of them have no backend yet, and they are
     // fetched anyway so the log can say why they do not appear rather than
@@ -963,10 +980,13 @@ static volatile bool g_asyncBusy = false;
 static volatile bool g_asyncDone = false;
 static String        g_asyncSummary;
 
+static volatile uint32_t g_syncCount = 0;
+
 static void syncTaskFn(void*) {
     String s;
     ttcloud::syncNow(s);
     g_asyncSummary = s;
+    g_syncCount++;
     g_asyncBusy = false;
     g_asyncDone = true;
     vTaskDelete(nullptr);
@@ -1019,6 +1039,13 @@ bool ttcloud::startAsyncSync() {
     return true;
 }
 bool ttcloud::asyncBusy() { return g_asyncBusy; }
+
+// Zero is "never synced", which due() answers as soon as the boot delay is over.
+// Asked during a sync, it makes another one follow it - which is right after a
+// sign-in, since the running one may have been fetching the previous account.
+void ttcloud::requestSync() { g_lastSync = 0; }
+uint32_t ttcloud::syncCount()   { return g_syncCount; }
+bool     ttcloud::changePending() { return g_changed; }
 // ---------------------------------------------------------------------------
 //  pairStart, off the UI thread.
 // ---------------------------------------------------------------------------

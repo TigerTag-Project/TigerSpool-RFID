@@ -40,6 +40,11 @@ serves.
 The device exchanges them for a session and stores the refresh token. It never
 stores the password.
 
+Once signed in, the same address is the account page: the account's picture,
+name and address, the printers with their on/off switches, a sync, and the
+sign-out. The sync runs on the device's own sync task, never inside the web
+request - see the `webcfg.cpp` row in [CODEMAP.md](../CODEMAP.md).
+
 ### 2. Google — a QR code on the device screen
 
 Accounts created with Google have **no password to type**, so there is nothing a

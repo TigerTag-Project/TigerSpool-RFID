@@ -1920,6 +1920,13 @@ void loop() {
     presenceWatch();             // notice what deserves an immediate beat
     presenceTick();              // and tell the account this device is here
     if (webStarted || webcfg::apActive()) webcfg::loop();
+    {
+        // The account page's switch, through the device's own - one budget,
+        // one owner. It asks for a state, so a double request cannot flip twice.
+        int wi; bool won;
+        while (webcfg::takePrinterSwitch(wi, won))
+            if (printers[wi].visible != won) tryToggle(wi);
+    }
 
     // A Google pairing started from the phone puts the same QR on this screen
     // for as long as it is waiting. Two reasons, and the second is the one that
@@ -2250,8 +2257,9 @@ void loop() {
         {
             // The two questions are asked SEPARATELY on purpose. "Did my own
             // async sync land" and "did the printer list change" are not the
-            // same thing: a sign-in from the web page syncs synchronously, on
-            // this very loop, and leaves nothing for asyncTake to hand back.
+            // same thing: a sign-in from the web page used to sync on this very
+            // loop, and left nothing for asyncTake to hand back. It goes through
+            // the task now, but the two tests stay apart so it cannot regress.
             // Nested, this test skipped that change entirely and the device
             // kept an empty list until it was restarted - which is why signing
             // in with an email used to reboot the box.
@@ -2338,8 +2346,9 @@ void loop() {
         {
             // The two questions are asked SEPARATELY on purpose. "Did my own
             // async sync land" and "did the printer list change" are not the
-            // same thing: a sign-in from the web page syncs synchronously, on
-            // this very loop, and leaves nothing for asyncTake to hand back.
+            // same thing: a sign-in from the web page used to sync on this very
+            // loop, and left nothing for asyncTake to hand back. It goes through
+            // the task now, but the two tests stay apart so it cannot regress.
             // Nested, this test skipped that change entirely and the device
             // kept an empty list until it was restarted - which is why signing
             // in with an email used to reboot the box.

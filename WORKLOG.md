@@ -18,6 +18,33 @@ message, and reset it to this header.
 
 ## Unreleased
 
+## 2026-09-23 - the account page, and a sign-in that no longer resets the box (released in 1.67.0)
+
+### Added
+
+- `/login`, signed in, is the account page: picture (`photoUrl` from
+  `accounts:lookup`, once per boot on the sync task, stored in NVS only when
+  there is one), name, address, a sign-out button that asks first, and a
+  drawer with every printer, an on/off switch each and "Sync machines now" at
+  its top. Nothing navigates: `/api/account` is read back after a sync
+  (`syncCount()` moves and `changePending()` clears) and after a switch.
+  Switches move at once and are put back only on a budget refusal - the web
+  server is on the loop, measured 5-6 s behind a printer handshake.
+
+### Fixed
+
+- Email sign-in reset the device (PR #15's backtrace: `handleTtLogin` ->
+  `syncNow` -> mbedTLS on the 8 KB loop stack). All four web-side syncs now
+  call `ttcloud::requestSync()`; the loop stack stays at 8 KB. Measured: the
+  page answers in 0.3 s, the sync runs 11.7 s on its task, taps during it
+  answer in 0.45-0.57 s.
+
+### Documentation
+
+- CODEMAP: the `gen_db.py` rows described a generator that no longer exists;
+  the battery "threshold" row contradicted the declared battery. AGENTS: the
+  ASCII-only and no-Chinese rows contradicted the fonts.
+
 ## 2026-09-21 - the battery is declared, and the screen always answers (released in 1.66.0)
 
 ### Changed

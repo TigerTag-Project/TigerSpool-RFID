@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.67.0] - 2026-09-23
+
+### Added
+
+- **The account page manages the account.** Signed in, the page the QR opens
+  used to be one status line that refreshed onto itself: nothing on it signed
+  out, and nothing anywhere synced. It now shows who is signed in - picture,
+  name and address - signs out (after asking, since that restarts the
+  device), and opens a drawer with every printer on the account: the same
+  on/off switch the device's own list has, the same memory check behind it,
+  and a button that syncs and redraws the list in place.
+
+### Fixed
+
+- **Signing in with an email no longer resets the device.** The web page ran
+  the account sync itself, inside the request, on the main loop: a TLS
+  handshake nested that deep overflowed the loop's stack the moment the
+  sign-in succeeded, and the device rebooted with nothing saved. The sign-in,
+  the Google pairing and the "Sync machines now" button now hand the sync to
+  the task that already runs it on a timer. The page answers at once, and the
+  screen stays usable for the ten seconds the sync takes - it used to hold
+  still for all of them. Reported, with the decoded backtrace, in #15.
+
 ## [1.66.0] - 2026-09-21
 
 ### Changed

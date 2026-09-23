@@ -64,9 +64,10 @@ namespace {
         W_SAVE_RESTART, W_TT_ACCOUNT, W_CONNECTED, W_SYNC_NOW, W_TT_FORGET,
         W_TT_HINT, W_TT_LOGIN, W_RETRY_NET, W_WIPE, W_NONE,
         W_SAVED, W_RESTART_JOIN, W_WIPED, W_RESTARTING, W_RETRY_SAVED,
-        W_LOGIN_FAIL, W_ACCT_LINKED, W_SYNCED, W_FAILED, W_ACCT_OFF,
+        W_LOGIN_FAIL, W_ACCT_LINKED, W_FAILED, W_ACCT_OFF,
         W_GOOGLE, W_EMAIL, W_OR, W_NO_ACCOUNT, W_SHOW_PW,
         W_PAIR_SCAN, W_PAIR_CODE, W_PAIR_WAIT, W_PAIR_DENIED, W_PAIR_EXPIRED,
+        W_SYNC_STARTED, W_FORGET_ASK, W_SYNC_TIMEOUT, W_NO_ROOM,
         W_N
     };
     const char* const WT[W_N][4] = {
@@ -120,7 +121,6 @@ namespace {
                               "Reintentando la red guardada.", "Nouvel essai sur le reseau enregistre." },
         /* W_LOGIN_FAIL   */ { "Login falhou", "Login failed", "Fallo de acceso", "Echec de connexion" },
         /* W_ACCT_LINKED  */ { "Conta ligada", "Account linked", "Cuenta conectada", "Compte lie" },
-        /* W_SYNCED       */ { "Sincronizado", "Synced", "Sincronizado", "Synchronise" },
         /* W_FAILED       */ { "Falhou", "Failed", "Fallo", "Echoue" },
         /* W_ACCT_OFF     */ { "Conta desligada", "Account disconnected", "Cuenta desconectada", "Compte deconnecte" },
         /* W_GOOGLE       */ { "Continuar com Google", "Continue with Google",
@@ -152,6 +152,20 @@ namespace {
         /* W_PAIR_DENIED  */ { "Pedido recusado", "Request denied", "Solicitud rechazada", "Demande refusee" },
         /* W_PAIR_EXPIRED */ { "Codigo expirado - tenta de novo", "Code expired - try again",
                               "Codigo expirado - intenta de nuevo", "Code expire - reessaie" },
+        /* W_SYNC_STARTED */ { "A sincronizar as impressoras em segundo plano.",
+                              "Syncing your printers in the background.",
+                              "Sincronizando las impresoras en segundo plano.",
+                              "Synchronisation des imprimantes en arrière-plan." },
+        /* W_FORGET_ASK   */ { "Desligar a conta? O dispositivo vai reiniciar.",
+                              "Disconnect the account? The device will restart.",
+                              "¿Desconectar la cuenta? El dispositivo se reiniciará.",
+                              "Déconnecter le compte ? Le TigerSpool va redémarrer." },
+        /* W_SYNC_TIMEOUT */ { "Sem resposta da sincronização.", "The sync did not answer.",
+                              "La sincronización no respondió.", "La synchronisation n’a pas répondu." },
+        /* W_NO_ROOM      */ { "Sem memória para ligar mais uma impressora.",
+                              "Not enough memory to switch on one more printer.",
+                              "Sin memoria para activar una impresora más.",
+                              "Pas assez de mémoire pour activer une imprimante de plus." },
     };
     // The web form still carries its own four-column table (PT, EN, ES, FR),
     // inherited from the prototype. The device now has nine languages, so an
@@ -999,6 +1013,56 @@ namespace {
                "color:var(--faint);font-size:12px}"
                ".sep:before,.sep:after{content:'';flex:1;height:1px;background:var(--soft)}"
                ".lead{margin:0 0 4px;font-size:15px;line-height:1.45}"
+               ".pl{list-style:none;margin:0;padding:0;border:1px solid var(--line);"
+               "border-radius:12px;background:var(--raised)}"
+               ".pl li{padding:11px 13px;border-top:1px solid var(--soft);display:flex;"
+               "align-items:center;gap:12px}"
+               ".pl li>div{flex:1;min-width:0}"
+               ".pl b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+               ".sw{position:relative;flex:none;width:44px;height:26px}"
+               ".sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}"
+               ".sw i{position:absolute;inset:0;border-radius:13px;background:var(--line);"
+               "pointer-events:none;transition:background .15s}"
+               ".sw i:after{content:'';position:absolute;left:3px;top:3px;width:20px;height:20px;"
+               "border-radius:50%;background:#fff;transition:transform .15s}"
+               ".sw input:checked+i{background:var(--brand)}"
+               ".sw input:checked+i:after{transform:translateX(18px)}"
+               ".sw input:disabled+i{opacity:.5}"
+               "button.studio{width:100%;font-family:inherit;cursor:pointer;text-align:left}"
+               ".who{display:flex;align-items:center;gap:14px;margin:4px 0 6px}"
+               ".who>div{min-width:0}"
+               ".who b{display:block;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+               ".who>div>span{display:block;font-size:13.5px;color:var(--muted);overflow:hidden;"
+               "text-overflow:ellipsis;white-space:nowrap}"
+               ".av{position:relative;flex:none;width:52px;height:52px;border-radius:50%;"
+               "display:grid;place-items:center;overflow:hidden;font-size:21px;font-weight:700;"
+               "color:#fff;background:linear-gradient(135deg,var(--brand),var(--ember))}"
+               ".av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}"
+               ".off-btn{display:flex;align-items:center;justify-content:center;height:46px;"
+               "margin-top:22px;border:1px solid #5a2328;border-radius:14px;color:#ff8a80;"
+               "font-size:14.5px;font-weight:600;text-decoration:none}"
+               ".studio .n{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}"
+               "#op svg{margin-left:6px}"
+               ".bd{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;"
+               "pointer-events:none;transition:opacity .2s}"
+               ".bd.open{opacity:1;pointer-events:auto}"
+               ".drawer{position:fixed;top:0;right:0;bottom:0;width:min(400px,100%);overflow-y:auto;"
+               "padding:18px 16px calc(18px + env(safe-area-inset-bottom));background:var(--bg);"
+               "border-left:1px solid var(--line);transform:translateX(100%);"
+               "transition:transform .25s ease,visibility .25s;visibility:hidden}"
+               ".drawer.open{transform:none;visibility:visible}"
+               ".dh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}"
+               ".dh b{font-size:17px}"
+               ".drawer button.go{margin-top:0}"
+               ".drawer .st{margin:8px 0 10px}"
+               ".x{width:40px;height:40px;border:0;border-radius:10px;background:var(--raised);"
+               "color:var(--text);font-size:24px;line-height:1;cursor:pointer}"
+               ".pl li:first-child{border-top:0}"
+               ".pl b{display:block;font-size:15px;font-weight:600}"
+               ".pl span{font-size:12.5px;color:var(--muted)}"
+               ".pl .off>div{opacity:.45}"
+               ".st{min-height:18px;margin:10px 0 0;font-size:13px;color:var(--muted)}"
+               "button.go:disabled{opacity:.55}"
                ".codelabel{margin:16px 0 0;text-align:center;font-size:12px;"
                "color:var(--muted)}"
                ".code{margin:8px 0 0;padding:14px;border:1px solid var(--line);"
@@ -1042,8 +1106,132 @@ namespace {
         h += F(" &middot; MIT &middot; &copy; TigerTag</p></div></body></html>");
     }
 
+    // Signed in, the page the QR opens is where the account is managed: it used
+    // to be a bare status line that refreshed onto itself, and with the legacy
+    // configuration page gone nothing anywhere led to a sign-out or a sync.
+    // Links, not forms, for the reason given at the Google button below; the
+    // sign-out asks first, because it restarts the device.
+    //
+    // The printers are a drawer over the page, opened from the account card and
+    // put away again - the same on/off switches the device's own list has.
+    // Nothing on this page navigates: a sync and a switch both answer in place.
+    void handleAccount() {
+        String h; h.reserve(6600);
+        pageOpen(h);
+        // Who is signed in, as the account shows them: picture, name, address.
+        // No picture (most email accounts) is an initial; a picture that will
+        // not load - the phone is offline, the URL has expired - falls back to
+        // the same initial rather than a broken-image icon.
+        const String name = ttcloud::displayName(), mail = ttcloud::email();
+        const String photo = ttcloud::photoUrl();
+        String ini = name.length() ? name.substring(0, 1) : String("?");
+        ini.toUpperCase();
+        h += F("<div class=who><span class=av>");
+        if (photo.startsWith("https://")) {
+            h += F("<img src=\""); h += esc(photo);
+            h += F("\" alt=\"\" referrerpolicy=no-referrer onerror=\"this.remove()\">");
+        }
+        h += esc(ini); h += F("</span><div><b>"); h += esc(name); h += F("</b>");
+        if (name != mail) { h += F("<span>"); h += esc(mail); h += F("</span>"); }
+        h += F("</div></div>");
+        h += F("<button type=button class=studio id=op>"); h += wl(W_PRINTERS);
+        h += F("<span class=n id=cnt></span><svg viewBox=\"0 0 24 24\" aria-hidden=true>"
+               "<path d=\"M9 5l7 7-7 7\"/></svg></button>");
+        h += STUDIO_LINK;
+        h += F("<a class=off-btn href=/tt-forget onclick=\"return confirm('");
+        h += wl(W_FORGET_ASK); h += F("')\">"); h += wl(W_TT_FORGET); h += F("</a>");
+        h += F("<div class=bd id=bd></div><aside class=drawer id=dr aria-hidden=true>"
+               "<div class=dh><b>"); h += wl(W_PRINTERS);
+        h += F("</b><button type=button class=x id=cl aria-label=Close>&times;</button></div>"
+               "<button class=go id=sy type=button>");
+        h += wl(W_SYNC_NOW); h += F("</button><p class=st id=st></p>"
+               "<ul class=pl id=pl></ul></aside>");
+        pageClose(h);
+        // The list is drawn from /api/account, on load and again when a sync
+        // this page asked for has finished AND been applied - the count moves
+        // when the task ends, the list only once main.cpp has reloaded it.
+        //
+        // A switch moves at once and asks afterwards. The web server is served
+        // from the main loop, which can be inside a printer handshake for
+        // seconds; a switch that waited for it felt dead. main.cpp decides in
+        // the same loop pass that takes the request, so the read-back right
+        // after it is the verdict: a refusal (the load budget) puts it back.
+        h += F("<script>var B=['','Creality','FlashForge','Bambu Lab','Snapmaker','Elegoo','Anycubic'],"
+               "$=function(i){return document.getElementById(i)},"
+               "L=$('pl'),S=$('st'),Y=$('sy'),D=$('dr'),K=$('bd'),C=$('cnt'),NONE='"); h += wl(W_NONE);
+        h += F("',BUSY='"); h += wl(W_SYNC_STARTED);
+        h += F("',LATE='"); h += wl(W_SYNC_TIMEOUT);
+        h += F("',ROOM='"); h += wl(W_NO_ROOM);
+        h += F("';function e(s){var d=document.createElement('i');d.textContent=s;return d.innerHTML}"
+               "function get(){return fetch('/api/account',{cache:'no-store'}).then(function(r){return r.json()})}"
+               "function count(){var b=L.querySelectorAll('input');C.textContent=b.length?"
+               "L.querySelectorAll('input:checked').length+'/'+b.length:''}"
+               "function draw(a){var o='';a.printers.forEach(function(q){o+='<li'+(q.v?'':' class=off')+'><div><b>'"
+               "+e(q.n)+'</b><span>'+(B[q.t]||'?')+' · '+(q.c?'cloud':e(q.h||'-'))+'</span></div>'"
+               "+'<label class=sw><input type=checkbox data-i='+q.i+(q.v?' checked':'')+'><i></i></label></li>'});"
+               "L.innerHTML=o||'<li><span>'+NONE+'</span></li>';count()}"
+               "function show(c,on){c.checked=on;c.closest('li').className=on?'':'off';count()}"
+               "L.onchange=function(ev){var c=ev.target,i=c.dataset.i,on=c.checked;S.textContent='';show(c,on);"
+               "fetch('/api/printer?i='+i+'&on='+(on?1:0)).then(get).then(function(a){"
+               "var q=a.printers.filter(function(p){return p.i==i})[0];"
+               "if(q&&q.v!=on&&c.checked==on){show(c,q.v);S.textContent=ROOM}})"
+               ".catch(function(){show(c,!on)})};"
+               "function open_(o){D.classList.toggle('open',o);K.classList.toggle('open',o);"
+               "D.setAttribute('aria-hidden',!o)}"
+               "$('op').onclick=function(){open_(true)};$('cl').onclick=K.onclick=function(){open_(false)};"
+               "document.onkeydown=function(ev){if(ev.key=='Escape')open_(false)};"
+               "function done(m){S.textContent=m;Y.disabled=false}"
+               "function poll(n,t0){get().then(function(a){"
+               "if(a.n!=n&&!a.pend&&!a.busy){draw(a);done(a.result)}"
+               "else if(Date.now()-t0>90000){draw(a);done(LATE)}"
+               "else setTimeout(function(){poll(n,t0)},1000)})"
+               ".catch(function(){setTimeout(function(){poll(n,t0)},1500)})}"
+               "Y.onclick=function(){Y.disabled=true;S.textContent=BUSY;"
+               "get().then(function(a){return fetch('/tt-sync').then(function(){poll(a.n,Date.now())})})"
+               ".catch(function(){done(LATE)})};"
+               "get().then(draw);</script>");
+        server.send(200, "text/html", h);
+    }
+
+    // What the account page draws. Names, brands and addresses only: serials
+    // and access codes stay on the device, and this answers anyone on the LAN.
+    void handleApiAccount() {
+        JsonDocument d;
+        d["busy"]   = ttcloud::asyncBusy();
+        d["pend"]   = ttcloud::changePending();
+        d["n"]      = ttcloud::syncCount();
+        d["result"] = ttcloud::lastResult();
+        JsonArray a = d["printers"].to<JsonArray>();
+        for (int i = 0; i < MAX_PRINTERS; i++) {
+            const PrinterCfg& p = printers[i];
+            if (p.type == PT_NONE) continue;
+            JsonObject o = a.add<JsonObject>();
+            o["i"] = i;
+            o["n"] = p.name; o["t"] = (int)p.type; o["h"] = p.host;
+            o["c"] = p.cloud; o["v"] = p.visible;
+        }
+        String out; serializeJson(d, out);
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", out);
+    }
+
+    // Switches on the account page. Only recorded here: main.cpp owns printers[]
+    // and applies them through the same budget check as the device's own switch.
+    // A mask, not one slot: two switches flipped quickly land in one loop pass.
+    static_assert(MAX_PRINTERS <= 32, "the switch masks are 32 bits");
+    uint32_t g_switchWant = 0, g_switchOn = 0;
+    void handleApiPrinter() {
+        const int i = server.arg("i").toInt();
+        if (!server.hasArg("i") || i < 0 || i >= MAX_PRINTERS || printers[i].type == PT_NONE) {
+            server.send(400, "text/plain", "bad index"); return;
+        }
+        g_switchWant |= 1u << i;
+        if (server.arg("on") == "1") g_switchOn |= 1u << i; else g_switchOn &= ~(1u << i);
+        server.send(202, "text/plain", "ok");
+    }
+
     void handleLogin() {
-        if (ttcloud::haveSession()) { reply(wl(W_CONNECTED) + esc(ttcloud::email()), ""); return; }
+        if (ttcloud::haveSession()) { handleAccount(); return; }
 
         String h; h.reserve(7400);
         pageOpen(h);
@@ -1110,13 +1298,16 @@ namespace {
         String pass = server.arg("ttpass");
         String err;
         if (!ttcloud::signIn(mail, pass, err)) { reply(wl(W_LOGIN_FAIL), err); return; }
-        String s; ttcloud::syncNow(s);
-        reply(wl(W_ACCT_LINKED), s);
+        ttcloud::requestSync();
+        reply(wl(W_ACCT_LINKED), wl(W_SYNC_STARTED));
     }
+    // Neither handler syncs itself. Both run on the loop task: a sync there
+    // nested a TLS handshake inside the web handler and overflowed the loop's
+    // 8 KB stack the moment an email sign-in succeeded, and even when it fit,
+    // it held every screen still for the ten seconds the sync takes.
     void handleTtSync() {
-        String s;
-        bool ok = ttcloud::syncNow(s);
-        reply(ok ? wl(W_SYNCED) : wl(W_FAILED), s);
+        ttcloud::requestSync();
+        reply(wl(W_TT_ACCOUNT), wl(W_SYNC_STARTED));
     }
     void handleTtForget() {
         ttcloud::forget();
@@ -1223,7 +1414,7 @@ namespace {
         if (st == 1) {
             g_pairTok = "";
             if (ttcloud::signInWithCustomToken(ct, em, err)) {
-                String s; ttcloud::syncNow(s);
+                ttcloud::requestSync();
                 Serial.printf("[account] paired: %s\n", em.c_str());
             } else {
                 Serial.printf("[account] pairing sign-in failed: %s\n", err.c_str());
@@ -1241,8 +1432,8 @@ namespace {
         if (st == 1) {
             g_pairTok = "";
             if (!ttcloud::signInWithCustomToken(ct, em, err)) { reply(wl(W_LOGIN_FAIL), err); return; }
-            String s; ttcloud::syncNow(s);
-            reply(wl(W_ACCT_LINKED), s);
+            ttcloud::requestSync();
+            reply(wl(W_ACCT_LINKED), wl(W_SYNC_STARTED));
         } else if (st == 2) {
             g_pairTok = ""; reply(wl(W_PAIR_DENIED), wl(W_RESTARTING)); restartAt = millis() + 1500;
         } else if (st == 3) {
@@ -1295,6 +1486,8 @@ namespace {
         server.on("/api/join", HTTP_POST, handleApiJoin);
         server.on("/api/lang", handleApiLang);
         server.on("/api/tap",  handleApiTap);
+        server.on("/api/account", handleApiAccount);
+        server.on("/api/printer", handleApiPrinter);
         // Diagnostic: measure what each printer connection costs. The
         // report goes to the serial console; this only starts it.
         server.on("/api/memtest", []() {
@@ -1346,7 +1539,7 @@ namespace {
         server.on("/tt-login", HTTP_POST, handleTtLogin);
         server.on("/tt-gstart", handleTtGStart);   // GET: submits nothing, see handleLogin
         server.on("/tt-gpoll", handleTtGPoll);
-        server.on("/tt-sync", HTTP_POST, handleTtSync);
+        server.on("/tt-sync", handleTtSync);      // GET: a link, see handleAccount
         server.on("/tt-forget", handleTtForget);
 
         // The probe paths every phone asks for. Harmless on the local network,
@@ -1498,6 +1691,13 @@ const char* webcfg::apName() { buildNames(); return AP_SSID; }
 const char* webcfg::apPass() { buildNames(); return AP_PASS; }
 int webcfg::apClients()    { return apServed ? WiFi.softAPgetStationNum() : 0; }
 void webcfg::pairTick() { pairTick_(); }
+bool webcfg::takePrinterSwitch(int& index, bool& on) {
+    if (!g_switchWant) return false;
+    index = __builtin_ctz(g_switchWant);
+    on = g_switchOn & (1u << index);
+    g_switchWant &= ~(1u << index);
+    return true;
+}
 bool webcfg::webPairing(String& url, String& code, int& secondsLeft) {
     return webPairing_(url, code, secondsLeft);
 }
