@@ -113,7 +113,7 @@ K2-Plus/
 | `Images/` | Nobody downloads a case they cannot see. The slicer's own previews can be taken out of a 3MF (`Metadata/plate_1.png`, `top_1.png`) until there is a photo |
 | `Source/` | So the next person can adapt it instead of starting again. `.step` opens everywhere; a native file (`.f3d`) is welcome beside it |
 | `OriginalFiles/` | The bare parts, for any slicer and any printer |
-| `<Slicer>/*.3mf` | A 3MF saved from a slicer carries the orientation, the supports and the plate for that slicer's printers, and is tied to it. One directory per slicer: `BambuStudio/`, `CrealityPrint/`, `OrcaSlicer/`, `PrusaSlicer/` |
+| `<Slicer>/*.3mf` | A 3MF saved from a slicer carries the orientation, the supports and the plate for that slicer's printers, and is tied to it. One directory per slicer: `BambuStudio/`, `CrealityPrint/`, `FlashStudio/`, `OrcaSlicer/`, `PrusaSlicer/` |
 
 Variants of one design (the desktop stand with the spool on the left or on the
 right) are told apart by the file name, or by a `Left/` and `Right/` level where

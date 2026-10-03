@@ -43,23 +43,26 @@ is a rare decision.
 | Cover | [`tigerspool-creator5-cover.3mf`](OriginalFiles/tigerspool-creator5-cover.3mf) |
 | RFID reader holder | [`tigerspool-creator5-rfid.3mf`](OriginalFiles/tigerspool-creator5-rfid.3mf) |
 | Everything, one plate (Bambu Studio) | [`tigerspool-creator5-full.3mf`](BambuStudio/tigerspool-creator5-full.3mf) |
+| Everything, one plate (FlashForge's Flash Studio, for the Creator 5) | [`tigerspool-creator5-full.3mf`](FlashStudio/tigerspool-creator5-full.3mf) |
 
-The bare parts carry geometry only, for any slicer - FlashForge Orca included;
-the Bambu Studio project carries the orientation, the supports and the
-settings below.
+The bare parts carry geometry only, for any slicer; the two slicer projects
+carry the orientation, the supports and the settings below.
 
 <img src="Images/tigerspool-creator5-bambu-studio-plate.png" alt="The parts on the Bambu Studio plate" width="360">
 
 ## Print settings
 
-Saved from Bambu Studio for an A1 mini, 0.4 mm nozzle.
-
-| Setting | Value |
-|---|---|
-| Layer height | 0.20 mm |
-| Walls | 3 |
-| Infill | 15 % |
-| Supports | normal, placed by hand - they are in the project |
-| Material | PLA (Bambu PLA Basic in the project), two colours |
+| Setting | Bambu Studio | Flash Studio |
+|---|---|---|
+| Printer | A1 mini, 0.4 mm nozzle | Creator 5, 0.4 mm nozzle |
+| Layer height | 0.20 mm | 0.08 mm |
+| Walls | 3 | 2 |
+| Infill | 15 % | 15 % |
+| Supports | tree, placed by hand - they are in the project | the same |
+| Material | PLA (Bambu PLA Basic in the project), two colours | PLA |
 
 <img src="Images/tigerspool-creator5-bambu-studio-top.png" alt="The plate from above" width="360">
+
+## Source
+
+[`Source/tigerspool-creator5.f3d`](Source/tigerspool-creator5.f3d) - the Fusion design.

@@ -25,6 +25,17 @@ message, and reset it to this header.
   replaced and the link updated in README.md and docs/WIRING.md; the README's
   alt text said "TX to SDA, RX to SCL", the reverse of the table - fixed.
 
+### Fixed
+
+- Creator 5 / 5 Pro case: a design error in the frame, corrected in Fusion
+  (V5). `OriginalFiles/tigerspool-creator5-frame.3mf` replaced (6049 -> 8195
+  vertices); cover and reader holder unchanged, byte for byte. The Bambu Studio
+  project (`BambuStudio/tigerspool-creator5-full.3mf`) re-saved with the V5
+  frame, supports placed again, and its two plate previews refreshed. A Flash
+  Studio project for the Creator 5 itself added beside it
+  (`FlashStudio/tigerspool-creator5-full.3mf`, 0.08 mm, 2 walls). The Fusion
+  source is now in the repository, `Source/tigerspool-creator5.f3d`.
+
 ## 2026-09-28 - A faster, steadier screen, and the certified mark at send time (released in 1.70.0)
 
 ### Changed

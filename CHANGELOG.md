@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The FlashForge Creator 5 case has a corrected frame**, in the bare parts
+  and in the Bambu Studio project, and its Fusion source is published beside
+  them.
+
+### Added
+
+- **A Flash Studio project for the Creator 5**, beside the Bambu Studio one:
+  the case sliced for the printer it goes on.
+
 ## [1.70.0] - 2026-09-28
 
 ### Changed
