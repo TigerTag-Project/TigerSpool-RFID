@@ -53,6 +53,11 @@ void open() {
     // against, the same situation as a printer on the LAN; trust comes from
     // the account session Tiger Studio obtained. See net/tls.h.
     s_net->setInsecure();
+    // The TCP connect is bounded on its own: the client's default is thirty
+    // seconds, as long as the loop watchdog, and an internet link that has gone
+    // silent would take the whole box down with it. Longer than a LAN printer's
+    // four - this is a host across the internet.
+    s_net->setTimeout(8);
     s_net->setHandshakeTimeout(5);
     // A full report from a four-unit X1 is about 50 KB and has to fit whole.
     // It lands in PSRAM - anything over 4 KB does on this build - so the size

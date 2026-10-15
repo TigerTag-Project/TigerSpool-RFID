@@ -245,6 +245,12 @@ void BambuBackend::begin(const PrinterCfg& cfg) {
     // like to the person holding it. Nothing here is worth more than a few
     // seconds; a failed attempt is retried anyway.
     mqtt_.setSocketTimeout(4);
+    // The TCP connect has its own limit, and it is not either of the two around
+    // it: WiFiClientSecure waits THIRTY seconds for a host that does not
+    // answer, which is exactly the loop watchdog. A printer that is switched
+    // off then froze the panel for half a minute and restarted the box, again
+    // and again, until somebody turned the printer on.
+    net_.setTimeout(4);
     net_.setHandshakeTimeout(5);
     mqtt_.setCallback([this](char*, uint8_t* p, unsigned int l) { onMqtt(p, l); });
     lastTry_ = 0;
