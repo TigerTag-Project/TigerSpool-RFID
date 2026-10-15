@@ -101,8 +101,8 @@ real; taking it would have violated the principle underneath it.
 key set.
 
 **Why it needed rewriting:** a second set does exist — the legacy configuration
-page's table in `webcfg.cpp`. But it has a *different axis*: four languages where
-the device speaks eight. Comparing their key sets would produce a permanent,
+page's table in `webcfg.cpp`. But it has a *different axis*: ten columns where
+the device speaks eleven languages. Comparing their key sets would produce a permanent,
 meaningless failure.
 
 `check-i18n.py` therefore checks each table against **its own** enum, on its own

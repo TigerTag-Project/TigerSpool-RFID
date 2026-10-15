@@ -18,9 +18,9 @@ So these all compile cleanly today:
 Counting is not enough: order is the failure mode. This checks the comments
 against the enum position by position.
 
-There are two tables. The second is the four-language set in webcfg.cpp used by
-the legacy configuration page - a different axis from the device's eight, and
-checked on its own terms rather than against them.
+There are two tables. The second is the ten-column set in webcfg.cpp used by
+the legacy configuration page - a different axis from the device's eleven
+languages, and checked on its own terms rather than against them.
 """
 
 import pathlib
@@ -94,7 +94,7 @@ def main() -> int:
         check_table(problems, "STR", "firmware/src/i18n.cpp", rows, keys,
                     len(langs), ", ".join(langs))
 
-    # --- the legacy web table: a different, four-language axis -------------
+    # --- the legacy web table: a different, ten-column axis ------------------
     w = (REPO / "firmware/src/webcfg.cpp").read_text()
     wkeys = enum_members(w, "", "W_N") or []
     wkeys = [k for k in wkeys if k.startswith("W_")]
@@ -112,7 +112,7 @@ def main() -> int:
             r"/\*\s*(W_\w+)\s*\*/\s*\{(.*?)\}\s*,?\s*(?:(?://[^\n]*\n)\s*)*(?=/\*|\};)",
             w, re.S)
         check_table(problems, "WT", "firmware/src/webcfg.cpp", wrows, wkeys,
-                    int(m.group(1)), "the legacy page's four languages")
+                    int(m.group(1)), "the legacy page's ten columns")
 
     if checked == 0:
         print("error: found no translation tables to check", file=sys.stderr)
