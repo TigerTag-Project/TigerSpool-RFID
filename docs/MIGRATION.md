@@ -1,5 +1,11 @@
 # Migration from the prototype
 
+> **A historical record - the migration is done.** The firmware it planned is
+> the one in `firmware/src/`. The target directories named below (`printers/`,
+> `reader/`, ...) were not adopted: the sources stayed flat in `firmware/src/`,
+> one `backend_*` file per brand. [CODEMAP.md](../CODEMAP.md) is the map of what
+> exists. This file is kept for the prototype facts it records.
+
 TigerSpool is not written from scratch. A working prototype exists, was tested
 against four real printers, and is the source of every protocol fact in this
 repository. This document is the plan for turning it into the firmware described

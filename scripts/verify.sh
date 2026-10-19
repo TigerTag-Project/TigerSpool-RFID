@@ -59,11 +59,12 @@ step() {
 
 if [ "$MODE" = "fix" ]; then
   printf '\n\033[1m== regenerating\033[0m\n'
-  "$PY" firmware/tools/gen_db.py || { echo "generator failed - fix its input first"; exit 1; }
+  "$PY" firmware/tools/tigertag_db/gen_db.py || { echo "generator failed - fix its input first"; exit 1; }
 fi
 
 step "file format: line endings, marks, invisible characters" "$PY" scripts/check-file-format.py
 step "documentation: internal notes unpublished, links resolve" "$PY" scripts/check-docs.py
+step "agent rules indexed, named paths exist, web tables complete" "$PY" scripts/check-agent-rules.py
 step "documented reader wiring matches config.h" "$PY" scripts/check-wiring.py
 step "documented device names match the ones the firmware builds" "$PY" scripts/check-device-names.py
 step "printable cases: layout, names, no local paths" "$PY" scripts/check-models.py

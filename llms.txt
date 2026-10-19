@@ -18,8 +18,9 @@ look fine and are not, each of which cost somebody a debugging session.
 
 ## Working here
 
-- [AGENTS.md](AGENTS.md): repository layout, conventions, and a table of decisions that are settled and must not be re-litigated.
-- [CLAUDE.md](CLAUDE.md): non-negotiables with the consequence of ignoring each, hardware facts that bite, the four-command workflow, and a symptom-to-fix table for every guard.
+- [AGENTS.md](AGENTS.md): repository layout, and where the rules are.
+- [CLAUDE.md](CLAUDE.md): what the board is, the index of every rule (one line each, pointing at `.agents/rules/`), the workflow commands, and a symptom-to-fix table for every guard.
+- `.agents/rules/`: one file per rule, each with the rule, why it exists and how to apply it.
 - [CODEMAP.md](CODEMAP.md): what each source file owns, what it must not be asked to do, and the Landmines table.
 - [WORKLOG.md](WORKLOG.md): everything done since the last commit, in Keep a Changelog headings. Release notes are written from it, never from memory.
 - [docs/ADOPTING-THIS-STANDARD.md](docs/ADOPTING-THIS-STANDARD.md): which parts of this way of working transferred from a sibling project, which were dropped and why, and the guards no standard predicted. Read first if you are bringing another repository up to this line.

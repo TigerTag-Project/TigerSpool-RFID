@@ -8,8 +8,8 @@ No line numbers are recorded here: nothing verifies them, and a number nothing
 verifies is a number that lies. Grep for the symbol. If a file has outgrown what
 this says, say so rather than working around it.
 
-Build-level and hardware-level facts live in [CLAUDE.md](CLAUDE.md) and are not
-repeated here.
+Build-level and hardware-level rules live in `.agents/rules/`, indexed in
+[CLAUDE.md](CLAUDE.md#rules), and are not repeated here.
 
 ## Modules worth a note
 

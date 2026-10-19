@@ -4,13 +4,9 @@
 // User-visible strings.
 //
 // English first, because it is the fallback and the language the source is
-// written in. The rest follow TigerScale's locale set so the two products speak
-// the same languages.
-//
-// Chinese is deliberately absent: the compiled font carries no CJK glyphs, and
-// offering a language that renders as empty boxes is worse than not offering it.
-// Adding it means generating a CJK subset font the way TigerScale does
-// (scripts/make-cjk-font.sh there) - tracked in docs/MIGRATION.md.
+// written in. Then TigerScale's locale set, then the two Tiger Studio speaks
+// that TigerScale does not (Russian, Dutch), so the device offers the same list
+// as the desktop app.
 enum Lang : uint8_t {
     LANG_EN = 0,   // English
     LANG_FR,       // Francais
@@ -20,9 +16,9 @@ enum Lang : uint8_t {
     LANG_PL,       // Polski
     LANG_PT,       // Portugues (BR)
     LANG_PT_PT,    // Portugues (PT)
-    // Simplified Chinese. Last, so every language already stored in NVS keeps
-    // its index.
-    LANG_ZH,
+    // Every language after this point was appended, never inserted, so a
+    // language already stored in NVS keeps its index. Add new ones at the end.
+    LANG_ZH,       // Simplified Chinese
     LANG_RU,       // Russkij
     LANG_NL,       // Nederlands
     LANG_N

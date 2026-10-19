@@ -2,8 +2,8 @@
 
 What the firmware is made of, and why it is divided the way it is.
 
-This describes the **target** architecture. The prototype it derives from is
-close but not identical; [MIGRATION.md](MIGRATION.md) is the diff.
+[CODEMAP.md](../CODEMAP.md) maps it file by file.
+[MIGRATION.md](MIGRATION.md) records how it was carried over from the prototype.
 
 ---
 

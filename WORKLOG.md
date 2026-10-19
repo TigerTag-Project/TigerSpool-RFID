@@ -18,6 +18,34 @@ message, and reset it to this header.
 
 ## Unreleased
 
+### Changed
+
+- The rules for working here are one file each in `.agents/rules/` (27, each
+  with Rule / Why / How), indexed one line per rule in `CLAUDE.md`, which now
+  holds the board facts, that index, the commands and the remedy table.
+  `AGENTS.md` keeps the layout and points at the index instead of repeating
+  rules. The maintainer's pre-commit checklist became the
+  `worklog-changelog.md` rule.
+- New guard `scripts/check-agent-rules.py`, run by `verify.sh`: every rule file
+  is indexed and every index line has its file; every path named in
+  `CLAUDE.md`, `AGENTS.md` or a rule exists (gitignored ones excepted); the
+  Wi-Fi portal page and the web installer have every English key in every
+  language. Mutation-tested: an unindexed rule, a dangling index line, a wrong
+  path inside a command and a key missing in one language each fail it.
+- "NFC Tester" translated in French, Spanish, Italian, Polish and both
+  Portuguese.
+
+### Fixed
+
+- `verify.sh --fix` called `firmware/tools/gen_db.py`, which does not exist;
+  it now runs `firmware/tools/tigertag_db/gen_db.py`.
+- Comments and docs that contradicted the code: `i18n.h` said Chinese was
+  absent and that Chinese was the last language; `CONTRIBUTING.md` said the
+  firmware was not written, that Elegoo and Anycubic had no backend and that
+  translations were JSON; `ARCHITECTURE.md` called itself a target;
+  `AGENTS.md` gave the font range without Cyrillic. `MIGRATION.md` is marked
+  as a historical record whose target layout was not adopted.
+
 ## 2026-10-12 - Russian and Dutch (released in 1.72.0)
 
 ### Added

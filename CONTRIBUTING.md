@@ -1,7 +1,8 @@
 # Contributing
 
-Thanks for being here. TigerSpool is early — the design is settled, the firmware
-is not written yet — so the most valuable contributions right now are not code.
+Thanks for being here. The firmware is released and updates itself over the
+air; six printer brands are supported. Code is welcome, and so is what code
+cannot produce: tests on real printers, cases, and translations.
 
 Talk to us on **[Discord](https://discord.gg/3Qv5TSqnJH)**.
 
@@ -9,29 +10,18 @@ Talk to us on **[Discord](https://discord.gg/3Qv5TSqnJH)**.
 
 ## What would help most, in order
 
-### 1. Elegoo and Anycubic, on printers we haven't captured
+### 1. Test on a printer we support, especially one we have not seen
 
-Both are targeted for v1 and neither has a firmware backend yet. Unlike the other
-protocols here, though, **neither needs reverse-engineering**: both are documented
-and working in
-[Tiger Studio](https://github.com/TigerTag-Project/TigerTag-Studio-Manager)
-(`renderer/printers/{elegoo,anycubic}/PROTOCOL.md`), from live captures of the
-vendors' slicers.
-
-Those captures come from **specific machines**. What is genuinely useful:
-
-- **Confirming the protocol holds on other models** in each brand's range.
-- **Testing** once the backends exist — particularly Anycubic, whose broker
-  insists on TLS 1.2 and requests an optional client certificate. Whether the
-  ESP32's TLS stack handles that can only be answered on hardware.
-
-See [docs/PRINTER-COMPATIBILITY.md](docs/PRINTER-COMPATIBILITY.md).
+A report saying "Creality K2, firmware 1.1.3.13, works" or "stopped working
+after the September update" is worth a lot: every protocol here except
+Snapmaker's is reverse-engineered, vendors change them without notice, and each
+backend was proven on specific machines only.
+[docs/PRINTER-COMPATIBILITY.md](docs/PRINTER-COMPATIBILITY.md) says which.
 
 ### 2. Read the architecture and argue with it
 
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes firmware that has not been
-written. That is the cheapest possible moment to find out it is wrong. Open an
-issue if something does not hold up.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes how the firmware is
+divided and why. Open an issue if something does not hold up.
 
 ### 3. Design a case
 
@@ -39,24 +29,14 @@ issue if something does not hold up.
 identical for every model — only the shell changes. A case that has been printed
 and used beats one that has been designed.
 
-### 4. Test on a printer we support
-
-Once there is firmware. A report saying "Creality K2, firmware 1.1.3.13, works"
-or "stopped working after the September update" is worth a lot: every protocol
-here except Snapmaker's is reverse-engineered and vendors change them without
-notice.
-
 ---
 
 ## Firmware contributions
 
-The firmware is not migrated yet. Until it is, please open an issue before
-writing code — you would be building against a tree that is about to arrive.
-
-When it is here:
-
-**Read [docs/MIGRATION.md](docs/MIGRATION.md) first.** It lists the hardware facts
-that must not be lost. Most of them look like arbitrary constants.
+Open an issue before a large change, so nobody builds the same thing twice.
+Read [AGENTS.md](AGENTS.md) and [CODEMAP.md](CODEMAP.md) first: they say where
+each thing lives and which constants only look arbitrary. Run
+`bash scripts/verify.sh` before opening the pull request - it is what CI runs.
 
 **Rules that are not negotiable:**
 
@@ -110,9 +90,12 @@ wish rather than something anyone can act on.
 
 The firmware speaks eleven languages - the nine of
 [TigerScale V3](https://github.com/TigerTag-Project/Tiger-Scale-V3), plus Russian
-and Dutch, which Tiger Studio also speaks. Once the
-locale files exist, translating is a matter of editing JSON — no build tools
-needed, and it is a genuinely useful first contribution.
+and Dutch, which Tiger Studio also speaks. Every string lives in a table, one
+row per string and one column per language: `firmware/src/i18n.cpp` for the
+screen, the `WT` table in `firmware/src/webcfg.cpp` for the sign-in pages,
+`firmware/src/net/portal_page.h` for the Wi-Fi page and `installer/i18n.js` for
+the web installer. Correcting a translation is a genuinely useful first
+contribution.
 
 Two constraints: the device screen is 240 px wide, so a string that is twice as
 long in your language will be cut off; and the fonts are generated from the

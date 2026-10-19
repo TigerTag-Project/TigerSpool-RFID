@@ -10,8 +10,8 @@ because they are there. The list below is how it stays a standard — by recordi
 what was dropped, and why, in enough detail that the next project can tell
 whether the same reason applies to it.
 
-The ten principles behind it are in [AGENTS.md](../AGENTS.md) and
-[CLAUDE.md](../CLAUDE.md). This is about the instances.
+The rules behind it are indexed in [CLAUDE.md](../CLAUDE.md#rules), one file
+each in `.agents/rules/`. This is about the instances.
 
 ---
 
@@ -183,8 +183,8 @@ a log rather than inferred.
 Recorded because a list of exceptions with no baseline reads as though the
 standard mostly failed. It mostly worked.
 
-- **"Things that are settled — do not re-litigate."** The highest-value table in
-  `AGENTS.md`, and the cheapest to write.
+- **"Things that are settled — do not re-litigate."** The highest-value rule,
+  and the cheapest to write: `.agents/rules/settled-decisions.md`.
 - **One command that runs everything CI runs.** With one honest exception, named
   in `CLAUDE.md`: CI re-derives the font range, a bench without `.pio` cannot.
 - **Every rule carries the incident that earned it.** Every guard's header names
