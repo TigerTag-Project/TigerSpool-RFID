@@ -7,6 +7,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.73.0] - 2026-11-03
+
+### Added
+
+- **Klipper printers.** Any Klipper printer added to Tiger Studio - Voron,
+  RatRig, Sovol, Qidi, a FlashForge Creator 5 Pro on OpenCreator... - now
+  appears on the box. With **AFC** (Box Turtle, OpenCreator) its lanes are
+  shown and a scanned spool is written into one; with **Happy Hare** (ERCF,
+  Tradrack) the same for its gates. Nothing to install on the printer: the box
+  uses AFC's and Happy Hare's own commands. A Moonraker port other than 7125
+  and an API key are read from your account. A Klipper printer with neither
+  system keeps no filament data, so its extruders are shown but cannot be
+  written.
+
+### Changed
+
+- **"NFC Tester" is translated** in French, Spanish, Italian, Polish and both
+  Portuguese.
+
 ## [1.72.0] - 2026-10-12
 
 ### Added

@@ -18,6 +18,8 @@ message, and reset it to this header.
 
 ## Unreleased
 
+## 2026-11-03 - Klipper printers, rules one per file (released in 1.73.0)
+
 ### Added
 
 - Klipper printers (issue #31): `backend_klipper.cpp`, any Klipper + Moonraker
