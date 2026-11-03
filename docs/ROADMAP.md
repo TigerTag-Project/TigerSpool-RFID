@@ -9,6 +9,23 @@ Anything already broken lives in [reviews/](reviews/), not here.
 
 ---
 
+## Spoolman: a slot for printers that keep no filament
+
+**Blocked on a decision.** A Klipper printer without AFC or Happy Hare, and
+every OctoPrint printer, keeps no filament identity at all: there is no command
+that would store a scanned spool anywhere on the printer. The device shows a
+plain Klipper's extruders and refuses to write them, and does not import
+OctoPrint printers, exactly as Tiger Studio shows them no filament card.
+
+The one bridge both have is **Spoolman** - a Moonraker component on Klipper, a
+plugin on OctoPrint - where "the active spool is this one" can be said. Before
+anything is built, decide **how a TigerTag chip maps to a Spoolman spool**:
+create one when none matches, find it by the chip's UID in an extra field, or
+something Tiger Studio defines first. Studio does not do it yet either, and the
+two should do it the same way.
+
+---
+
 ## The account: a heartbeat
 
 **The device never writes to the account.** It reads printers, the profile and

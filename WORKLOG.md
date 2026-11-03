@@ -18,6 +18,38 @@ message, and reset it to this header.
 
 ## Unreleased
 
+### Added
+
+- Klipper printers (issue #31): `backend_klipper.cpp`, any Klipper + Moonraker
+  machine imported from the account's `klipper` brand. As Tiger Studio's
+  driver does, `printer.objects.list` decides the slots - Happy Hare gates
+  (`0`..`n-1`, written with `MMU_GATE_MAP`), AFC lanes (`1`..`n`, written with
+  `SET_MATERIAL` / `SET_COLOR`; a lane published as both `AFC_stepper` and
+  `AFC_lane` is listed once), or plain extruders, shown and never written. No
+  macro to install on the printer. The port can ride in `ip` ("host:7126")
+  and the reachability probe uses it; an optional `apiKey` from the account is
+  presented with `server.connection.identify`, and nothing else is sent until
+  it is accepted. Moonraker's once-a-second notifications are skipped before
+  parsing. Load budget 5, like Snapmaker - not measured. @BastiMila's fork
+  proved the Moonraker transport on a Creator 5 Pro with OpenCreator; this
+  uses AFC's and Happy Hare's own commands instead of a macro on the printer.
+  A material goes out with '_' for its spaces and is shown with spaces again.
+  Checked on the bench board (1.72.0 + this), against the mock, through a
+  Klipper printer added manually in Tiger Studio: AFC detected with 4 lanes
+  (each lane published twice, listed once), colours drawn, two scanned spools
+  written (`SET_MATERIAL` / `SET_COLOR`) and read back; Happy Hare 4 gates, a
+  scan wrote `MMU_GATE_MAP GATE=2 ...` and the gate redrew; plain extruders
+  shown as T0 / T1 after the mock changed profile. Not run on a real printer,
+  and the refusal to write a plain extruder was not tried on the device.
+  Tiger Studio's Demo Klipper cannot stand in: it answers HTTP only and 404s
+  `/websocket`.
+- `scripts/moonraker-ws-mock.py`: a Moonraker WebSocket mock (plain, Happy
+  Hare, AFC with doubled lane objects, optional API key, notify pushes) to run
+  the backend against without a printer. Checked with a local client: the key
+  is enforced, writes land in the state, an unknown lane is refused.
+- Roadmap: Spoolman, for a plain Klipper and for OctoPrint, blocked on how a
+  TigerTag chip maps to a Spoolman spool.
+
 ### Changed
 
 - The rules for working here are one file each in `.agents/rules/` (27, each

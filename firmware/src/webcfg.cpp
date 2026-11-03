@@ -1156,7 +1156,7 @@ namespace {
         // seconds; a switch that waited for it felt dead. main.cpp decides in
         // the same loop pass that takes the request, so the read-back right
         // after it is the verdict: a refusal (the load budget) puts it back.
-        h += F("<script>var B=['','Creality','FlashForge','Bambu Lab','Snapmaker','Elegoo','Anycubic'],"
+        h += F("<script>var B=['','Creality','FlashForge','Bambu Lab','Snapmaker','Elegoo','Anycubic','Klipper'],"
                "$=function(i){return document.getElementById(i)},"
                "L=$('pl'),S=$('st'),Y=$('sy'),D=$('dr'),K=$('bd'),C=$('cnt'),NONE='"); h += wl(W_NONE);
         h += F("',BUSY='"); h += wl(W_SYNC_STARTED);

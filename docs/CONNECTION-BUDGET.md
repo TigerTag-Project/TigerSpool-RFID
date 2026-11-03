@@ -76,6 +76,7 @@ a printer that does not speak TLS, the earlier one is kept.
 | **Each further Anycubic in cloud mode** | *not measured* ([#19](https://github.com/TigerTag-Project/TigerSpool-RFID/issues/19)) | **6** | 4 |
 | **Creality** | 4.5 KB | **6** | 6 (5.6 KB) |
 | **Snapmaker** | 4.7 KB | **5** | 5 |
+| **Klipper** | *not measured* - the same WebSocket client and Moonraker as Snapmaker | **5** | - |
 | **Elegoo** | 0.7 KB | **3** | 3 (2.5 KB) |
 | **FlashForge** | 0.1 KB | **2** | 2 (2.0 KB) |
 

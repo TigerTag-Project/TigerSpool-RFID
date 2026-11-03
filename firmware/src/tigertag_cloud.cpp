@@ -264,6 +264,8 @@ namespace {
         // this by looksCloud(): it has no open local port to connect to, and
         // reaching it needs Anycubic's own service rather than this backend.
         if (brand == "anycubic")   return PT_ANYCUBIC;                              // MQTT/TLS :9883
+        // Any Klipper + Moonraker machine; the backend detects AFC or Happy Hare.
+        if (brand == "klipper")    return PT_KLIPPER;                               // Moonraker ws :7125
         return PT_NONE;
     }
 }
@@ -499,16 +501,16 @@ bool ttcloud::syncNow(String& summary) {
     if (!ensureToken()) { summary = g_lastResult = "TigerTag: sessao invalida"; return false; }
     fetchProfile();
 
-    // All six brands are read. Two of them have no backend yet, and they are
-    // fetched anyway so the log can say why they do not appear rather than
-    // leaving the user to guess. See docs/PRINTER-COMPATIBILITY.md.
+    // Every brand with a backend is read. A brand Tiger Studio knows and this
+    // list does not (OctoPrint, Prusa) never reaches the device at all - see
+    // docs/PRINTER-COMPATIBILITY.md.
     const char* BRANDS[] = { "creality", "flashforge", "bambulab",
-                             "snapmaker", "elegoo", "anycubic" };
+                             "snapmaker", "elegoo", "anycubic", "klipper" };
     // Each brand maps to exactly one backend type, which is what makes it
     // possible to say "these stored printers came from that brand" when its
     // request fails. Kept beside the list above so the two cannot drift.
     const PrinterType BRAND_TYPE[] = { PT_CREALITY, PT_FF_C5, PT_BAMBU,
-                                       PT_SNAPMAKER, PT_ELEGOO, PT_ANYCUBIC };
+                                       PT_SNAPMAKER, PT_ELEGOO, PT_ANYCUBIC, PT_KLIPPER };
     String base = String("https://firestore.googleapis.com/v1/projects/") + PROJECT +
                   "/databases/(default)/documents";
     // The fields this import reads, in ONE list.
@@ -535,6 +537,8 @@ bool ttcloud::syncNow(String& summary) {
         "serial", "serialNumber", "sn", "deviceId",
         "password", "dev_access_code", "accessCode", "access_code", "checkCode",
         "mqttPassword", "username", "acuModelId",
+        // A Klipper printer's optional Moonraker API key.
+        "apiKey",
         // An Anycubic in cloud mode: its broker key and machine type, and the
         // Anycubic account's email and workbench token that sign the session.
         "key", "machineType", "cloudPrinterId", "cloudEmail", "cloudToken",
@@ -702,6 +706,8 @@ bool ttcloud::syncNow(String& summary) {
                     // access code (FF checkCode / Bambu LAN) in the "password" field
                     p.cc = fsAny(f, { "password", "dev_access_code", "accessCode", "access_code", "checkCode",
                                   "mqttPassword" });
+                    // Klipper: the Moonraker API key, when the printer wants one.
+                    if (t == PT_KLIPPER) p.cc = fsStr(f, "apiKey");
                 }
                 if (t == PT_ANYCUBIC) {
                     // Logged in full because all three come from the account and

@@ -5,7 +5,7 @@
 // How many printers the device carries from the account.
 //
 // It was eight, and eight was wrong for a reason that only shows up on a real
-// account: the import walks the six brands in a fixed order and stops when it
+// account: the import walks the brands in a fixed order and stops when it
 // is full, so an account with more printers than this does not lose a random
 // eight - it loses the LAST BRANDS ALPHABETICALLY IN THAT LIST, every time.
 // Elegoo and Anycubic are last. A user who owned one of each would have found
@@ -24,7 +24,8 @@ enum PrinterType : uint8_t {
     PT_BAMBU     = 3,   // MQTT/TLS :8883
     PT_SNAPMAKER = 4,   // Moonraker WebSocket :7125
     PT_ELEGOO    = 5,   // MQTT :1883, no TLS
-    PT_ANYCUBIC  = 6    // MQTT/TLS :9883, self-signed
+    PT_ANYCUBIC  = 6,   // MQTT/TLS :9883, self-signed
+    PT_KLIPPER   = 7    // Moonraker WebSocket :7125 unless the account names a port
 };
 
 // One printer, as imported from the user's TigerTag account.
@@ -45,7 +46,7 @@ struct PrinterCfg {
     String name;        // shown on the home screen
     String host;        // IP address on the LAN
     String sn;          // serial number (FlashForge, Bambu Lab)
-    String cc;          // check code / access code / broker password
+    String cc;          // check code / access code / broker password / Moonraker API key
     // Reachable only through the maker's cloud, not on this network. Bambu
     // Lab's cloud is READ-ONLY by design: the broker accepts a report
     // subscription and refuses the commands that set a tray, so a slot on such
@@ -68,6 +69,20 @@ struct PrinterCfg {
 // whose broker refuses the tray commands. An Anycubic in cloud mode is not one
 // of them - its cloud broker takes the same writes as its LAN one.
 inline bool readOnly(const PrinterCfg& p) { return p.cloud && p.type == PT_BAMBU; }
+
+// A host may carry its port, "192.168.1.50:7126": Tiger Studio stores a
+// Klipper printer's non-default Moonraker port inside `ip` that way, and
+// several Moonraker instances on one host differ only by it.
+inline String hostOnly(const String& host) {
+    const int c = host.lastIndexOf(':');
+    return (c > 0 && host.indexOf(':') == c) ? host.substring(0, c) : host;
+}
+inline uint16_t portOf(const String& host, uint16_t fallback) {
+    const int c = host.lastIndexOf(':');
+    if (c <= 0 || host.indexOf(':') != c) return fallback;
+    const long p = host.substring(c + 1).toInt();
+    return (p > 0 && p < 65536) ? (uint16_t)p : fallback;
+}
 
 // What the printer says is currently in one slot.
 struct SlotState {

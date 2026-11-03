@@ -114,6 +114,7 @@ and agree on nothing above it, including whether there is any TLS.
 | FlashForge | HTTP POST, port 8898 | JSON with credentials in every request body |
 | Bambu Lab | MQTT over TLS, port 8883 | JSON commands on `device/{SN}/request` |
 | Snapmaker | WebSocket, port 7125 | Moonraker JSON-RPC 2.0, no auth |
+| Klipper | WebSocket, port 7125 or the account's | Moonraker JSON-RPC 2.0, optional API key; AFC or Happy Hare G-code |
 | Elegoo | MQTT, port 1883, **plain TCP** | numbered JSON methods on `elegoo/{sn}/…` topics |
 | Anycubic | MQTT over TLS, port 9883 | JSON actions on an `anycubic/…/multiColorBox` topic |
 

@@ -49,6 +49,7 @@ This is the single most consequential fact for the firmware. Observed, per brand
 | Brand | Reachability | Fields that matter |
 |---|---|---|
 | **Snapmaker** | LAN | `ip` only — Moonraker needs no authentication |
+| **Klipper** | LAN | `ip`, as `host` or `host:port` when Moonraker is not on 7125; optional `apiKey` |
 | **Creality** | LAN | `ip`, `discovery.transport: "ws-9999"` |
 | **FlashForge** | LAN | `ip`, `serialNumber`, `checkCode` *(also mirrored as `password`)* |
 | **Bambu Lab** | LAN | `ip`, serial, access code |

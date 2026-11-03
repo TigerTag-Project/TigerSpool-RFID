@@ -69,6 +69,9 @@ inline uint16_t loadSlotsFor(const PrinterCfg& p, bool sharesCloud) {
         // Replace them with readings.
         case PT_ANYCUBIC:  return 6;
         case PT_SNAPMAKER: return 5;
+        // Same client and server as Snapmaker; NOT measured - no Klipper printer
+        // on the bench. Replace with a reading.
+        case PT_KLIPPER:   return 5;
         case PT_CREALITY:  return 6;
         case PT_ELEGOO:    return 3;
         case PT_FF_C5:     return 2;

@@ -287,6 +287,7 @@ which grades each on three levels — ✅ automatic, ⚙️ one setup step,
 | **Snapmaker** | ✅ implemented, proven on hardware | Moonraker over WebSocket |
 | **Elegoo** | ✅ implemented, reading proven on hardware | MQTT |
 | **Anycubic** | ✅ implemented, proven on hardware - LAN and cloud mode | MQTT over TLS |
+| **Klipper** | 🧪 implemented, not yet proven on a printer | Moonraker over WebSocket |
 
 </div>
 
@@ -305,6 +306,7 @@ works the same way.
 | **Anycubic**<br>Anycubic Kobra 3<br>Anycubic Kobra 3 V2<br>Anycubic Kobra 3 Max<br>Anycubic Kobra 3 Max V2<br>Anycubic Kobra S1<br>Anycubic Kobra X | LAN<br>Cloud | Your choice. **LAN mode**: pair the printer once in AnycubicSlicerNext - its credentials come from there, through Tiger Studio. **Anycubic Cloud**: add it to Tiger Studio in cloud mode; TigerSpool connects beside Tiger Studio without taking its place. |
 | **Elegoo**<br>Elegoo Centauri 2<br>Elegoo Centauri 2 Combo<br>Elegoo Centauri Carbon 2<br>Elegoo Centauri Carbon 2 Combo | LAN | Nothing: the access code comes from your account. |
 | **Snapmaker**<br>Snapmaker U1 | LAN | Nothing. |
+| **Klipper**<br>Any Klipper + Moonraker printer with **AFC** (Box Turtle, OpenCreator on a Creator 5 Pro...) or **Happy Hare** (ERCF, Tradrack...) | LAN | Nothing to install: add it to Tiger Studio as a Klipper printer, with its port and Moonraker API key if it needs one. Without AFC or Happy Hare, Klipper keeps no filament data: the extruders are shown, nothing can be written. |
 
 </div>
 
@@ -315,7 +317,7 @@ the printer to LAN mode to write.
 Slot names match the ones the printer and Tiger Studio use — `Ext.` plus
 `1A`–`1D` on Creality and FlashForge, `A1`–`A4` then `B1`–`B4` on Bambu,
 `E1`–`E4` on Snapmaker, `S1`–`S4` on Elegoo, `A1`–`A4` per ACE unit on
-Anycubic. An Elegoo **Combo** has the CANVAS unit and its four colours,
+Anycubic, lanes `1`–`n` on Klipper with AFC and gates `0`–`n` with Happy Hare. An Elegoo **Combo** has the CANVAS unit and its four colours,
 `S1`–`S4`; a Centauri without it has the single `Ext.` slot. The table and its two traps are in the compatibility document.
 
 ## How many printers at once
@@ -337,6 +339,7 @@ takes what its connection costs:
 | Each further Anycubic in cloud mode | 6 - they share one connection |
 | Creality | 6 |
 | Snapmaker | 5 |
+| Klipper | 5 - not measured yet |
 | Elegoo | 3 |
 | FlashForge | 2 |
 
