@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.74.0] - 2026-11-04
+
+### Added
+
+- **The sign-in and account pages on your phone now speak your language.**
+  The pages the box opens when you scan its QR code - sign in to TigerTag,
+  pair with Google, your account - were in four languages; they now follow
+  the eleven the box speaks, German, Italian, Polish, Chinese, Russian and
+  Dutch included.
+
 ## [1.73.0] - 2026-11-03
 
 ### Added

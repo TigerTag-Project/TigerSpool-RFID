@@ -18,6 +18,18 @@ message, and reset it to this header.
 
 ## Unreleased
 
+## 2026-11-04 - The sign-in and account pages in eleven languages (released in 1.74.0)
+
+### Added
+
+- The pages the device serves to a phone - TigerTag sign-in, Google pairing
+  wait, account page, the short replies - in every language the panel speaks
+  (PR #28, @Ptitlouis6012): the `WT` table in `webcfg.cpp` gains DE, IT, PL,
+  ZH, RU and NL (ten columns, the two Portuguese share one), `wl()` maps each
+  language. Checked on the bench board: the account page in all six new
+  languages and the sync reply in Russian and Chinese, rendered in a browser;
+  the sign-in form itself was not opened (it needs the account signed out).
+
 ## 2026-11-03 - Klipper printers, rules one per file (released in 1.73.0)
 
 ### Added
