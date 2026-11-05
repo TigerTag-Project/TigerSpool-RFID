@@ -681,6 +681,8 @@ void onAction(lv_event_t* e) {
 void onBright(lv_event_t* e) { s_newBright = (int)(intptr_t)lv_event_get_user_data(e); }
 void onSleep(lv_event_t* e)  { s_newSleep  = (int)(intptr_t)lv_event_get_user_data(e); }
 void onRotate(lv_event_t* e) { s_newRot    = (int)(intptr_t)lv_event_get_user_data(e); }
+volatile int s_newWeightSrc = -1;
+void onWeightSrc(lv_event_t* e) { s_newWeightSrc = (int)(intptr_t)lv_event_get_user_data(e); }
 
 // A row of exclusive choices. Each option is 44 px tall, which is the floor for
 // something you tap without looking twice.
@@ -774,6 +776,7 @@ Action takeAction()   { Action v = s_action; s_action = A_NONE; return v; }
 int  takeBrightness() { int v = s_newBright; s_newBright = -1; return v; }
 int  takeSleep()      { int v = s_newSleep;  s_newSleep  = -1; return v; }
 int  takeRotation()   { int v = s_newRot; s_newRot = ROT_NONE; return v; }
+int  takeWeightSource() { int v = s_newWeightSrc; s_newWeightSrc = -1; return v; }
 
 // A card: the row style's outline around a flex column, no fill.
 static lv_obj_t* wifiCard(lv_obj_t* parent, lv_coord_t padV) {
@@ -920,9 +923,20 @@ void showWifi(const char* ssid, const char* ip, const char* mac, bool connected,
                   []() { s_action = A_CHANGE_WIFI; });
 }
 
-void showAccount(const char* email, int printers, bool linked) {
+// Chip or account, as the same pair of chips as every other choice here. Not
+// static: a static array holding i18n::T() keeps the first language it saw.
+static void weightSourceRow(lv_obj_t* body, bool fromCloud) {
+    kv(body, i18n::T(S_WEIGHT_FROM),
+       i18n::T(fromCloud ? S_SRC_CLOUD : S_SRC_CHIP), theme::TEXT);
+    const char* const wl[] = { i18n::T(S_SRC_CHIP), i18n::T(S_SRC_CLOUD) };
+    static const int wv[] = { 0, 1 };
+    segmented(body, wl, wv, 2, fromCloud ? 1 : 0, onWeightSrc);
+}
+
+void showAccount(const char* email, int printers, bool linked, bool weightFromCloud) {
     lvgl_port::Lock lvglGuard;   // LVGL is not reentrant - see lvgl_port.h
-    uint32_t sig = hashOf(email) ^ ((uint32_t)printers << 8) ^ (uint32_t)linked;
+    uint32_t sig = hashOf(email) ^ ((uint32_t)printers << 8) ^ (uint32_t)linked
+                 ^ (weightFromCloud ? 0x40000000u : 0u);
     if (sameView((const void*)showAccount, sig)) return;
     claimView((const void*)showAccount, sig);
 
@@ -932,6 +946,8 @@ void showAccount(const char* email, int printers, bool linked) {
 
     if (!linked) {
         frame::caption(i18n::T(S_ADD_WEB), theme::TEXT_DIM);
+        gap(body, 22);
+        weightSourceRow(body, weightFromCloud);
         return;
     }
 
@@ -946,6 +962,8 @@ void showAccount(const char* email, int printers, bool linked) {
     char n[32];
     snprintf(n, sizeof(n), "%d", printers);
     kv(body, i18n::T(S_PRINTER), n, theme::TEXT);
+    gap(body, 16);
+    weightSourceRow(body, weightFromCloud);
 
     lv_obj_t* spacer = lv_obj_create(body);
     lv_obj_remove_style_all(spacer);

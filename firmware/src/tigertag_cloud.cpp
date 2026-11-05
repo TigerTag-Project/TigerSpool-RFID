@@ -257,6 +257,7 @@ namespace {
         if (brand == "flashforge") return (m == 5 || m == 6) ? PT_FF_C5 : PT_NONE;
         if (brand == "bambulab")   return PT_BAMBU;                                // protocolo LAN comum
         if (brand == "snapmaker")  return PT_SNAPMAKER;                             // Moonraker ws :7125
+        if (brand == "klipper")    return PT_KLIPPER;                              // Moonraker ws :7125, AFC
         // Elegoo speaks one protocol across the range - the Centauri Carbon
         // family and everything after it - so there is no model to check.
         if (brand == "elegoo")     return PT_ELEGOO;                                // MQTT :1883
@@ -1052,6 +1053,8 @@ bool ttcloud::consumeChanged() { bool v = g_changed; g_changed = false; return v
 //  that reloads printers[] through loadCfg() once asyncDone() turns true.
 // ---------------------------------------------------------------------------
 static volatile bool g_asyncBusy = false;
+// A read of the spool's stock from the account; see requestSpool() at the foot of the file.
+static volatile bool g_spoolBusy = false;
 static volatile bool g_asyncDone = false;
 static String        g_asyncSummary;
 
@@ -1078,7 +1081,7 @@ bool ttcloud::needsRoom() { return g_wantRoom; }
 
 bool ttcloud::startAsyncSync() {
     // A presence beat on its own task shares the session token: one at a time.
-    if (g_asyncBusy || ttcloud::heartbeatBusy()) return false;
+    if (g_asyncBusy || g_spoolBusy || ttcloud::heartbeatBusy()) return false;
 
     // Ask for the room BEFORE trying, not after failing.
     //
@@ -1413,7 +1416,7 @@ void heartbeatTaskFn(void*) {
 }  // namespace
 
 bool ttcloud::startAsyncHeartbeat(const Presence& p, bool full) {
-    if (g_hbBusy || g_hbDone || g_asyncBusy) return false;
+    if (g_hbBusy || g_hbDone || g_asyncBusy || g_spoolBusy) return false;
     g_hbP = p;
     const int n = p.printerIdCount < MAX_PRINTERS ? p.printerIdCount : MAX_PRINTERS;
     for (int i = 0; i < n; i++) g_hbIds[i] = p.printerIds[i];
@@ -1440,3 +1443,99 @@ bool ttcloud::takeHeartbeat(bool& ok, bool& full, String& err) {
     g_hbDone = false;
     return true;
 }
+
+
+// ---- the spool's stock, from the account -----------------------------------
+//
+// See SpoolStock in tigertag_cloud.h. The session token is shared with the
+// account sync and the presence beat, so the three never overlap: this task does
+// not start while either runs, and neither starts while this one does.
+namespace {
+    // One answer is kept, for one chip. The requester sets the uid before the
+    // task starts and does not touch it while g_spoolBusy is set, so the task and
+    // the loop never write the same String at once.
+    String              g_stockUid;
+    ttcloud::SpoolStock g_stock;
+    uint32_t            g_stockStart = 0;    // when the running read started
+    uint32_t            g_stockAt    = 0;    // when the held answer arrived
+    volatile bool       g_stockDone  = false;
+    // A spool can be weighed again. An answer older than this is a wrong one.
+    const uint32_t      STOCK_TTL_MS = 30UL * 1000;
+
+    String stockKey(const String& chipUid) {
+        String k = chipUid; k.trim(); k.toUpperCase();   // the document id is uppercase hex
+        return k;
+    }
+
+    void stockTaskFn(void*) {
+        ttcloud::SpoolStock r;
+        const String uid = g_stockUid;
+        const uint32_t t0 = millis();
+        int code = -3;
+        if (ensureToken()) {
+            // Only the fields this reads: the document carries links, colours and
+            // a rack position that nothing here has any use for.
+            const String url = String("https://firestore.googleapis.com/v1/projects/") + PROJECT +
+                               "/databases/(default)/documents/users/" + g_uid + "/inventory/" + uid +
+                               "?mask.fieldPaths=weight_available&mask.fieldPaths=measure_gr"
+                               "&mask.fieldPaths=measure&mask.fieldPaths=deleted";
+            String resp;
+            code = httpsGET(url, resp, g_idToken.c_str());
+            if (code == 200) {
+                JsonDocument d;
+                if (!deserializeJson(d, resp)) {
+                    JsonObjectConst f = d["fields"];
+                    if (fsBool(f, "deleted") != 1) {
+                        const String w = fsStr(f, "weight_available");
+                        String m = fsStr(f, "measure_gr");
+                        if (!m.length()) m = fsStr(f, "measure");
+                        if (w.length()) r.netGrams   = (int)w.toFloat();
+                        if (m.length()) r.totalGrams = (int)m.toFloat();
+                    }
+                }
+            }
+        }
+        Serial.printf("[spool] inventory/%s -> http=%d net=%d total=%d in %lu ms\n",
+                      uid.c_str(), code, r.netGrams, r.totalGrams, (unsigned long)(millis() - t0));
+        g_stock = r;
+        g_stockAt = millis();
+        g_stockDone = true;
+        g_spoolBusy = false;       // last, so a reader that sees "not busy" sees the answer
+        vTaskDelete(nullptr);
+    }
+}  // namespace
+
+bool ttcloud::requestSpool(const String& chipUid) {
+    const String uid = stockKey(chipUid);
+    if (uid.isEmpty() || g_uid.isEmpty() || g_spoolBusy) return false;
+    if (g_stockDone && uid == g_stockUid && millis() - g_stockAt < STOCK_TTL_MS) return false;
+    if (g_asyncBusy || g_hbBusy) return false;
+    // A handshake needs one large block, the same figure the sync asks for.
+    if (ESP.getMaxAllocHeap() < SYNC_STACK + 2048) {
+        Serial.printf("[spool] no room for the read: largest block %u\n",
+                      (unsigned)ESP.getMaxAllocHeap());
+        return false;
+    }
+    g_stockUid = uid;
+    g_stockDone = false;
+    g_stockStart = millis();
+    g_spoolBusy = true;
+    if (xTaskCreatePinnedToCore(stockTaskFn, "ttStock", SYNC_STACK, nullptr, 1, nullptr, 0) != pdPASS) {
+        g_spoolBusy = false;
+        return false;
+    }
+    return true;
+}
+
+bool ttcloud::spoolWaiting(const String& chipUid) {
+    if (!g_spoolBusy) return false;
+    return stockKey(chipUid) == g_stockUid && millis() - g_stockStart < SPOOL_BUDGET_MS;
+}
+
+bool ttcloud::spoolCached(const String& chipUid, SpoolStock& out) {
+    if (!g_stockDone || g_spoolBusy) return false;
+    if (stockKey(chipUid) != g_stockUid || millis() - g_stockAt >= STOCK_TTL_MS) return false;
+    out = g_stock;
+    return true;
+}
+

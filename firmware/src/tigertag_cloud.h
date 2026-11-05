@@ -157,4 +157,32 @@ namespace ttcloud {
     bool startAsyncHeartbeat(const Presence& p, bool full);
     bool heartbeatBusy();
     bool takeHeartbeat(bool& ok, bool& full, String& err);
+
+    // The spool's own document in the account, users/{uid}/inventory/{chip uid}.
+    //
+    // A chip is written once. The weight a TigerScale measures afterwards goes to
+    // that document, not back onto the chip, so a slot that should show what is left
+    // on the spool has to ask the account. Same shape as product_api: the fetch
+    // starts the moment the tag is read (the slot is chosen before), on a task of
+    // its own, a send waits for it only inside SPOOL_BUDGET_MS, and an answer that
+    // arrives later is kept for the next send rather than sent as a second one.
+    //
+    // 8 s is three times the 2.6 s one Firestore read took on this device, TLS
+    // handshake included (the account import logs it).
+    struct SpoolStock {
+        int netGrams   = -1;   // weight_available, filament only; -1 = not in the document
+        int totalGrams = -1;   // measure_gr, the spool's full quantity; -1 = not in the document
+    };
+    constexpr uint32_t SPOOL_BUDGET_MS = 8000;
+
+    // Starts the read for this chip. False when nothing was started: no account, a
+    // read already running, a fresh answer already held, the sync or the presence
+    // beat running (they share the token), or no room for a handshake.
+    bool requestSpool(const String& chipUid);
+    // A read for THIS chip is running and still inside its budget - the one
+    // condition under which a send should wait.
+    bool spoolWaiting(const String& chipUid);
+    // The last answer, if it was about this chip and is not stale. A document that
+    // does not exist answers with both figures at -1.
+    bool spoolCached(const String& chipUid, SpoolStock& out);
 }

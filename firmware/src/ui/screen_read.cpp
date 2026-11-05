@@ -24,7 +24,11 @@ uint32_t s_sig = 0;
 // The Settings rows dim their labels because the value is what you came for
 // there. Here the pair IS the content - "Nozzle 215-230" is one fact in two
 // halves - and a dim half reads as decoration.
-void factRow(lv_obj_t* parent, const char* key, const char* value) {
+//
+// `note`, when given, is a small dim word after the value - where the value came
+// from, not part of it.
+void factRow(lv_obj_t* parent, const char* key, const char* value,
+             const char* note = nullptr) {
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
@@ -50,6 +54,16 @@ void factRow(lv_obj_t* parent, const char* key, const char* value) {
     lv_obj_set_style_max_width(v, 150, 0);
     lv_obj_set_style_text_font(v, &font_ui_bold_16, 0);
     lv_obj_set_style_text_color(v, lv_color_hex(theme::TEXT), 0);
+
+    if (note) {
+        // The key takes the slack, so value and note stay together on the right.
+        lv_obj_set_flex_grow(k, 1);
+        lv_obj_t* n = lv_label_create(row);
+        lv_label_set_text(n, note);
+        lv_obj_set_style_text_font(n, &font_ui_12, 0);
+        lv_obj_set_style_text_color(n, lv_color_hex(theme::TEXT_DIM), 0);
+        lv_obj_set_style_pad_left(n, 5, 0);
+    }
 }
 
 }  // namespace
@@ -94,10 +108,12 @@ void showWaiting() {
     lv_obj_set_style_pad_top(where, 4, 0);
 }
 
-void showTag(const TagInfo& tag) {
+void showTag(const TagInfo& tag, bool fromCloud, int cloudGrams, bool cloudPending) {
     lvgl_port::Lock lvglGuard;   // LVGL is not reentrant - see lvgl_port.h
     const uint32_t sig = 0xA5000000u ^ tag.idProduct ^ (tag.available << 3)
-                       ^ ((uint32_t)tag.signature << 24);
+                       ^ ((uint32_t)tag.signature << 24)
+                       ^ (fromCloud ? 0x00800000u ^ ((uint32_t)(cloudGrams + 2) << 5)
+                                      ^ (cloudPending ? 0x00400000u : 0u) : 0u);
     if (sig == s_sig) return;
     s_sig = sig;
 
@@ -200,13 +216,22 @@ void showTag(const TagInfo& tag) {
         snprintf(buf, sizeof(buf), "%u °C · %u h", tag.dryTemp, tag.dryHours);
         factRow(body, i18n::T(S_DRYING), buf);
     }
-    // What is left, which the TigerScale keeps up to date on the chip itself.
-    // Shown only when a scale has written it: a spool nobody weighed reads 0,
-    // and "0 g" on a full spool is worse than no line at all.
-    if (tag.available) {
+    // What is left, from the source the user chose, named after the value so a
+    // figure from the chip is never taken for the account's, or the reverse.
+    //
+    // From the account the row is always there: "..." while the answer is on
+    // its way, "-" when the account has no figure. From the chip it is shown
+    // only when a scale has written one - a spool nobody weighed reads 0, and
+    // "0 g" on a full spool is worse than no line at all.
+    if (fromCloud) {
+        if (cloudPending)        snprintf(buf, sizeof(buf), "...");
+        else if (cloudGrams < 0) snprintf(buf, sizeof(buf), "-");
+        else                     snprintf(buf, sizeof(buf), "%d g", cloudGrams);
+        factRow(body, i18n::T(S_REMAINING), buf, i18n::T(S_SRC_CLOUD));
+    } else if (tag.available) {
         snprintf(buf, sizeof(buf), "%lu %s", (unsigned long)tag.available,
                  tag.unitLabel.length() ? tag.unitLabel.c_str() : "g");
-        factRow(body, i18n::T(S_REMAINING), buf);
+        factRow(body, i18n::T(S_REMAINING), buf, i18n::T(S_SRC_CHIP));
     }
 }
 

@@ -26,8 +26,13 @@ void showScan(const char* slotLabel);
 // `msLeft` is what is left of the five seconds before it closes itself, drawn
 // as a draining bar. A tap anywhere closes it at once. `message` is only read
 // on failure.
+//
+// `warning` is the exception to "says nothing about what the printer did": a
+// part of the send that did NOT happen although the send succeeded, such as a
+// weight that was not updated. Drawn under the spool, in the warning colour;
+// nullptr for none.
 void showResult(const char* slotLabel, bool ok, const char* message,
-                const TagInfo& tag, uint32_t msLeft);
+                const TagInfo& tag, uint32_t msLeft, const char* warning = nullptr);
 
 void invalidate();
 bool takeCancel();

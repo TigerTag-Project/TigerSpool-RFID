@@ -84,12 +84,13 @@ static const uint32_t RESULT_MS = 5000;
 static lv_obj_t* s_timerFill = nullptr;   // width driven by msLeft, not rebuilt
 
 void showResult(const char* slotLabel, bool ok, const char* message,
-                const TagInfo& tag, uint32_t msLeft) {
+                const TagInfo& tag, uint32_t msLeft, const char* warning) {
     lvgl_port::Lock lvglGuard;   // LVGL is not reentrant - see lvgl_port.h
     // msLeft is NOT in the signature: it changes on every pass, and rebuilding
     // this screen sixty times a second is how a device stops answering taps.
     uint32_t sig = hashStr(message) ^ (uint32_t)ok ^ hashStr(slotLabel)
-                 ^ hashStr(tag.material.c_str()) ^ ((uint32_t)tag.signature << 24);
+                 ^ hashStr(tag.material.c_str()) ^ ((uint32_t)tag.signature << 24)
+                 ^ (warning ? hashStr(warning) * 31u : 0u);
     if (s_which == RESULT && sig == s_sig) {
         if (s_timerFill) {
             const lv_coord_t full = theme::SCREEN_W - 2 * theme::PAD;
@@ -153,19 +154,25 @@ void showResult(const char* slotLabel, bool ok, const char* message,
         return;
     }
 
-    lv_obj_t* ring = lv_obj_create(body);
-    lv_obj_remove_style_all(ring);
-    lv_obj_set_size(ring, 52, 52);
-    lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(ring, lv_color_hex(theme::OK), 0);
-    lv_obj_set_style_bg_opa(ring, 40, 0);
-    lv_obj_clear_flag(ring, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_t* tick = lv_label_create(ring);
-    lv_label_set_text(tick, LV_SYMBOL_OK);
-    lv_obj_set_style_text_font(tick, &font_ui_24, 0);
-    lv_obj_set_style_text_color(tick, lv_color_hex(theme::OK), 0);
-    lv_obj_center(tick);
+    // The screen has no spare height: a warning line under the spool pushes the
+    // countdown off the bottom, and a bar that drains out of sight is a screen
+    // that closes without warning. So a warning takes the tick's place - the
+    // title and the green band still say it went through.
+    if (!warning || !*warning) {
+        lv_obj_t* ring = lv_obj_create(body);
+        lv_obj_remove_style_all(ring);
+        lv_obj_set_size(ring, 52, 52);
+        lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(ring, lv_color_hex(theme::OK), 0);
+        lv_obj_set_style_bg_opa(ring, 40, 0);
+        lv_obj_clear_flag(ring, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_t* tick = lv_label_create(ring);
+        lv_label_set_text(tick, LV_SYMBOL_OK);
+        lv_obj_set_style_text_font(tick, &font_ui_24, 0);
+        lv_obj_set_style_text_color(tick, lv_color_hex(theme::OK), 0);
+        lv_obj_center(tick);
+    }
 
     lv_obj_t* title = lv_label_create(body);
     lv_label_set_text(title, i18n::T(S_SENT_TO_PRINTER));
@@ -220,6 +227,20 @@ void showResult(const char* slotLabel, bool ok, const char* message,
     lv_obj_set_width(who, LV_PCT(100));
     lv_obj_set_style_text_font(who, &font_ui_12, 0);
     lv_obj_set_style_text_color(who, lv_color_hex(theme::TEXT_DIM), 0);
+
+    // Directly under the spool it is about, before the instruction: the spool
+    // still goes in the slot, so this must not read as a failure - the warning
+    // colour, not the danger one.
+    if (warning && *warning) {
+        lv_obj_t* w = lv_label_create(body);
+        lv_label_set_text_fmt(w, "%s %s", LV_SYMBOL_WARNING, warning);
+        lv_label_set_long_mode(w, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(w, LV_PCT(100));
+        lv_obj_set_style_text_align(w, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_font(w, &font_ui_12, 0);
+        lv_obj_set_style_text_color(w, lv_color_hex(theme::WARN), 0);
+        lv_obj_clear_flag(w, LV_OBJ_FLAG_CLICKABLE);
+    }
 
     // Pushes the instruction to the bottom of the screen, where the thumb is.
     lv_obj_t* spacer = lv_obj_create(body);
