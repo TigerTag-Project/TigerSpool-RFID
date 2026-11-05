@@ -15,7 +15,7 @@ the device sync. Studio itself talks HTTP to Moonraker, so the few HTTP
 requests its add flow and its card make are answered too (server/printer/
 machine info, the object list and query, an empty webcam list). What it answers: server.connection.identify,
 printer.objects.list, printer.objects.query and printer.gcode.script with
-MMU_GATE_MAP and AFC's SET_MATERIAL / SET_COLOR parsed into the state - so a
+MMU_GATE_MAP and AFC's SET_MATERIAL / SET_COLOR / SET_WEIGHT parsed into the state - so a
 write is read back exactly as it would be from a printer. It also pushes a
 notify_proc_stat_update every second, as Moonraker does to every client.
 
@@ -50,7 +50,8 @@ def build_state(profile):
         for i, lane in enumerate(lanes):
             obj = {"map": f"T{i}", "material": ["PLA", "PETG", "", "TPU"][i],
                    "color": ["#FF8800", "#0055FF", "#000000", "#FFFFFF"][i],
-                   "load": i != 2, "prep": i != 2, "tool_loaded": False, "weight": 850}
+                   "load": i != 2, "prep": i != 2, "tool_loaded": False, "weight": 850,
+                   "initial_weight": 1000}
             s[f"AFC_stepper {lane}"] = obj
             s[f"AFC_lane {lane}"] = obj          # the same lane, published twice
     else:
@@ -83,12 +84,14 @@ def run_script(state, script):
             if "COLOR" in p:
                 m["gate_color"][g] = p["COLOR"].lstrip("#")
             m["gate_status"][g] = 1
-        elif cmd in ("SET_MATERIAL", "SET_COLOR") and "AFC" in state:
+        elif cmd in ("SET_MATERIAL", "SET_COLOR", "SET_WEIGHT") and "AFC" in state:
             lane = state.get(f"AFC_lane {p.get('LANE', '')}")
             if lane is None:
                 raise ValueError(f"Unknown lane {p.get('LANE')}")
             if cmd == "SET_MATERIAL":
                 lane["material"] = p.get("MATERIAL", "")
+            elif cmd == "SET_WEIGHT":
+                lane["weight"] = float(p.get("WEIGHT", 0))
             else:
                 lane["color"] = "#" + p.get("COLOR", "").lstrip("#")
         else:

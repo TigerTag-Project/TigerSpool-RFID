@@ -21,6 +21,10 @@
 //                                    shown and never written: there is nothing
 //                                    on the printer to write the filament into.
 //
+// Weight goes to AFC only, with its own SET_WEIGHT LANE= WEIGHT=. Happy Hare's
+// MMU_GATE_MAP takes no weight, so a gate is written without one - and that is
+// not reported as a weight skipped, there was nothing to skip.
+//
 // Commands are the systems' own: nothing has to be installed on the printer.
 // An optional Moonraker API key comes from the account's `apiKey` (carried in
 // PrinterCfg::cc) and is presented with server.connection.identify.
@@ -37,6 +41,8 @@ public:
     const char* slotLabel(int i) override;
     const SlotState& slot(int i) override;
     bool assign(int i, const TagInfo& t) override;
+    bool weightSkipped() override { return weightSkipped_; }
+    void setWeightFromCloud(bool v) override { weightFromCloud_ = v; }
     String status() override;
     void refresh() override;
 
@@ -64,4 +70,15 @@ private:
     String    lane_[KMAX];           // AFC lane name, or the extruder object
     String    laneObj_[KMAX];        // AFC: the object the lane is read from
     uint32_t  lastReq_ = 0;
+
+    // AFC: the lane's weight as reported, and the full quantity of the spool
+    // last sent to it. AFC keeps `initial_weight` at 1000 g whatever spool is
+    // loaded, so the percentage uses the spool's own quantity when this device
+    // sent it, and AFC's figure otherwise (after a restart, or a spool loaded
+    // by hand).
+    float     weight_[KMAX] = {};
+    float     initW_[KMAX]  = {};
+    long      totalW_[KMAX] = {};
+    bool      weightSkipped_   = false;   // the last assign went out without SET_WEIGHT
+    bool      weightFromCloud_ = true;    // the user's choice, set before every assign
 };

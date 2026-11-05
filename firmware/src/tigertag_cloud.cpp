@@ -257,7 +257,6 @@ namespace {
         if (brand == "flashforge") return (m == 5 || m == 6) ? PT_FF_C5 : PT_NONE;
         if (brand == "bambulab")   return PT_BAMBU;                                // protocolo LAN comum
         if (brand == "snapmaker")  return PT_SNAPMAKER;                             // Moonraker ws :7125
-        if (brand == "klipper")    return PT_KLIPPER;                              // Moonraker ws :7125, AFC
         // Elegoo speaks one protocol across the range - the Centauri Carbon
         // family and everything after it - so there is no model to check.
         if (brand == "elegoo")     return PT_ELEGOO;                                // MQTT :1883

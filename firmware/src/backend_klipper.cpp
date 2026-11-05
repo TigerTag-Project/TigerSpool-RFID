@@ -1,5 +1,6 @@
 #include "backend_klipper.h"
 #include "version.h"
+#include "tigertag_cloud.h"
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <algorithm>
@@ -151,6 +152,13 @@ void KlipperBackend::applyStatus(JsonObjectConst st) {
             s.r = s.g = s.b = 90;
             if (!empty) hexRGB(o["color"] | "", s.r, s.g, s.b);
             s.selected = lane_[i] == cur || (o["tool_loaded"] | false);
+            if (o["weight"].is<float>())         weight_[i] = o["weight"].as<float>();
+            if (o["initial_weight"].is<float>()) initW_[i]  = o["initial_weight"].as<float>();
+            const float den = totalW_[i] > 0 ? (float)totalW_[i] : initW_[i];
+            float pct = (!empty && den > 0) ? weight_[i] * 100.0f / den : 0.0f;
+            if (pct < 0) pct = 0;
+            if (pct > 100) pct = 100;
+            s.percent = (uint8_t)(pct + 0.5f);
         }
         status_ = "Klipper: slots updated";
     } else if (sys_ == SYS_EXTRUDERS) {
@@ -241,7 +249,11 @@ bool KlipperBackend::rpc(const char* method, JsonDocument& params, int id) {
 }
 
 void KlipperBackend::begin(const PrinterCfg& cfg) {
-    for (int i = 0; i < KMAX; i++) { slots_[i] = SlotState{}; lane_[i] = laneObj_[i] = String(); }
+    for (int i = 0; i < KMAX; i++) {
+        slots_[i] = SlotState{}; lane_[i] = laneObj_[i] = String();
+        weight_[i] = initW_[i] = 0; totalW_[i] = 0;
+    }
+    weightSkipped_ = false;
     nSlots_ = 0;
     sys_ = SYS_UNKNOWN;
     connected_ = false;
@@ -288,7 +300,8 @@ void KlipperBackend::refresh() {
         o["AFC"].to<JsonArray>().add("current_lane");
         for (int i = 0; i < nSlots_; i++) {
             JsonArray f = o[laneObj_[i]].to<JsonArray>();
-            for (const char* k : { "material", "color", "load", "prep", "tool_loaded" }) f.add(k);
+            for (const char* k : { "material", "color", "load", "prep", "tool_loaded",
+                                   "weight", "initial_weight" }) f.add(k);
         }
     } else {
         o["toolhead"].to<JsonArray>().add("extruder");
@@ -297,6 +310,7 @@ void KlipperBackend::refresh() {
 }
 
 bool KlipperBackend::assign(int idx, const TagInfo& t) {
+    weightSkipped_ = false;
     if (idx < 0 || idx >= nSlots_ || !connected_) return false;
     if (sys_ == SYS_EXTRUDERS || sys_ == SYS_UNKNOWN) {
         // Klipper keeps no filament identity on a plain extruder: there is no
@@ -317,6 +331,40 @@ bool KlipperBackend::assign(int idx, const TagInfo& t) {
         const String lane = gv(lane_[idx]);
         if (mat.length()) script = "SET_MATERIAL LANE=" + lane + " MATERIAL=" + mat + "\n";
         script += "SET_COLOR LANE=" + lane + " COLOR=" + col;
+
+        // Weight, from the source the user chose (setWeightFromCloud).
+        //
+        // Account: a chip is written once; what a TigerScale measures afterwards
+        // goes to the spool's document in the account (ttcloud::requestSpool,
+        // started the moment the tag is read). When the account has not answered,
+        // the lane gets everything else and the weight already on the printer
+        // stays - a stale weight is worse than none.
+        //
+        // Chip: what is written on the tag, for a device that works offline. The
+        // remaining quantity once a scale has written it, else the quantity it
+        // left the factory with. Only grams and kilograms are understood.
+        long net = -1, total = -1;
+        if (weightFromCloud_) {
+            ttcloud::SpoolStock st;
+            if (ttcloud::spoolCached(t.uid, st) && st.netGrams >= 0) { net = st.netGrams; total = st.totalGrams; }
+        } else {
+            const char u = t.unitLabel.length() ? (char)(t.unitLabel[0] | 0x20) : 0;
+            const long mul = (u == 'g') ? 1L : (u == 'k') ? 1000L : 0L;
+            // Unlike the account, a chip reads 0 when nothing was written, so 0
+            // is not a figure here.
+            const uint32_t qty = t.available > 0 ? t.available : t.measure;
+            if (mul && qty > 0) { net = (long)qty * mul; total = (long)t.measure * mul; }
+        }
+        // An empty spool reads 0, and that is a figure. Over 10 kg is not a spool.
+        const bool haveWeight = net >= 0 && net <= 10000;
+        Serial.printf("[klipper] weight %ld of %ld g from the %s%s\n", net, total,
+                      weightFromCloud_ ? "account" : "chip",
+                      haveWeight ? "" : " - not available, weight left as it is");
+        weightSkipped_ = !haveWeight;
+        if (haveWeight) {
+            script += "\nSET_WEIGHT LANE=" + lane + " WEIGHT=" + net;
+            totalW_[idx] = (total > 0 && total <= 10000) ? total : 0;
+        }
     }
 
     JsonDocument p;
