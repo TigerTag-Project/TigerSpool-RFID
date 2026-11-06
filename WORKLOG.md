@@ -18,6 +18,10 @@ message, and reset it to this header.
 
 ## Unreleased
 
+### Added
+
+- Share tags on the installer page: title, description and tigersystem.io's TigerSpool card as the picture (`https://tigersystem.io/en/tigerspool/opengraph-image`), so a shared link shows a card (`installer/index.html`).
+
 ## 2026-11-04 - The sign-in and account pages in eleven languages (released in 1.74.0)
 
 ### Added
