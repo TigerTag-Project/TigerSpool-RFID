@@ -144,6 +144,7 @@ int     selSlot = -1;
 TagInfo tag;
 bool    sendOk = false;
 bool    sendWeightKept = false;   // sent, but the slot's weight was left as it was
+int     sendGrams = -1;           // the weight that went with it, -1 for none
 String  resultMsg;
 uint32_t stateSince = 0;
 
@@ -3238,6 +3239,7 @@ void loop() {
             // Asked once, here, and kept: the result screen is drawn from this
             // state, not from the backend, whose next assign would change it.
             sendWeightKept = sendOk && backend->weightSkipped();
+            sendGrams = sendOk ? backend->sentGrams() : -1;
             BENCH_MARK("send:assign");
             char m[48];
             if (sendOk) snprintf(m, sizeof(m), i18n::T(S_UPDATED), backend->slotLabel(selSlot));
@@ -3269,7 +3271,7 @@ void loop() {
         screen_scan::showResult(backend ? backend->slotLabel(selSlot) : "?",
                                 sendOk, resultMsg.c_str(), tag,
                                 since >= RESULT_MS ? 0 : RESULT_MS - since,
-                                sendWeightKept ? i18n::T(S_WEIGHT_KEPT) : nullptr);
+                                sendWeightKept ? i18n::T(S_WEIGHT_KEPT) : nullptr, sendGrams);
         BENCH_MARK("result:draw");
         lvgl_port::loop();
         BENCH_MARK("result:lvgl");

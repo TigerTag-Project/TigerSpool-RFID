@@ -49,6 +49,7 @@ public:
     const SlotState& slot(int i) override;
     bool assign(int i, const TagInfo& t) override;
     bool weightSkipped() override { return weightSkipped_; }
+    int  sentGrams() override { return sentGrams_; }
     void setWeightFromCloud(bool v) override { weightFromCloud_ = v; }
     String status() override;
     void refresh() override;
@@ -90,5 +91,6 @@ private:
     int       bedT_[KMAX]   = {};        // tag that carries only one of the two
     bool      hasSv_ = false;            // the printer has [save_variables]
     bool      weightSkipped_   = false;   // the last assign went out without SET_WEIGHT
+    int       sentGrams_       = -1;      // the WEIGHT the last assign sent, -1 for none
     bool      weightFromCloud_ = true;    // the user's choice, set before every assign
 };

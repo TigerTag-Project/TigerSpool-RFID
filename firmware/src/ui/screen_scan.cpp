@@ -88,13 +88,13 @@ static const uint32_t RESULT_MS = 5000;
 static lv_obj_t* s_timerFill = nullptr;   // width driven by msLeft, not rebuilt
 
 void showResult(const char* slotLabel, bool ok, const char* message,
-                const TagInfo& tag, uint32_t msLeft, const char* warning) {
+                const TagInfo& tag, uint32_t msLeft, const char* warning, int grams) {
     lvgl_port::Lock lvglGuard;   // LVGL is not reentrant - see lvgl_port.h
     // msLeft is NOT in the signature: it changes on every pass, and rebuilding
     // this screen sixty times a second is how a device stops answering taps.
     uint32_t sig = hashStr(message) ^ (uint32_t)ok ^ hashStr(slotLabel)
                  ^ hashStr(tag.material.c_str()) ^ ((uint32_t)tag.signature << 24)
-                 ^ (warning ? hashStr(warning) * 31u : 0u);
+                 ^ (warning ? hashStr(warning) * 31u : 0u) ^ ((uint32_t)(grams + 1) << 8);
     if (s_which == RESULT && sig == s_sig) {
         if (s_timerFill) {
             const lv_coord_t full = theme::SCREEN_W - 2 * theme::PAD;
@@ -224,6 +224,10 @@ void showResult(const char* slotLabel, bool ok, const char* message,
     if (tag.diameterLabel.length() && tag.diameterLabel != "-") {
         if (sub.length()) sub += " \xC2\xB7 ";
         sub += tag.diameterLabel;
+    }
+    if (ok && grams >= 0) {
+        if (sub.length()) sub += " \xC2\xB7 ";
+        sub += String(grams) + " g";
     }
     lv_obj_t* who = lv_label_create(col);
     lv_label_set_text(who, sub.c_str());

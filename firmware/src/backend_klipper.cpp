@@ -175,13 +175,18 @@ void KlipperBackend::applyStatus(JsonObjectConst st) {
             s.r = s.g = s.b = 90;
             if (!empty) hexRGB(o["color"] | "", s.r, s.g, s.b);
             s.selected = lane_[i] == cur || (o["tool_loaded"] | false);
-            if (o["weight"].is<float>())         weight_[i] = o["weight"].as<float>();
+            if (o["weight"].is<float>()) {
+                weight_[i] = o["weight"].as<float>();
+                s.grams = (int16_t)(weight_[i] < 0 ? 0 : weight_[i] > 30000 ? 30000 : weight_[i] + 0.5f);
+            }
+            if (empty) s.grams = -1;
             if (o["initial_weight"].is<float>()) initW_[i]  = o["initial_weight"].as<float>();
             const float den = totalW_[i] > 0 ? (float)totalW_[i] : initW_[i];
             float pct = (!empty && den > 0) ? weight_[i] * 100.0f / den : 0.0f;
             if (pct < 0) pct = 0;
             if (pct > 100) pct = 100;
             s.percent = (uint8_t)(pct + 0.5f);
+            s.percentKnown = !empty && den > 0 && s.grams >= 0;
             if (o["extruder_temp"].is<float>()) extT_[i] = (int)o["extruder_temp"].as<float>();
             if (o["bed_temp"].is<float>())      bedT_[i] = (int)o["bed_temp"].as<float>();
             s.brand = (!empty && !sv.isNull()) ? shown(sv[svName(lane_[i], "brand")] | "") : String();
@@ -339,6 +344,7 @@ void KlipperBackend::refresh() {
 
 bool KlipperBackend::assign(int idx, const TagInfo& t) {
     weightSkipped_ = false;
+    sentGrams_ = -1;
     if (idx < 0 || idx >= nSlots_ || !connected_) return false;
     if (sys_ == SYS_EXTRUDERS || sys_ == SYS_UNKNOWN) {
         // Klipper keeps no filament identity on a plain extruder: there is no
@@ -391,6 +397,7 @@ bool KlipperBackend::assign(int idx, const TagInfo& t) {
         weightSkipped_ = !haveWeight;
         if (haveWeight) {
             script += "\nSET_WEIGHT LANE=" + lane + " WEIGHT=" + net;
+            sentGrams_ = (int)net;
             totalW_[idx] = (total > 0 && total <= 10000) ? total : 0;
         }
 

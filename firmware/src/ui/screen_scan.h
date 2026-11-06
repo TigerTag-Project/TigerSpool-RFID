@@ -35,8 +35,12 @@ void showScan(const char* slotLabel, const char* note = nullptr);
 // part of the send that did NOT happen although the send succeeded, such as a
 // weight that was not updated. Drawn under the spool, in the warning colour;
 // nullptr for none.
+//
+// `grams` is the weight that was sent with the spool, added to the line under
+// its name; -1 when none was.
 void showResult(const char* slotLabel, bool ok, const char* message,
-                const TagInfo& tag, uint32_t msLeft, const char* warning = nullptr);
+                const TagInfo& tag, uint32_t msLeft, const char* warning = nullptr,
+                int grams = -1);
 
 void invalidate();
 bool takeCancel();

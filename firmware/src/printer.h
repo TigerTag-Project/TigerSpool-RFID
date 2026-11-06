@@ -91,6 +91,12 @@ struct SlotState {
     String  brand;                   // "eSun", "Creality", ... empty if unknown
     uint8_t r = 90, g = 90, b = 90;  // grey until the printer says otherwise
     uint8_t percent = 0;
+    // `percent` is a real figure, not the default 0. Only then does the slot
+    // grid fill the colour block to that level.
+    bool    percentKnown = false;
+    // Filament left on the spool, in grams, as the printer reports it; -1 when
+    // it reports none. Drawn inside the colour block when known.
+    int16_t grams = -1;
     bool    selected = false;        // loaded / active in the printer
 };
 
@@ -134,6 +140,9 @@ public:
     // tick believes the weight moved too. False for every backend that sends no
     // weight at all - there is nothing there to have missed.
     virtual bool weightSkipped() { return false; }
+    // The grams the last assign() wrote to the slot, for the result screen to
+    // show; -1 when it wrote none.
+    virtual int sentGrams() { return -1; }
     // Where the next assign() takes the spool's weight from: the account (the
     // figure a TigerScale keeps up to date) or the chip (what was written on
     // it, but needs no network). The user's choice, held by main.cpp and handed

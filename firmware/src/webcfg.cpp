@@ -649,6 +649,8 @@ namespace {
         else if (preview == "scanweight") screen_scan::showScan("2", i18n::T(S_WEIGHT_WAIT));
         else if (preview == "scanretry")  screen_scan::showScan("2", i18n::T(S_WEIGHT_RETRY));
         else if (preview == "result")    screen_scan::showResult("B2", true, "", previewTag(), 3200);
+        else if (preview == "resultgrams") screen_scan::showResult("2", true, "", previewTag(), 3200,
+                                             nullptr, 500);
         else if (preview == "resultlong") screen_scan::showResult("AMS2-4", true, "", previewTag(), 5000);
         else if (preview == "resultfail") screen_scan::showResult("B2", false,
                                              i18n::T(S_SEND_FAIL), previewTag(), 0);
