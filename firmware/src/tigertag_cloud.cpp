@@ -1480,9 +1480,11 @@ namespace {
                                "&mask.fieldPaths=measure&mask.fieldPaths=deleted";
             String resp;
             code = httpsGET(url, resp, g_idToken.c_str());
+            if (code == 404) r.ok = true;          // no such spool: an answer too
             if (code == 200) {
                 JsonDocument d;
                 if (!deserializeJson(d, resp)) {
+                    r.ok = true;
                     JsonObjectConst f = d["fields"];
                     if (fsBool(f, "deleted") != 1) {
                         const String w = fsStr(f, "weight_available");
@@ -1507,7 +1509,7 @@ namespace {
 bool ttcloud::requestSpool(const String& chipUid) {
     const String uid = stockKey(chipUid);
     if (uid.isEmpty() || g_uid.isEmpty() || g_spoolBusy) return false;
-    if (g_stockDone && uid == g_stockUid && millis() - g_stockAt < STOCK_TTL_MS) return false;
+    if (g_stockDone && g_stock.ok && uid == g_stockUid && millis() - g_stockAt < STOCK_TTL_MS) return false;
     if (g_asyncBusy || g_hbBusy) return false;
     // A handshake needs one large block, the same figure the sync asks for.
     if (ESP.getMaxAllocHeap() < SYNC_STACK + 2048) {
@@ -1529,6 +1531,10 @@ bool ttcloud::requestSpool(const String& chipUid) {
 bool ttcloud::spoolWaiting(const String& chipUid) {
     if (!g_spoolBusy) return false;
     return stockKey(chipUid) == g_stockUid && millis() - g_stockStart < SPOOL_BUDGET_MS;
+}
+
+bool ttcloud::spoolRunning(const String& chipUid) {
+    return g_spoolBusy && stockKey(chipUid) == g_stockUid;
 }
 
 bool ttcloud::spoolCached(const String& chipUid, SpoolStock& out) {

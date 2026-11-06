@@ -170,8 +170,12 @@ namespace ttcloud {
     // 8 s is three times the 2.6 s one Firestore read took on this device, TLS
     // handshake included (the account import logs it).
     struct SpoolStock {
-        int netGrams   = -1;   // weight_available, filament only; -1 = not in the document
-        int totalGrams = -1;   // measure_gr, the spool's full quantity; -1 = not in the document
+        int  netGrams   = -1;   // weight_available, filament only; -1 = not in the document
+        int  totalGrams = -1;   // measure_gr, the spool's full quantity; -1 = not in the document
+        // The account answered: the document was read, or it does not exist.
+        // False when the read itself failed (no token, no network, an HTTP
+        // error) - the one case worth asking again.
+        bool ok = false;
     };
     constexpr uint32_t SPOOL_BUDGET_MS = 8000;
 
@@ -182,7 +186,10 @@ namespace ttcloud {
     // A read for THIS chip is running and still inside its budget - the one
     // condition under which a send should wait.
     bool spoolWaiting(const String& chipUid);
+    // A read for this chip is running, inside its budget or past it.
+    bool spoolRunning(const String& chipUid);
     // The last answer, if it was about this chip and is not stale. A document that
-    // does not exist answers with both figures at -1.
+    // does not exist answers with both figures at -1. A read that failed is
+    // held too, with `ok` false, and does not stop requestSpool asking again.
     bool spoolCached(const String& chipUid, SpoolStock& out);
 }

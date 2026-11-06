@@ -15,7 +15,11 @@ namespace screen_scan {
 // hold the spool against the box - and a red line saying the same thing under
 // somebody who is doing exactly that reads as a fault of their own. The
 // reader's error goes to the serial log.
-void showScan(const char* slotLabel);
+//
+// `note` replaces the instruction once the spool has been read and the send is
+// held up by something the user should know is happening - the weight still
+// being fetched from the account. nullptr for the instruction.
+void showScan(const char* slotLabel, const char* note = nullptr);
 
 // The success screen confirms what was SENT and names the next step: put the
 // spool in that slot. It deliberately says nothing about what the slot held

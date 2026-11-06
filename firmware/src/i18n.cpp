@@ -203,6 +203,8 @@ static const Row STR[S_COUNT] = {
 /* S_WEIGHT_FROM    */ {{ "Weight from", "Poids depuis", "Gewicht aus", "Peso desde", "Peso da", "Waga z", "Peso de", "Peso de", "重量" , "Вес из", "Gewicht van"}},
 /* S_SRC_CHIP       */ {{ "Chip", "Puce", "Chip", "Chip", "Chip", "Chip", "Chip", "Chip", "标签" , "Чип", "Chip"}},
 /* S_SRC_CLOUD      */ {{ "Cloud", "Cloud", "Cloud", "Nube", "Cloud", "Chmura", "Nuvem", "Nuvem", "账户" , "Облако", "Cloud"}},
+/* S_WEIGHT_WAIT    */ {{ "Reading the weight from the account...", "Lecture du poids depuis le compte...", "Gewicht wird aus der Cloud gelesen...", "Leyendo el peso desde la cuenta...", "Lettura del peso dall'account...", "Odczyt wagi z konta...", "Lendo o peso da conta...", "A ler o peso da conta...", "正在从账户读取重量" , "Чтение веса из аккаунта...", "Gewicht wordt uit het account gelezen..."}},
+/* S_WEIGHT_RETRY   */ {{ "No answer - asking the account once more...", "Pas de réponse - nouvelle demande au compte...", "Keine Antwort - frage die Cloud noch einmal...", "Sin respuesta - consultando la cuenta otra vez...", "Nessuna risposta - nuova richiesta all'account...", "Brak odpowiedzi - ponowne zapytanie konta...", "Sem resposta - consultando a conta de novo...", "Sem resposta - a perguntar de novo à conta...", "重试: 正在从账户读取重量" , "Нет ответа - повторный запрос к аккаунту...", "Geen antwoord - het account wordt opnieuw gevraagd..."}},
 };
 
 // A mismatch here is silent at runtime and reads as garbled text on screen, so

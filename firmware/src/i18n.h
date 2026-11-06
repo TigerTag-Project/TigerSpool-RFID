@@ -201,6 +201,8 @@ enum StrId : uint8_t {
     S_WEIGHT_FROM,
     S_SRC_CHIP,
     S_SRC_CLOUD,
+    S_WEIGHT_WAIT,
+    S_WEIGHT_RETRY,
     S_COUNT
 };
 

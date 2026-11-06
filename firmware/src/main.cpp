@@ -82,6 +82,12 @@ int     selectedPrinter = 0;
 // Send was pressed on the review screen and is waiting, briefly, for the
 // TigerTag+ product answer - see ST_SENDING.
 static bool sendWaiting = false;
+// The weight from the account, asked once more when the first read brought no
+// figure: one further read, and the send waits for it at most WEIGHT_RETRY_MS.
+// Both reset when a spool is read for a send.
+static const uint32_t WEIGHT_RETRY_MS = 5000;
+static uint32_t weightRetryAt = 0;        // when the second try began; 0 = not yet
+static bool     weightRetryStarted = false;
 
 PrinterBackend* backend = nullptr;
 
@@ -3149,6 +3155,7 @@ void loop() {
                         product_api::request(tag);
                     // Not on chip weight: that choice means no network for it.
                     if (to.type == PT_KLIPPER && weightFromCloud) ttcloud::requestSpool(tag.uid);
+                    weightRetryAt = 0; weightRetryStarted = false;
                     // Straight into the send. The slot was chosen and the spool
                     // was presented; asking a third time to approve what the
                     // user is visibly doing only stands in the way.
@@ -3167,10 +3174,47 @@ void loop() {
     }
 
     case ST_SENDING: {
-        // The same screen the user is already looking at, unchanged: the
-        // write is short, and a screen that appears and vanishes inside a
-        // second reads as a fault rather than as progress.
-        screen_scan::showScan(backend ? backend->slotLabel(selSlot) : "?");
+        // The weight from the account. The first read was started when the
+        // spool was read, and the send waits for it inside its budget. When it
+        // brought no figure - it failed, it could not start, or it is still
+        // running past its budget - the account is asked once more and the send
+        // waits for that at most WEIGHT_RETRY_MS. An answer that the spool has
+        // no weight is an answer: it is not asked again.
+        bool weightWait = false, weightRetry = false;
+        if (sendWaiting && weightFromCloud && ttcloud::haveSession()
+                && printers[selectedPrinter].type == PT_KLIPPER) {
+            ttcloud::SpoolStock st;
+            const bool answered = ttcloud::spoolCached(tag.uid, st) && st.ok;
+            if (ttcloud::spoolWaiting(tag.uid)) {
+                weightWait = true;
+            } else if (!answered) {
+                if (!weightRetryAt) {
+                    weightRetryAt = millis();
+                    Serial.printf("[weight] no figure from the account yet - asking once more, %lu ms\n",
+                                  (unsigned long)WEIGHT_RETRY_MS);
+                }
+                if (millis() - weightRetryAt < WEIGHT_RETRY_MS) {
+                    // Kept trying until it starts: the sync or the presence beat
+                    // may hold the token for a moment.
+                    if (!weightRetryStarted && !ttcloud::spoolRunning(tag.uid))
+                        weightRetryStarted = ttcloud::requestSpool(tag.uid);
+                    // The second read has ended without a figure: nothing left to wait for.
+                    const bool over = weightRetryStarted && !ttcloud::spoolRunning(tag.uid);
+                    weightWait = weightRetry = !over;
+                } else {
+                    Serial.println("[weight] second try ran out - sent without the weight");
+                }
+            }
+        }
+
+        // The same screen the user is already looking at: the write is short,
+        // and a screen that appears and vanishes inside a second reads as a
+        // fault rather than as progress. Only a wait for the weight that
+        // outlasts that half second is put into words.
+        const char* note = nullptr;
+        if (weightRetry) note = i18n::T(S_WEIGHT_RETRY);
+        else if (weightWait && millis() - stateSince > 500) note = i18n::T(S_WEIGHT_WAIT);
+        screen_scan::showScan(backend ? backend->slotLabel(selSlot) : "?", note);
         BENCH_MARK("send:draw");
         lvgl_port::loop();
         BENCH_MARK("send:lvgl");
@@ -3187,7 +3231,7 @@ void loop() {
         // THIS spool is still inside its budget, and the screen keeps drawing
         // meanwhile. Past the budget the send goes ahead without it - once:
         // an answer that turns up later is kept for next time, never sent.
-        if (sendWaiting && !product_api::waiting(tag.idProduct) && !ttcloud::spoolWaiting(tag.uid)) {
+        if (sendWaiting && !product_api::waiting(tag.idProduct) && !weightWait) {
             sendWaiting = false;
             if (backend) backend->setWeightFromCloud(weightFromCloud);
             sendOk = backend && backend->connected() && backend->assign(selSlot, tag);

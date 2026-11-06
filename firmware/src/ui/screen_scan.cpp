@@ -43,9 +43,9 @@ void invalidate() { s_which = NONE; s_sig = 0; }
 // proof: the slot grid is only reachable through a printer that answered, and
 // the tap that opened this screen came off that grid. A pair of green dots
 // repeating it spends the top of the panel saying what the user just did.
-void showScan(const char* slotLabel) {
+void showScan(const char* slotLabel, const char* note) {
     lvgl_port::Lock lvglGuard;   // LVGL is not reentrant - see lvgl_port.h
-    uint32_t sig = hashStr(slotLabel);
+    uint32_t sig = hashStr(slotLabel) ^ (note ? hashStr(note) * 31u : 0u);
     if (s_which == SCAN && sig == s_sig) return;
     s_which = SCAN; s_sig = sig;
 
@@ -60,8 +60,12 @@ void showScan(const char* slotLabel) {
     lv_obj_set_style_arc_color(sp, lv_color_hex(0x1E2530), LV_PART_MAIN);
     lv_obj_set_style_arc_color(sp, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
 
-    frame::caption(i18n::T(S_BRING_TAG), theme::TEXT, &font_ui_14);
-    frame::caption(i18n::T(S_TO_READER), theme::TEXT, &font_ui_14);
+    if (note) {
+        frame::caption(note, theme::TEXT, &font_ui_14);
+    } else {
+        frame::caption(i18n::T(S_BRING_TAG), theme::TEXT, &font_ui_14);
+        frame::caption(i18n::T(S_TO_READER), theme::TEXT, &font_ui_14);
+    }
 
     // Tone 0, not the destructive red. Cancelling a scan throws nothing away -
     // it wore the same colour as Sign out and Factory reset, which teaches
