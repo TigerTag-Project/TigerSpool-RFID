@@ -26,6 +26,45 @@ bool s_built = false;
 volatile int s_tapped = -1;
 volatile bool s_back = false;
 lv_obj_t* s_progress = nullptr;   // the line under the spinner, or null
+// The grams line inside each block, or null where the printer reports none.
+// Its number changes while a printer prints; it is written into the label,
+// never a reason to rebuild the grid.
+const int MAX_CELLS = 24;
+lv_obj_t* s_grams[MAX_CELLS] = {};
+
+// The fill level, where the printer reports one: the block's top part is the
+// spool's colour darkened, and `s_fill` rises from the bottom in the colour
+// itself to the percentage left. Like the grams, the level is written into
+// the objects already there.
+const lv_coord_t BLOCK_H = 62;
+lv_obj_t* s_fill[MAX_CELLS] = {};
+lv_obj_t* s_mat[MAX_CELLS]  = {};
+int       s_pct[MAX_CELLS]  = {};
+uint32_t  s_ink[MAX_CELLS]  = {};   // the text colour on the filled part
+
+// A label is read against what lies behind its middle: the colour where the
+// fill reaches it, the darkened colour above. The darkened part is dark for
+// every spool, so it always takes white.
+void inkFor(lv_obj_t* label, lv_coord_t midY, lv_coord_t fillH, uint32_t ink) {
+    if (!label) return;
+    const uint32_t c = (midY >= BLOCK_H - fillH) ? ink : 0xFFFFFFu;
+    lv_obj_set_style_text_color(label, lv_color_hex(c), 0);
+}
+
+void applyLevel(int i, int pct) {
+    if (!s_fill[i]) return;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    s_pct[i] = pct;
+    const lv_coord_t h = (lv_coord_t)(BLOCK_H * pct / 100);
+    lv_obj_set_height(s_fill[i], h);
+    lv_obj_update_layout(s_fill[i]);
+    // Text positions inside the block, from the alignments set when it was built.
+    inkFor(s_mat[i],   s_grams[i] ? BLOCK_H / 2 - 8 : BLOCK_H / 2, h, s_ink[i]);
+    inkFor(s_grams[i], BLOCK_H - 4 - 7, h, s_ink[i]);
+}
+
+void gramsText(char* buf, size_t n, int grams) { snprintf(buf, n, "%d g", grams); }
 int  s_lastCount = -1;
 uint32_t s_lastSig = 0;
 
@@ -57,6 +96,9 @@ uint32_t signature(PrinterBackend* b, int n, int selected, int link) {
         v ^= (uint32_t)s.selected << 25;
         for (const char* p = s.type.c_str();  *p; p++) v = v * 16777619u ^ (uint8_t)*p;
         for (const char* p = s.brand.c_str(); *p; p++) v = v * 16777619u ^ (uint8_t)*p;
+        // Whether a grams line exists, not its value - see s_grams.
+        v ^= (uint32_t)(s.grams >= 0) << 26;
+        v ^= (uint32_t)s.percentKnown << 27;
         h = h * 16777619u ^ v;
     }
     return h;
@@ -132,10 +174,21 @@ void show(const char* printerName, PrinterBackend* backend,
             progressText(t, sizeof(t), tries, budget, fetching);
             lv_label_set_text(s_progress, t);
         }
+        for (int i = 0; i < n && i < MAX_CELLS; i++) {
+            if (!s_grams[i]) continue;
+            char t[16];
+            gramsText(t, sizeof(t), backend->slot(i).grams);
+            // Only when it differs: setting a label invalidates it, and this
+            // runs every frame.
+            if (strcmp(lv_label_get_text(s_grams[i]), t)) lv_label_set_text(s_grams[i], t);
+        }
+        for (int i = 0; i < n && i < MAX_CELLS; i++)
+            if (s_fill[i] && s_pct[i] != backend->slot(i).percent) applyLevel(i, backend->slot(i).percent);
         return;
     }
     s_built = true; s_lastCount = n; s_lastSig = sig;
     s_progress = nullptr;              // whatever it pointed at is about to go
+    for (int i = 0; i < MAX_CELLS; i++) s_grams[i] = s_fill[i] = s_mat[i] = nullptr;   // so are these
 
     lv_obj_t* body = frame::build(printerName, onBack);
     // The reader dot is gone: it was green on every screen, always, because
@@ -361,17 +414,35 @@ void show(const char* printerName, PrinterBackend* backend,
         // Taller than wide: a spool's material name is two or three words and
         // wants the vertical room, and five portrait blocks fill a 240 px
         // panel better than five squares with dead space above and below.
-        lv_obj_set_size(block, CELL_W, 62);
+        lv_obj_set_size(block, CELL_W, BLOCK_H);
         lv_obj_set_style_radius(block, 8, 0);
         lv_obj_set_style_bg_opa(block, LV_OPA_COVER, 0);
+        const bool level = st.known && st.percentKnown && i < MAX_CELLS;
+        const lv_color_t spool = st.known ? lv_color_make(st.r, st.g, st.b) : lv_color_hex(0x3A424E);
+        // With a level, the block itself is the empty part of the spool.
         lv_obj_set_style_bg_color(block,
-            st.known ? lv_color_make(st.r, st.g, st.b) : lv_color_hex(0x3A424E), 0);
+            level ? lv_color_mix(spool, lv_color_black(), 90) : spool, 0);
         lv_obj_clear_flag(block, LV_OBJ_FLAG_SCROLLABLE);
         // A hairline edge, because the panel's ground is black and so are
         // plenty of filaments. Without it a black spool is an invisible cell -
         // the colour is right and the slot looks empty.
         lv_obj_set_style_border_width(block, 1, 0);
         lv_obj_set_style_border_color(block, lv_color_hex(theme::LINE), 0);
+        if (level) {
+            // The fill is a child, so the block clips it to its rounded
+            // corners, and the edge is drawn over it rather than under.
+            lv_obj_set_style_clip_corner(block, true, 0);
+            lv_obj_set_style_border_post(block, true, 0);
+            lv_obj_t* fill = lv_obj_create(block);
+            lv_obj_remove_style_all(fill);
+            lv_obj_set_width(fill, LV_PCT(100));
+            lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
+            lv_obj_set_style_bg_color(fill, spool, 0);
+            lv_obj_align(fill, LV_ALIGN_BOTTOM_MID, 0, 0);
+            lv_obj_clear_flag(fill, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_clear_flag(fill, LV_OBJ_FLAG_SCROLLABLE);
+            s_fill[i] = fill;
+        }
         // And not clickable. A bare lv_obj is clickable by default in LVGL 8,
         // and this one covers almost the whole cell - so every press aimed at
         // the slot landed on the colour block and stopped there. The cell was
@@ -392,6 +463,28 @@ void show(const char* printerName, PrinterBackend* backend,
         lv_obj_set_style_text_font(mat, &font_ui_12, 0);
         lv_obj_set_style_text_color(mat, lv_color_hex(lum > 150 ? 0x101010 : 0xFFFFFF), 0);
         lv_obj_center(mat);
+
+        // What is left on the spool, under the material, in the same ink.
+        if (st.known && st.grams >= 0 && i < MAX_CELLS) {
+            // The face's 17 px line is sized for CJK; a Latin name needs about
+            // 12. Pulled together, a three-line name ("PEI-9085-GF") fits in
+            // the 41 px above the grams instead of running into them.
+            lv_obj_set_style_text_line_space(mat, -5, 0);
+            lv_obj_align(mat, LV_ALIGN_CENTER, 0, -8);
+            lv_obj_t* gr = lv_label_create(block);
+            char t[16];
+            gramsText(t, sizeof(t), st.grams);
+            lv_label_set_text(gr, t);
+            lv_obj_set_style_text_font(gr, &font_ui_12, 0);
+            lv_obj_set_style_text_color(gr, lv_color_hex(lum > 150 ? 0x101010 : 0xFFFFFF), 0);
+            lv_obj_align(gr, LV_ALIGN_BOTTOM_MID, 0, -4);
+            s_grams[i] = gr;
+        }
+        if (level) {
+            s_mat[i] = mat;
+            s_ink[i] = lum > 150 ? 0x101010u : 0xFFFFFFu;
+            applyLevel(i, st.percent);
+        }
 
         lv_obj_t* brand = lv_label_create(cell);
         // One line, or a long vendor wraps and pushes its cell taller than the

@@ -79,7 +79,10 @@ Action takeAction();
 
 void showWifi(const char* ssid, const char* ip, const char* mac, bool connected, int channel,
               int rssi);   // dBm, 0 when not connected
-void showAccount(const char* email, int printers, bool linked);
+// Also carries where a spool's weight comes from, chip or account - shown signed
+// out too, because choosing the chip is how a device is run without an account.
+void showAccount(const char* email, int printers, bool linked, bool weightFromCloud);
+int  takeWeightSource();     // 1 = account, 0 = chip, -1 = no change
 void showScreen(uint8_t brightness, int sleepSeconds, int rotation, bool autoRot);
 // What the battery is doing. `volts` is the cell, `pct` the estimate from it.
 // Reached only from the row that exists only when there is a cell.

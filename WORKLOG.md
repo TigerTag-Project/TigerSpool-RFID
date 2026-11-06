@@ -18,6 +18,35 @@ message, and reset it to this header.
 
 ## Unreleased
 
+### Added
+
+- Klipper with AFC: the spool's remaining weight is sent with the lane, with
+  AFC's own `SET_WEIGHT`, so still nothing to install on the printer. Where it
+  comes from is the user's choice under Settings > Account, "Weight from: Chip
+  / Cloud" (NVS `wcloud`, default Cloud): the account's spool document
+  (`users/{uid}/inventory/{chip uid}`, the figure a TigerScale keeps current,
+  read by `ttcloud::requestSpool` the moment the tag is read), or the chip,
+  which needs no network. Happy Hare's `MMU_GATE_MAP` takes no weight.
+- AFC lanes also get the tag's temperatures (`AFC_SET_SPOOL_TEMP`, the middle of
+  each window), and - when the printer has a `[save_variables]` section - the
+  brand and the spool's full quantity (`SAVE_VARIABLE tt_<lane>_brand /
+  tt_<lane>_total`), read back so the brand shows under the slot again and the
+  percentage is not taken against AFC's fixed 1000 g.
+- The slot grid shows what is left in each colour block: the grams, and the
+  block filled from the bottom to the percentage (`SlotState::grams`,
+  `percentKnown`), both updated in place while the printer prints.
+- The result screen adds the weight that was sent to the line under the spool,
+  and warns in orange when the send went out without one.
+- The reader screen shows the remaining weight from the chosen source.
+- When the first account read brings no figure, the send asks once more and
+  waits for it at most 5 s, saying so on the screen ("Reading the weight from
+  the account...", then "No answer - asking the account once more..."). An
+  answer that the spool has no weight is not asked again.
+- `scripts/moonraker-ws-mock.py` understands `SET_WEIGHT`, `AFC_SET_SPOOL_TEMP`
+  and `SAVE_VARIABLE`.
+- Previews: `setacct-out`, `readcloud`, `readcloud-wait`, `scanweight`,
+  `scanretry`, `resultweight`, `resultgrams`.
+
 ## 2026-11-04 - The sign-in and account pages in eleven languages (released in 1.74.0)
 
 ### Added

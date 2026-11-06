@@ -610,7 +610,8 @@ namespace {
                                                                   WiFi.macAddress().c_str(), true, 6, -76);
         else if (preview == "setwifi-none") screen_settings::showWifi("", "-",
                                                                   WiFi.macAddress().c_str(), false, 0, 0);
-        else if (preview == "setacct")  screen_settings::showAccount("benoit@atome3d.com", 6, true);
+        else if (preview == "setacct")  screen_settings::showAccount("benoit@atome3d.com", 6, true, true);
+        else if (preview == "setacct-out") screen_settings::showAccount("", 0, false, false);
         else if (preview == "setbatt")  screen_settings::showBattery(3.86f, 74, false, 270, true);
         else if (preview == "setcharge") screen_settings::showBattery(3.76f, 42, true, 95, true);
         else if (preview == "setbattlow") screen_settings::showBattery(3.45f, 8, false, 25, true);
@@ -637,14 +638,25 @@ namespace {
         else if (preview == "main")      screen_home::showMain(2, 3, true, -58, 3);
         else if (preview == "read")      screen_read::showWaiting();
         else if (preview == "readtag")   { screen_read::invalidate(); screen_read::showTag(previewTag()); }
+        // The same spool with its weight from the account, answered and on its way.
+        else if (preview == "readcloud") { screen_read::invalidate(); screen_read::showTag(previewTag(), true, 144); }
+        else if (preview == "readcloud-wait") { screen_read::invalidate();
+                                               screen_read::showTag(previewTag(), true, -1, true); }
         // The everyday loop: present the spool, confirm it, and the receipt
         // that tells you where to put it. `resultlong` is the layout's worst
         // case - a printer whose slots are called AMS2-4.
         else if (preview == "scan")      screen_scan::showScan("B2");
+        else if (preview == "scanweight") screen_scan::showScan("2", i18n::T(S_WEIGHT_WAIT));
+        else if (preview == "scanretry")  screen_scan::showScan("2", i18n::T(S_WEIGHT_RETRY));
         else if (preview == "result")    screen_scan::showResult("B2", true, "", previewTag(), 3200);
+        else if (preview == "resultgrams") screen_scan::showResult("2", true, "", previewTag(), 3200,
+                                             nullptr, 500);
         else if (preview == "resultlong") screen_scan::showResult("AMS2-4", true, "", previewTag(), 5000);
         else if (preview == "resultfail") screen_scan::showResult("B2", false,
                                              i18n::T(S_SEND_FAIL), previewTag(), 0);
+        // Sent, but the weight stayed: the longest warning sits under the spool.
+        else if (preview == "resultweight") screen_scan::showResult("T2", true, "", previewTag(), 3200,
+                                             i18n::T(S_WEIGHT_KEPT));
         else if (preview == "greys")     previewGreys();
         else if (preview == "icons")     previewIcons();
 

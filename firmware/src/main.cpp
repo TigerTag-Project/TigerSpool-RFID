@@ -82,6 +82,12 @@ int     selectedPrinter = 0;
 // Send was pressed on the review screen and is waiting, briefly, for the
 // TigerTag+ product answer - see ST_SENDING.
 static bool sendWaiting = false;
+// The weight from the account, asked once more when the first read brought no
+// figure: one further read, and the send waits for it at most WEIGHT_RETRY_MS.
+// Both reset when a spool is read for a send.
+static const uint32_t WEIGHT_RETRY_MS = 5000;
+static uint32_t weightRetryAt = 0;        // when the second try began; 0 = not yet
+static bool     weightRetryStarted = false;
 
 PrinterBackend* backend = nullptr;
 
@@ -137,6 +143,8 @@ uint32_t nfcLastTry = 0;
 int     selSlot = -1;
 TagInfo tag;
 bool    sendOk = false;
+bool    sendWeightKept = false;   // sent, but the slot's weight was left as it was
+int     sendGrams = -1;           // the weight that went with it, -1 for none
 String  resultMsg;
 uint32_t stateSince = 0;
 
@@ -531,6 +539,22 @@ uint8_t screenBrightness = BRIGHTNESS_DEFAULT;
 int     screenSleepSec   = 60;
 int     screenRotation   = SCR_ROTATION;
 bool    screenAutoRot    = false;
+
+// Where a spool's weight comes from: the account, which a TigerScale keeps up to
+// date, or the chip, which needs no network. The account by default - it is the
+// figure that is right; the chip is for a device that is meant to stay offline.
+bool    weightFromCloud  = true;
+
+static void loadWeightPref() {
+    nvs.begin("tigerspool", true);
+    weightFromCloud = nvs.getBool("wcloud", true);
+    nvs.end();
+}
+static void saveWeightPref() {
+    nvs.begin("tigerspool", false);
+    nvs.putBool("wcloud", weightFromCloud);
+    nvs.end();
+}
 
 static void loadScreenPrefs() {
     nvs.begin("tigerspool", true);
@@ -1883,6 +1907,7 @@ void setup() {
     loadCfg();
     imu::begin();          // before loadScreenPrefs: first boot asks it
     loadScreenPrefs();
+    loadWeightPref();
     // After lvgl_port::begin(), because turning the panel repaints it. The
     // boot logo above was drawn at the compiled default, which is the right
     // way up for the reference shell; a device mounted the other way sees the
@@ -2471,6 +2496,12 @@ void loop() {
         static uint8_t seenUid[7] = {0};
         static uint8_t seenLen = 0;
         static uint32_t lastPoll = 0;
+        // The account's figure for the spool on screen, once it has answered.
+        // Kept here rather than asked of ttcloud on every frame: its answer
+        // goes stale after 30 s, and the row would fall back to "..." under a
+        // spool that has not moved.
+        static int  cloudGrams = -1;
+        static bool cloudKnown = false;
 
         if (nfcReady && millis() - lastPoll > 300) {
             lastPoll = millis();
@@ -2482,18 +2513,28 @@ void loop() {
                     seen = t;
                     memcpy(seenUid, uid, ul > 7 ? 7 : ul);
                     seenLen = ul;
+                    cloudGrams = -1; cloudKnown = false;
                     Serial.printf("[reader] tag %s read\n", t.uid.c_str());
                 }
             }
+            // Asked again on every poll until it answers: a request is refused
+            // while the account sync holds the session, and goes through after.
+            if (seen.ok && weightFromCloud && !cloudKnown && ttcloud::haveSession()) {
+                ttcloud::SpoolStock st;
+                if (ttcloud::spoolCached(seen.uid, st)) { cloudGrams = st.netGrams; cloudKnown = true; }
+                else ttcloud::requestSpool(seen.uid);
+            }
         }
         if (seen.ok) seen.signature = reader::signatureOf(seen);
-        if (seen.ok) screen_read::showTag(seen);
+        if (seen.ok) screen_read::showTag(seen, weightFromCloud, cloudGrams,
+                                          weightFromCloud && !cloudKnown && ttcloud::haveSession());
         else         screen_read::showWaiting();
         lvgl_port::loop();
 
         if (screen_read::takeBack()) {
             seen = TagInfo();
             seenLen = 0;
+            cloudGrams = -1; cloudKnown = false;
             screen_read::invalidate();
             state = ST_MAIN; stateSince = millis();
         }
@@ -2744,9 +2785,17 @@ void loop() {
     case ST_SET_ACCOUNT: {
         int n = 0;
         for (int i = 0; i < MAX_PRINTERS; i++) if (printers[i].type != PT_NONE) n++;
-        screen_settings::showAccount(ttcloud::email().c_str(), n, ttcloud::haveSession());
+        screen_settings::showAccount(ttcloud::email().c_str(), n, ttcloud::haveSession(),
+                                     weightFromCloud);
         lvgl_port::loop();
         BACK_TO_SETTINGS();
+        int ws = screen_settings::takeWeightSource();
+        if (ws >= 0 && (ws == 1) != weightFromCloud) {
+            weightFromCloud = (ws == 1);
+            saveWeightPref();
+            Serial.printf("[weight] source: %s\n", weightFromCloud ? "account" : "chip");
+            screen_settings::invalidate();
+        }
         if (screen_settings::takeAction() == screen_settings::A_SIGN_OUT) {
             // The imported printers go with the session. Leaving them would
             // show a list belonging to an account nobody is logged into.
@@ -3105,6 +3154,9 @@ void loop() {
                     const PrinterCfg& to = printers[selectedPrinter];
                     if (to.type == PT_CREALITY || (to.type == PT_BAMBU && !to.cloud))
                         product_api::request(tag);
+                    // Not on chip weight: that choice means no network for it.
+                    if (to.type == PT_KLIPPER && weightFromCloud) ttcloud::requestSpool(tag.uid);
+                    weightRetryAt = 0; weightRetryStarted = false;
                     // Straight into the send. The slot was chosen and the spool
                     // was presented; asking a third time to approve what the
                     // user is visibly doing only stands in the way.
@@ -3123,10 +3175,47 @@ void loop() {
     }
 
     case ST_SENDING: {
-        // The same screen the user is already looking at, unchanged: the
-        // write is short, and a screen that appears and vanishes inside a
-        // second reads as a fault rather than as progress.
-        screen_scan::showScan(backend ? backend->slotLabel(selSlot) : "?");
+        // The weight from the account. The first read was started when the
+        // spool was read, and the send waits for it inside its budget. When it
+        // brought no figure - it failed, it could not start, or it is still
+        // running past its budget - the account is asked once more and the send
+        // waits for that at most WEIGHT_RETRY_MS. An answer that the spool has
+        // no weight is an answer: it is not asked again.
+        bool weightWait = false, weightRetry = false;
+        if (sendWaiting && weightFromCloud && ttcloud::haveSession()
+                && printers[selectedPrinter].type == PT_KLIPPER) {
+            ttcloud::SpoolStock st;
+            const bool answered = ttcloud::spoolCached(tag.uid, st) && st.ok;
+            if (ttcloud::spoolWaiting(tag.uid)) {
+                weightWait = true;
+            } else if (!answered) {
+                if (!weightRetryAt) {
+                    weightRetryAt = millis();
+                    Serial.printf("[weight] no figure from the account yet - asking once more, %lu ms\n",
+                                  (unsigned long)WEIGHT_RETRY_MS);
+                }
+                if (millis() - weightRetryAt < WEIGHT_RETRY_MS) {
+                    // Kept trying until it starts: the sync or the presence beat
+                    // may hold the token for a moment.
+                    if (!weightRetryStarted && !ttcloud::spoolRunning(tag.uid))
+                        weightRetryStarted = ttcloud::requestSpool(tag.uid);
+                    // The second read has ended without a figure: nothing left to wait for.
+                    const bool over = weightRetryStarted && !ttcloud::spoolRunning(tag.uid);
+                    weightWait = weightRetry = !over;
+                } else {
+                    Serial.println("[weight] second try ran out - sent without the weight");
+                }
+            }
+        }
+
+        // The same screen the user is already looking at: the write is short,
+        // and a screen that appears and vanishes inside a second reads as a
+        // fault rather than as progress. Only a wait for the weight that
+        // outlasts that half second is put into words.
+        const char* note = nullptr;
+        if (weightRetry) note = i18n::T(S_WEIGHT_RETRY);
+        else if (weightWait && millis() - stateSince > 500) note = i18n::T(S_WEIGHT_WAIT);
+        screen_scan::showScan(backend ? backend->slotLabel(selSlot) : "?", note);
         BENCH_MARK("send:draw");
         lvgl_port::loop();
         BENCH_MARK("send:lvgl");
@@ -3143,9 +3232,14 @@ void loop() {
         // THIS spool is still inside its budget, and the screen keeps drawing
         // meanwhile. Past the budget the send goes ahead without it - once:
         // an answer that turns up later is kept for next time, never sent.
-        if (sendWaiting && !product_api::waiting(tag.idProduct)) {
+        if (sendWaiting && !product_api::waiting(tag.idProduct) && !weightWait) {
             sendWaiting = false;
+            if (backend) backend->setWeightFromCloud(weightFromCloud);
             sendOk = backend && backend->connected() && backend->assign(selSlot, tag);
+            // Asked once, here, and kept: the result screen is drawn from this
+            // state, not from the backend, whose next assign would change it.
+            sendWeightKept = sendOk && backend->weightSkipped();
+            sendGrams = sendOk ? backend->sentGrams() : -1;
             BENCH_MARK("send:assign");
             char m[48];
             if (sendOk) snprintf(m, sizeof(m), i18n::T(S_UPDATED), backend->slotLabel(selSlot));
@@ -3176,7 +3270,8 @@ void loop() {
         tag.signature = reader::signatureOf(tag);
         screen_scan::showResult(backend ? backend->slotLabel(selSlot) : "?",
                                 sendOk, resultMsg.c_str(), tag,
-                                since >= RESULT_MS ? 0 : RESULT_MS - since);
+                                since >= RESULT_MS ? 0 : RESULT_MS - since,
+                                sendWeightKept ? i18n::T(S_WEIGHT_KEPT) : nullptr, sendGrams);
         BENCH_MARK("result:draw");
         lvgl_port::loop();
         BENCH_MARK("result:lvgl");

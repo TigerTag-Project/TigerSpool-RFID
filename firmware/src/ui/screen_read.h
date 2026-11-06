@@ -18,7 +18,13 @@ namespace screen_read {
 void showWaiting();
 
 // A spool has been read. Cheap to re-call with the same tag.
-void showTag(const TagInfo& tag);
+//
+// What is left on the spool comes from one source, the one the user chose, and
+// the row says which. From the chip it is `tag.available`; from the account it
+// is `cloudGrams` (-1: the account has no figure), or "..." while
+// `cloudPending`, because that answer takes a few seconds to arrive.
+void showTag(const TagInfo& tag, bool fromCloud = false,
+             int cloudGrams = -1, bool cloudPending = false);
 
 // The back arrow was pressed.
 bool takeBack();
