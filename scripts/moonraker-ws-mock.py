@@ -15,7 +15,8 @@ the device sync. Studio itself talks HTTP to Moonraker, so the few HTTP
 requests its add flow and its card make are answered too (server/printer/
 machine info, the object list and query, an empty webcam list). What it answers: server.connection.identify,
 printer.objects.list, printer.objects.query and printer.gcode.script with
-MMU_GATE_MAP and AFC's SET_MATERIAL / SET_COLOR / SET_WEIGHT parsed into the state - so a
+MMU_GATE_MAP, AFC's SET_MATERIAL / SET_COLOR / SET_WEIGHT / AFC_SET_SPOOL_TEMP
+and Klipper's SAVE_VARIABLE parsed into the state - so a
 write is read back exactly as it would be from a printer. It also pushes a
 notify_proc_stat_update every second, as Moonraker does to every client.
 
@@ -23,6 +24,7 @@ The AFC profile publishes its lanes twice, as `AFC_stepper` and `AFC_lane`,
 the way an OpenCentauri CC1 does: the backend must list each lane once.
 """
 
+import ast
 import argparse
 import base64
 import hashlib
@@ -47,11 +49,12 @@ def build_state(profile):
     elif profile == "afc":
         lanes = ["lane1", "lane2", "lane3", "lane4"]
         s["AFC"] = {"lanes": lanes, "current_lane": "lane2"}
+        s["save_variables"] = {"variables": {}}
         for i, lane in enumerate(lanes):
             obj = {"map": f"T{i}", "material": ["PLA", "PETG", "", "TPU"][i],
                    "color": ["#FF8800", "#0055FF", "#000000", "#FFFFFF"][i],
                    "load": i != 2, "prep": i != 2, "tool_loaded": False, "weight": 850,
-                   "initial_weight": 1000}
+                   "initial_weight": 1000, "extruder_temp": 210, "bed_temp": 60}
             s[f"AFC_stepper {lane}"] = obj
             s[f"AFC_lane {lane}"] = obj          # the same lane, published twice
     else:
@@ -84,7 +87,13 @@ def run_script(state, script):
             if "COLOR" in p:
                 m["gate_color"][g] = p["COLOR"].lstrip("#")
             m["gate_status"][g] = 1
-        elif cmd in ("SET_MATERIAL", "SET_COLOR", "SET_WEIGHT") and "AFC" in state:
+        elif cmd == "SAVE_VARIABLE" and "save_variables" in state:
+            # Klipper lowercases the name and reads the value as a Python literal.
+            v = p.get("VALUE", "")
+            if len(v) >= 2 and v[0] == v[-1] == '"':
+                v = v[1:-1]
+            state["save_variables"]["variables"][p.get("VARIABLE", "").lower()] = ast.literal_eval(v)
+        elif cmd in ("SET_MATERIAL", "SET_COLOR", "SET_WEIGHT", "AFC_SET_SPOOL_TEMP") and "AFC" in state:
             lane = state.get(f"AFC_lane {p.get('LANE', '')}")
             if lane is None:
                 raise ValueError(f"Unknown lane {p.get('LANE')}")
@@ -92,6 +101,9 @@ def run_script(state, script):
                 lane["material"] = p.get("MATERIAL", "")
             elif cmd == "SET_WEIGHT":
                 lane["weight"] = float(p.get("WEIGHT", 0))
+            elif cmd == "AFC_SET_SPOOL_TEMP":
+                lane["extruder_temp"] = float(p.get("EXTRUDER_TEMP", lane["extruder_temp"]))
+                lane["bed_temp"] = float(p.get("BED_TEMP", lane["bed_temp"]))
             else:
                 lane["color"] = "#" + p.get("COLOR", "").lstrip("#")
         else:

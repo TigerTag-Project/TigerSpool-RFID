@@ -21,9 +21,16 @@
 //                                    shown and never written: there is nothing
 //                                    on the printer to write the filament into.
 //
-// Weight goes to AFC only, with its own SET_WEIGHT LANE= WEIGHT=. Happy Hare's
-// MMU_GATE_MAP takes no weight, so a gate is written without one - and that is
-// not reported as a weight skipped, there was nothing to skip.
+// Weight goes to AFC only, with its own SET_WEIGHT LANE= WEIGHT=, and the
+// temperatures with AFC_SET_SPOOL_TEMP. Happy Hare's MMU_GATE_MAP takes no
+// weight, so a gate is written without one - and that is not reported as a
+// weight skipped, there was nothing to skip.
+//
+// AFC keeps no brand, and its `initial_weight` stays at 1000 g whatever spool
+// is loaded. When the printer has a [save_variables] section (it is Klipper's
+// own, nothing to install), both go there with SAVE_VARIABLE, as
+// tt_<lane>_brand and tt_<lane>_total, and are read back from it. Without
+// one, a lane shows no brand and the percentage uses AFC's 1000 g.
 //
 // Commands are the systems' own: nothing has to be installed on the printer.
 // An optional Moonraker API key comes from the account's `apiKey` (carried in
@@ -78,7 +85,10 @@ private:
     // by hand).
     float     weight_[KMAX] = {};
     float     initW_[KMAX]  = {};
-    long      totalW_[KMAX] = {};
+    long      totalW_[KMAX] = {};        // tt_<lane>_total, or what was last sent
+    int       extT_[KMAX]   = {};        // AFC's extruder_temp / bed_temp, for a
+    int       bedT_[KMAX]   = {};        // tag that carries only one of the two
+    bool      hasSv_ = false;            // the printer has [save_variables]
     bool      weightSkipped_   = false;   // the last assign went out without SET_WEIGHT
     bool      weightFromCloud_ = true;    // the user's choice, set before every assign
 };

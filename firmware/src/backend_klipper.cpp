@@ -37,6 +37,22 @@ namespace {
         return o;
     }
 
+    // A save_variables value is a Python literal, sent quoted: VALUE="'eSUN'".
+    // A quote or a backslash inside would end it early, so they are dropped.
+    String svText(const String& in) {
+        String o = gv(in);
+        o.replace("'", ""); o.replace("\"", ""); o.replace("\\", "");
+        return o;
+    }
+
+    // The variable a lane's brand or quantity is kept under. Klipper stores
+    // the names lowercased, so they are written that way.
+    String svName(const String& lane, const char* what) {
+        String n = String("tt_") + gv(lane) + "_" + what;
+        n.toLowerCase();
+        return n;
+    }
+
     // What a slot shows: gv() turned the label's spaces into '_' on the way
     // out, and the printer hands it back that way. "PLA High Speed" is what
     // the spool says and what the screen should say.
@@ -61,11 +77,13 @@ namespace {
 
 void KlipperBackend::detect(JsonArrayConst objects) {
     bool mmu = false;
+    hasSv_ = false;
     int extruders[KMAX]; int nExt = 0;
     int nLane = 0;
     for (JsonVariantConst v : objects) {
         const char* name = v | "";
         if (!strcmp(name, "mmu")) mmu = true;
+        if (!strcmp(name, "save_variables")) hasSv_ = true;
         // One slot per AFC lane. A unit can publish the same lane twice, as
         // `AFC_stepper <lane>` and `AFC_lane <lane>` (a CANVAS on an OpenCentauri
         // CC1 does): the lane is listed once, in the order first met, and read
@@ -140,7 +158,12 @@ void KlipperBackend::applyStatus(JsonObjectConst st) {
         status_ = "Klipper: slots updated";
     } else if (sys_ == SYS_AFC) {
         const char* cur = st["AFC"]["current_lane"] | "";
+        JsonObjectConst sv = st["save_variables"]["variables"];
         for (int i = 0; i < nSlots_; i++) {
+            if (!sv.isNull()) {
+                const long tot = sv[svName(lane_[i], "total")] | 0L;
+                if (tot > 0 && tot <= 10000) totalW_[i] = tot;
+            }
             JsonObjectConst o = st[laneObj_[i]];
             if (o.isNull()) continue;
             SlotState& s = slots_[i];
@@ -159,6 +182,9 @@ void KlipperBackend::applyStatus(JsonObjectConst st) {
             if (pct < 0) pct = 0;
             if (pct > 100) pct = 100;
             s.percent = (uint8_t)(pct + 0.5f);
+            if (o["extruder_temp"].is<float>()) extT_[i] = (int)o["extruder_temp"].as<float>();
+            if (o["bed_temp"].is<float>())      bedT_[i] = (int)o["bed_temp"].as<float>();
+            s.brand = (!empty && !sv.isNull()) ? shown(sv[svName(lane_[i], "brand")] | "") : String();
         }
         status_ = "Klipper: slots updated";
     } else if (sys_ == SYS_EXTRUDERS) {
@@ -251,8 +277,9 @@ bool KlipperBackend::rpc(const char* method, JsonDocument& params, int id) {
 void KlipperBackend::begin(const PrinterCfg& cfg) {
     for (int i = 0; i < KMAX; i++) {
         slots_[i] = SlotState{}; lane_[i] = laneObj_[i] = String();
-        weight_[i] = initW_[i] = 0; totalW_[i] = 0;
+        weight_[i] = initW_[i] = 0; totalW_[i] = 0; extT_[i] = bedT_[i] = 0;
     }
+    hasSv_ = false;
     weightSkipped_ = false;
     nSlots_ = 0;
     sys_ = SYS_UNKNOWN;
@@ -301,8 +328,9 @@ void KlipperBackend::refresh() {
         for (int i = 0; i < nSlots_; i++) {
             JsonArray f = o[laneObj_[i]].to<JsonArray>();
             for (const char* k : { "material", "color", "load", "prep", "tool_loaded",
-                                   "weight", "initial_weight" }) f.add(k);
+                                   "weight", "initial_weight", "extruder_temp", "bed_temp" }) f.add(k);
         }
+        if (hasSv_) o["save_variables"].to<JsonArray>().add("variables");
     } else {
         o["toolhead"].to<JsonArray>().add("extruder");
     }
@@ -364,6 +392,24 @@ bool KlipperBackend::assign(int idx, const TagInfo& t) {
         if (haveWeight) {
             script += "\nSET_WEIGHT LANE=" + lane + " WEIGHT=" + net;
             totalW_[idx] = (total > 0 && total <= 10000) ? total : 0;
+        }
+
+        // Temperatures: the middle of the tag's windows - a choice, not a rule.
+        // A tag that carries only one keeps the lane's other.
+        const int ext = (t.nozMin > 0 && t.nozMax >= t.nozMin) ? (t.nozMin + t.nozMax) / 2 : 0;
+        const int bed = (t.bedMin > 0 && t.bedMax >= t.bedMin) ? (t.bedMin + t.bedMax) / 2 : 0;
+        if (ext || bed)
+            script += "\nAFC_SET_SPOOL_TEMP LANE=" + lane
+                    + " EXTRUDER_TEMP=" + (ext ? ext : extT_[idx])
+                    + " BED_TEMP=" + (bed ? bed : bedT_[idx]);
+
+        // Brand and full quantity, which AFC has no field for. Written every
+        // time, empty included, so nothing of the previous spool stays behind.
+        if (hasSv_) {
+            script += "\nSAVE_VARIABLE VARIABLE=" + svName(lane_[idx], "brand")
+                    + " VALUE=\"'" + svText(t.brand) + "'\"";
+            script += "\nSAVE_VARIABLE VARIABLE=" + svName(lane_[idx], "total")
+                    + " VALUE=" + totalW_[idx];
         }
     }
 
