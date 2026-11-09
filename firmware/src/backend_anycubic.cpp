@@ -191,6 +191,10 @@ void AnycubicBackend::begin(const PrinterCfg& cfg) {
     // like to the person holding it. Nothing here is worth more than a few
     // seconds; a failed attempt is retried anyway.
     mqtt_.setSocketTimeout(4);
+    // And the TCP connect, which neither of those bounds: the client waits
+    // thirty seconds for a host that does not answer - as long as the loop
+    // watchdog - so a printer switched off restarted the box.
+    net_.setTimeout(4);
     net_.setHandshakeTimeout(5);
     mqtt_.setCallback([this](char*, uint8_t* p, unsigned int l) { onMqtt(p, l); });
     status_ = "Anycubic: connecting...";
